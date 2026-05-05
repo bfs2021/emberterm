@@ -249,56 +249,56 @@
 
 ### Rust Core — Block Model
 
-- [ ] `src-tauri/src/terminal/blocks.rs` — `Block` + `BlockAnnotations` structs
-- [ ] OSC 133 `A` mark → `block.start` event with new `Block` (command extracted from prompt line)
-- [ ] OSC 133 `B` mark → command text captured
-- [ ] OSC 133 `C` mark → output started
-- [ ] OSC 133 `D;<exit>` mark → `block.end` event with exit code
+- [x] `src-tauri/src/terminal/blocks.rs` — `BlockManager` state machine (Idle → Prompting → Executing)
+- [x] OSC 133 `A` mark → `on_prompt_start()`, emits `block:start` via PTY reader
+- [ ] OSC 133 `B` mark → command text captured (B mark currently unhandled in pty.rs)
+- [x] OSC 133 `C` mark → `on_output_start()`, emits `block:start` IPC event
+- [x] OSC 133 `D;<exit>` mark → `on_command_end()`, emits `block:end` IPC event with exit code + duration
 - [ ] `block.get` and `block.search` Tauri commands
 - [ ] Store blocks on `Session`, index by `BlockId`
 
 ### Rust Core — OSC 7777 Full
 
-- [ ] `tool.progress` — update `ToolCallState`, emit `agent.tool_progress` event (pct + message)
-- [ ] `diff` verb — parse `DiffPayload`, emit `agent.diff` event; write `reply` to PTY input on user action
-- [ ] `approval` verb — parse `ApprovalPayload`, emit `agent.approval` event; write `reply` to PTY input on user action
+- [x] `tool.progress` — update `ToolCallState`, emit `agent:tool_progress` event (pct + message)
+- [x] `diff` verb — parse `DiffPayload`, emit `agent:diff` event; `agentRespond` writes OSC reply on user action
+- [x] `approval` verb — parse `ApprovalPayload`, emit `agent:approval` event; `agentRespond` writes OSC reply on user action
 - [ ] `block.annotate` — apply tags/fold/title to current open block
-- [ ] `session.mark` — insert `SessionMark` into session timeline, emit event
-- [ ] `agent.bye` — clear `session.agent`, update status bar
+- [x] `session.mark` — emit `agent:session_mark` event + inject ANSI separator into `terminal:output`
+- [x] `agent.bye` — emit `agent:bye`, frontend clears agent state and dismisses hello banner
 - [ ] `agent.query` — reply with capabilities JSON written into PTY input
 - [ ] Rate-limit OSC 7777 processing: max 1000 sequences/sec/session
-- [ ] `tool.cancel` event: write `ESC ] 7777 ; event ; {"kind":"tool.cancel","id":...} ESC \` to PTY input
+- [x] `tool.cancel` event: `cancelTool()` in App.svelte writes `ESC ] 7777 ; event ; {"kind":"tool.cancel","id":...} ESC \` to PTY input
 
 ### Frontend — Block UI
 
-- [ ] `frontend/src/agent/` — `BlockView.svelte` — wraps a `Block` with collapsible output
-- [ ] Block header: command text, duration, exit code badge
+- [x] `frontend/src/agent/Block.svelte` — collapsible block chrome with expand/collapse toggle
+- [x] Block header: command text, duration label, exit code badge (green/red), agent badge
 - [ ] Fold/unfold animation (respects `prefers-reduced-motion`)
-- [ ] Agent-annotated blocks: show agent badge + tag chips
+- [x] Agent-annotated blocks: accent left-border + agent badge chip
 - [ ] Keyboard navigation between blocks (e.g., `Alt+Up/Down`)
 - [ ] Per-block context menu (right-click): Copy command, Copy output, Share block
 
 ### Frontend — Diff Viewer
 
-- [ ] `frontend/src/agent/DiffView.svelte` — inline unified diff renderer
-- [ ] Header: file path, `+N/-N` stats
-- [ ] Body: line-by-line diff with `+`/`-` gutter, syntax highlighting (Shiki)
+- [x] `frontend/src/agent/DiffView.svelte` — inline unified diff renderer
+- [x] Header: file path, `+N/-N` stats
+- [x] Body: line-by-line diff with `+`/`-` gutter (no Shiki — plain ANSI colors)
 - [ ] Toggle: unified / side-by-side view
-- [ ] Footer: [Accept] [Reject] [Edit] action buttons
-- [ ] Keyboard: `Y` = accept, `N` = reject, `E` = edit
-- [ ] On action: emit `agent.respond` with result → backend writes OSC reply to PTY
+- [x] Footer: [Accept] [Reject] [Edit] action buttons (from `actions` payload)
+- [x] Keyboard: `Y` = accept, `N` = reject, `E` = edit
+- [x] On action: emit `agent.respond` with result → backend writes OSC reply to PTY
 - [ ] Collapse to one-line summary on resolution: `✓ Applied to src/main.rs`
 
 ### Frontend — Approval Sheet
 
-- [ ] `frontend/src/agent/ApprovalSheet.svelte` — bottom-slide overlay
-- [ ] Slide-up animation from bottom of active pane
-- [ ] Header: title + risk badge (safe = blue, caution = yellow, destructive = red)
-- [ ] Body: detail text (monospace font if it looks like a command)
-- [ ] Footer: action buttons in declared order, leftmost = safest
-- [ ] Keyboard: arrow keys + Enter select action, Esc = deny
-- [ ] Default focus on safest action
-- [ ] On action: emit `agent.respond` → backend writes reply to PTY, sheet dismisses
+- [x] `frontend/src/agent/ApprovalSheet.svelte` — bottom-slide overlay
+- [x] Slide-up animation from bottom of active pane
+- [x] Header: title + risk badge (safe = blue, caution = yellow, destructive = red)
+- [x] Body: detail text (monospace font if it looks like a command)
+- [x] Footer: action buttons in declared order, leftmost = safest
+- [x] Keyboard: arrow keys + Enter select action, Esc = deny
+- [x] Default focus on safest action
+- [x] On action: emit `agent.respond` → backend writes reply to PTY, sheet dismisses
 
 ### Frontend — Split Panes
 

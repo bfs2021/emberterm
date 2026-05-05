@@ -4,9 +4,27 @@ use anyhow::{Context, Result};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::{AppHandle, Emitter};
 
+use super::blocks::BlockManager;
 use super::session::{Session, SessionId};
 use crate::agent::handlers;
 use crate::agent::tools::ActiveTools;
+
+#[derive(serde::Serialize, Clone)]
+struct BlockStartIpcPayload {
+    session_id: SessionId,
+    id: String,
+    command: String,
+    started_at: u64,
+    agent_id: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct BlockEndIpcPayload {
+    session_id: SessionId,
+    id: String,
+    exit_code: i32,
+    duration_ms: u64,
+}
 
 #[derive(serde::Serialize, Clone)]
 pub struct TerminalOutputPayload {
@@ -100,6 +118,8 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
             let mut buf = vec![0u8; 8192];
+            // BlockManager tracks OSC 133 prompt marks for this session.
+            let mut block_mgr = BlockManager::default();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
@@ -160,17 +180,49 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         },
                                     );
                                 }
-                                OscEvent::PromptMark(_mark) => {
-                                    // Phase 2: block model.
+                                OscEvent::PromptMark { mark, exit_code, command } => {
+                                    match mark {
+                                        'A' => block_mgr.on_prompt_start(),
+                                        'C' => {
+                                            if let Some(data) = block_mgr.on_output_start(command) {
+                                                let _ = app_clone.emit("block:start", BlockStartIpcPayload {
+                                                    session_id: sid.clone(),
+                                                    id: data.id,
+                                                    command: data.command,
+                                                    started_at: data.started_at_ms,
+                                                    agent_id: None,
+                                                });
+                                            }
+                                        }
+                                        'D' => {
+                                            if let Some(data) = block_mgr.on_command_end(exit_code.unwrap_or(0)) {
+                                                let _ = app_clone.emit("block:end", BlockEndIpcPayload {
+                                                    session_id: sid.clone(),
+                                                    id: data.id,
+                                                    exit_code: data.exit_code,
+                                                    duration_ms: data.duration_ms,
+                                                });
+                                            }
+                                        }
+                                        _ => {}
+                                    }
                                 }
                                 OscEvent::Osc7777 { verb, payload } => {
-                                    handlers::dispatch(
+                                    if let Some(inject) = handlers::dispatch(
                                         &verb,
                                         &payload,
                                         &sid,
                                         &mut tools,
                                         &app_clone,
-                                    );
+                                    ) {
+                                        let _ = app_clone.emit(
+                                            "terminal:output",
+                                            TerminalOutputPayload {
+                                                session_id: sid.clone(),
+                                                data: inject,
+                                            },
+                                        );
+                                    }
                                 }
                             }
                         }

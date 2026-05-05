@@ -139,6 +139,16 @@ export function onAgentApproval(cb: (p: AgentApprovalPayload) => void): Promise<
   return listen<AgentApprovalPayload>("agent:approval", (e) => cb(e.payload));
 }
 
+// ── Agent bye ─────────────────────────────────────────────────────────────
+
+export interface AgentByePayload {
+  session_id: string;
+}
+
+export function onAgentBye(cb: (p: AgentByePayload) => void): Promise<UnlistenFn> {
+  return listen<AgentByePayload>("agent:bye", (e) => cb(e.payload));
+}
+
 // ── Bell ──────────────────────────────────────────────────────────────────
 
 export interface TerminalBellPayload {

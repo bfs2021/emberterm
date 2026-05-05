@@ -162,50 +162,23 @@ These components exist in the design mockup but have no implementation or stub s
 
 ### 8.1 Block UI (`.block`, `.block-head`, `.block-body`)
 
-The block-based scrollback is one of the headline features. The design shows:
-- Each command+output is a visually distinct card with a header (command, timestamp, exit code badge)
-- Blocks are collapsible via a `[▸]` toggle
-- Blocks have a subtle left border in the accent color when the agent was active
-- Block header shows: shell prompt marker, command text, agent-id badge, duration, exit code
-
-Current state: OSC 133 marks are parsed (`PromptMark`) but no block data model or UI exists.
+**Implemented.** `Block.svelte` drives from `block:start` / `block:end` IPC events (emitted by the Rust `BlockManager` OSC 133 state machine). Each command+output unit has a collapsible header with command text, exit code badge, agent-id badge, and duration. Block store lives in `stores/app.ts`. Full xterm.js scrollback byte-range integration is deferred to a later phase.
 
 ### 8.2 Diff Viewer (`.diff`, `.diff-head`, `.diff-body`, `.diff-line`)
 
-The inline diff viewer is a core agent feature:
-- `.diff-head`: file path + `+N/-N` stats bar
-- `.diff-body`: unified diff with line-by-line coloring using `--diff-add-bg`/`--diff-del-bg` tokens
-- `.diff-foot`: `[Accept]` `[Reject]` `[Edit]` action buttons
-- `.diff-line.add` / `.diff-line.del` / `.diff-line.ctx` class variants
-- Syntax highlighting layer on top of diff colors
-
-No stub exists; the `DiffView.svelte` file is not yet created.
+**Implemented.** `DiffView.svelte` parses unified diff patches into add/remove/context lines using `--diff-add-bg` / `--diff-del-bg` tokens. Header shows path + `+N/-N` stats. Footer renders action buttons from the `actions` payload. Wired to `agent:diff` IPC event; user actions call `agentRespond()` which writes the OSC 7777 reply to PTY stdin.
 
 ### 8.3 Approval Sheet (`.approval-sheet`, `.risk-badge`)
 
-The approval overlay:
-- Slides up from the bottom of the terminal area (not a centered modal)
-- `.risk-badge` variants: `safe` (green), `caution` (yellow), `destructive` (red)
-- Action buttons use `.btn.danger` for destructive, `.btn.ghost` for deny
-- Transition: `220ms cubic-bezier(.2,.8,.2,1)` translate-Y from `100%` to `0`
-- Keyboard: `Y` = first action, `N` = deny, `Esc` = deny
-
-No stub exists; `ApprovalSheet.svelte` is not yet created.
+**Implemented.** `ApprovalSheet.svelte` slides up from the bottom with `220ms cubic-bezier(.2,.8,.2,1)` animation. Risk badge has `safe` / `caution` / `destructive` variants. Keyboard: `Y` = first action, `N` / `Esc` = deny. Wired to `agent:approval` IPC event; actions call `agentRespond()`.
 
 ### 8.4 Agent Hello Banner (`.agent-hello`)
 
-A transient one-line banner that appears when `agent.hello` is received:
-- Shows agent name + version
-- Auto-dismisses after ~3s or on any keypress
-- Appears between the terminal grid and status bar (overlays from top of status bar)
-
-Currently `agent.hello` only updates the status bar agent name; no banner.
+**Implemented.** `HelloBanner.svelte` appears when `agent:hello` is received, shows agent name + version, auto-dismisses after 3s, has manual dismiss button. Cleared automatically on `agent:bye`.
 
 ### 8.5 Session Mark (`.session-mark`)
 
-A horizontal divider with label text, injected into the scrollback at a checkpoint:
-- Design: `────── Refactor complete ──────` style, muted color
-- Not implemented.
+**Implemented.** `session.mark` OSC 7777 verb causes the Rust backend to emit ANSI-styled `────── label ──────` separator bytes via `terminal:output`, rendered inline by xterm.js without any extra frontend component.
 
 ### 8.6 Progress Bar (standalone `.progress-bar`)
 
@@ -263,7 +236,7 @@ Standalone progress bar component distinct from the tool card usage — used in 
 - [x] **`DiffView.svelte`** — unified diff renderer with `--diff-add-bg`/`--diff-del-bg` coloring, accept/reject/edit actions (Y/N/E); wire to `diff` OSC 7777 verb handler
 - [x] **Block model + `Block.svelte`** — drive from OSC 133 `PromptMark` events; collapsible command+output units with header, exit code badge, agent-id badge
 - [x] **Agent hello banner** — transient pill banner on `agent.hello`; auto-dismiss after 3s; wired in App.svelte
-- [ ] **Session mark** — horizontal divider injected on `session.mark` verb; scrollback-navigable
+- [x] **Session mark** — ANSI-styled `────── label ──────` separator bytes emitted via `terminal:output` on `session.mark` verb; rendered by xterm.js inline in scrollback
 - [x] **Custom scrollbar styles** — 4px-wide overlay scrollbar using `--fg-muted` thumb, via `app.css`
 
 ---

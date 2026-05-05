@@ -24,6 +24,7 @@
     onConfigUpdated,
     onAgentDiff,
     onAgentApproval,
+    onAgentBye,
     onBlockStart,
     onBlockEnd,
     type AgentDiffPayload,
@@ -40,6 +41,7 @@
     setTabCwd,
     setTabTitle,
     setTabAgent,
+    clearTabAgent,
     addToolCall,
     updateToolCall,
     toolCalls,
@@ -179,6 +181,10 @@
         }),
         onAgentApproval((p) => {
           pendingApprovals = new Map(pendingApprovals).set(p.session_id, p);
+        }),
+        onAgentBye((p) => {
+          clearTabAgent(p.session_id);
+          pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== p.session_id));
         }),
         onBlockStart((p) => {
           addBlock(p.session_id, {

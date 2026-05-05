@@ -40,15 +40,22 @@ fn handle_osc(osc: &OperatingSystemCommand) -> Option<OscEvent> {
         }
         // OSC 133 — FinalTerm/shell integration prompt marks
         OperatingSystemCommand::FinalTermSemanticPrompt(prompt) => {
-            let mark = match prompt {
-                FinalTermSemanticPrompt::FreshLineAndStartPrompt { .. } => 'A',
+            match prompt {
+                FinalTermSemanticPrompt::FreshLineAndStartPrompt { .. } => {
+                    Some(OscEvent::PromptMark { mark: 'A', exit_code: None, command: None })
+                }
                 FinalTermSemanticPrompt::MarkEndOfPromptAndStartOfInputUntilNextMarker
-                | FinalTermSemanticPrompt::MarkEndOfPromptAndStartOfInputUntilEndOfLine => 'B',
-                FinalTermSemanticPrompt::MarkEndOfInputAndStartOfOutput { .. } => 'C',
-                FinalTermSemanticPrompt::CommandStatus { .. } => 'D',
-                _ => return None,
-            };
-            Some(OscEvent::PromptMark(mark))
+                | FinalTermSemanticPrompt::MarkEndOfPromptAndStartOfInputUntilEndOfLine => {
+                    Some(OscEvent::PromptMark { mark: 'B', exit_code: None, command: None })
+                }
+                FinalTermSemanticPrompt::MarkEndOfInputAndStartOfOutput { aid } => {
+                    Some(OscEvent::PromptMark { mark: 'C', exit_code: None, command: aid.clone() })
+                }
+                FinalTermSemanticPrompt::CommandStatus { status, .. } => {
+                    Some(OscEvent::PromptMark { mark: 'D', exit_code: Some(*status), command: None })
+                }
+                _ => None,
+            }
         }
         OperatingSystemCommand::Unspecified(parts) => handle_unspecified_osc(parts),
         _ => None,
@@ -87,10 +94,33 @@ fn handle_unspecified_osc(parts: &[Vec<u8>]) -> Option<OscEvent> {
             Some(OscEvent::ClipboardWrite(data.to_string()))
         }
         // OSC 133 — shell prompt marks (A=prompt start, B=command start, C=output start, D=command end)
+        // Format: ESC]133;A\a  /  ESC]133;C;aid=<cmd>\a  /  ESC]133;D;exit=<code>\a
         "133" => {
-            let mark = parts.get(1)?;
-            let mark_str = std::str::from_utf8(mark).ok()?;
-            Some(OscEvent::PromptMark(mark_str.chars().next()?))
+            let mark_bytes = parts.get(1)?;
+            let mark_str = std::str::from_utf8(mark_bytes).ok()?;
+            let mark = mark_str.chars().next()?;
+
+            let exit_code = if mark == 'D' {
+                // Extra params: ESC]133;D;exit=0\a → parts[2] = "exit=0"
+                parts.get(2)
+                    .and_then(|b| std::str::from_utf8(b).ok())
+                    .and_then(|s| {
+                        s.strip_prefix("exit=").unwrap_or(s).parse::<i32>().ok()
+                    })
+            } else {
+                None
+            };
+
+            let command = if mark == 'C' {
+                // ESC]133;C;aid=<cmd>\a → parts[2] = "aid=<cmd>"
+                parts.get(2)
+                    .and_then(|b| std::str::from_utf8(b).ok())
+                    .and_then(|s| s.strip_prefix("aid=").map(str::to_string))
+            } else {
+                None
+            };
+
+            Some(OscEvent::PromptMark { mark, exit_code, command })
         }
         // OSC 7777 — EmberTerm agent protocol
         "7777" => {
@@ -157,7 +187,7 @@ mod tests {
         let seq = osc_bel("133", &["A"]);
         let events = extract_osc_events(&seq);
         assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
-        assert!(matches!(events[0], OscEvent::PromptMark('A')));
+        assert!(matches!(events[0], OscEvent::PromptMark { mark: 'A', .. }));
     }
 
     #[test]
@@ -166,7 +196,7 @@ mod tests {
         let seq = osc_bel("133", &["B"]);
         let events = extract_osc_events(&seq);
         assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
-        assert!(matches!(events[0], OscEvent::PromptMark('B')));
+        assert!(matches!(events[0], OscEvent::PromptMark { mark: 'B', .. }));
     }
 
     #[test]
@@ -175,7 +205,7 @@ mod tests {
         let seq = osc_bel("133", &["C"]);
         let events = extract_osc_events(&seq);
         assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
-        assert!(matches!(events[0], OscEvent::PromptMark('C')));
+        assert!(matches!(events[0], OscEvent::PromptMark { mark: 'C', .. }));
     }
 
     #[test]
@@ -184,7 +214,34 @@ mod tests {
         let seq = osc_bel("133", &["D"]);
         let events = extract_osc_events(&seq);
         assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
-        assert!(matches!(events[0], OscEvent::PromptMark('D')));
+        assert!(matches!(events[0], OscEvent::PromptMark { mark: 'D', .. }));
+    }
+
+    #[test]
+    fn test_osc_133_command_end_with_exit_code() {
+        // OSC 133;D;2 → mark 'D' with exit_code = Some(2)
+        // Termwiz reads osc[2] as a plain integer for the D mark exit code.
+        let seq = osc_bel("133", &["D", "2"]);
+        let events = extract_osc_events(&seq);
+        assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
+        match &events[0] {
+            OscEvent::PromptMark { mark: 'D', exit_code: Some(2), .. } => {}
+            other => panic!("expected PromptMark D exit_code=2, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_osc_133_output_start_with_aid() {
+        // OSC 133;C;aid=ls -la → mark 'C' with command = Some("ls -la")
+        let seq = osc_bel("133", &["C", "aid=ls -la"]);
+        let events = extract_osc_events(&seq);
+        assert_eq!(events.len(), 1, "expected 1 event, got {events:?}");
+        match &events[0] {
+            OscEvent::PromptMark { mark: 'C', command: Some(cmd), .. } => {
+                assert_eq!(cmd, "ls -la");
+            }
+            other => panic!("expected PromptMark C with aid, got {other:?}"),
+        }
     }
 
     #[test]

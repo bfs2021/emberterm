@@ -139,6 +139,16 @@ export function setTabAgent(sessionId: string, agentName: string) {
   );
 }
 
+export function clearTabAgent(sessionId: string) {
+  tabs.update((ts) =>
+    ts.map((t) =>
+      t.sessionId === sessionId
+        ? { ...t, agentActive: false, agentName: undefined }
+        : t,
+    ),
+  );
+}
+
 export function addToolCall(sessionId: string, call: ToolCall) {
   toolCalls.update((m) => {
     const existing = m.get(sessionId) ?? [];
