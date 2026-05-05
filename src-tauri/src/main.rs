@@ -7,6 +7,7 @@ mod platform;
 mod profile;
 mod state;
 mod terminal;
+mod watcher;
 
 fn main() {
     tracing_subscriber::fmt()
@@ -20,6 +21,9 @@ fn main() {
         .manage(state::AppState::new())
         .setup(|app| {
             platform::setup_window(app)?;
+            if let Err(e) = watcher::setup(app) {
+                tracing::warn!("file watcher setup failed: {e}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -31,6 +35,8 @@ fn main() {
             ipc::config_update,
             ipc::profile_list,
             ipc::profile_upsert,
+            ipc::agent_respond,
+            ipc::git_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running EmberTerm");

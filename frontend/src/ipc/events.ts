@@ -86,3 +86,15 @@ export function onToolProgress(cb: (p: ToolProgressPayload) => void): Promise<Un
 export function onToolEnd(cb: (p: ToolEndPayload) => void): Promise<UnlistenFn> {
   return listen<ToolEndPayload>("agent:tool_end", (e) => cb(e.payload));
 }
+
+// ── Hot-reload events ──────────────────────────────────────────────────────
+
+/** Fired when ~/.config/ember/profiles/ changes on disk. */
+export function onProfilesUpdated(cb: () => void): Promise<UnlistenFn> {
+  return listen("profiles:updated", () => cb());
+}
+
+/** Fired when ~/.config/ember/config.toml changes on disk. */
+export function onConfigUpdated(cb: () => void): Promise<UnlistenFn> {
+  return listen("config:updated", () => cb());
+}

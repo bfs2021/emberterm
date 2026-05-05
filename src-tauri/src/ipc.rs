@@ -105,6 +105,56 @@ pub async fn profile_upsert(
     Ok(())
 }
 
+// ── Agent commands ───────────────────────────────────────────────────────────
+
+/// Write an OSC 7777 message back into the agent's PTY input stream.
+/// `verb` is typically "reply" or "event"; `payload` is a JSON string.
+#[tauri::command]
+pub async fn agent_respond(
+    session_id: SessionId,
+    verb: String,
+    payload: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Format: ESC ] 7777 ; <verb> ; <payload> ESC \
+    let sequence = format!("\x1b]7777;{};{}\x1b\\", verb, payload);
+    let sessions = state.sessions.lock().unwrap();
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| format!("session {session_id} not found"))?;
+    let mut writer = session.writer.lock().unwrap();
+    use std::io::Write;
+    writer.write_all(sequence.as_bytes()).map_err(|e| e.to_string())?;
+    writer.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Shell out to git to get the current branch name for the given directory.
+/// Returns `None` if not a git repository or git is not installed.
+#[tauri::command]
+pub async fn git_branch(cwd: String) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || -> Option<String> {
+        let output = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&cwd)
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if branch.is_empty() || branch == "HEAD" {
+                None
+            } else {
+                Some(branch)
+            }
+        } else {
+            None
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn json_merge(base: &mut serde_json::Value, patch: serde_json::Value) {

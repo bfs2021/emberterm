@@ -16,7 +16,8 @@
   async function close() { await win.close(); }
 </script>
 
-<header class="title-bar" data-tauri-drag-region>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header class="title-bar" data-tauri-drag-region ondblclick={toggleMaximize}>
   <TabStrip {onNewTab} {onCloseTab} />
 
   <!-- Window controls -->

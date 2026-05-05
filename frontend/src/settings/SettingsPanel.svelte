@@ -17,6 +17,26 @@
   let profiles = $state<Profile[]>([]);
   let editingProfile = $state<Profile | null>(null);
   let creatingProfile = $state(false);
+  let searchQuery = $state("");
+
+  const CATEGORIES: { id: Category; label: string; keywords: string[] }[] = [
+    { id: "appearance", label: "Appearance", keywords: ["theme", "font", "color", "style", "opacity", "acrylic"] },
+    { id: "profiles", label: "Profiles", keywords: ["shell", "profile", "pwsh", "bash", "zsh", "cmd", "env"] },
+    { id: "keymap", label: "Keymap", keywords: ["key", "shortcut", "hotkey", "ctrl", "cmd"] },
+    { id: "agent", label: "Agent", keywords: ["agent", "osc", "tool", "claude", "ai"] },
+  ];
+
+  const visibleCategories = $derived(
+    searchQuery.trim()
+      ? CATEGORIES.filter((c) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            c.label.toLowerCase().includes(q) ||
+            c.keywords.some((k) => k.includes(q))
+          );
+        })
+      : CATEGORIES
+  );
 
   onMount(async () => {
     try {
@@ -49,18 +69,27 @@
     <div class="settings-panel" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-label="Settings">
       <!-- Left nav -->
       <nav class="settings-nav">
-        <button class="nav-item" class:active={activeCategory === "appearance"} onclick={() => (activeCategory = "appearance")}>
-          Appearance
-        </button>
-        <button class="nav-item" class:active={activeCategory === "profiles"} onclick={() => (activeCategory = "profiles")}>
-          Profiles
-        </button>
-        <button class="nav-item" class:active={activeCategory === "keymap"} onclick={() => (activeCategory = "keymap")}>
-          Keymap
-        </button>
-        <button class="nav-item" class:active={activeCategory === "agent"} onclick={() => (activeCategory = "agent")}>
-          Agent
-        </button>
+        <div class="nav-search-wrap">
+          <input
+            class="nav-search"
+            placeholder="Search…"
+            bind:value={searchQuery}
+            autocomplete="off"
+            spellcheck={false}
+          />
+        </div>
+        {#each visibleCategories as cat}
+          <button
+            class="nav-item"
+            class:active={activeCategory === cat.id}
+            onclick={() => { activeCategory = cat.id; }}
+          >
+            {cat.label}
+          </button>
+        {/each}
+        {#if visibleCategories.length === 0}
+          <span class="nav-empty">No matches</span>
+        {/if}
       </nav>
 
       <!-- Right content -->
@@ -157,8 +186,36 @@
     width: 160px;
     flex-shrink: 0;
     border-right: 1px solid var(--border, #21262d);
-    padding: 12px 0;
+    padding: 8px 0;
     gap: 2px;
+  }
+
+  .nav-search-wrap {
+    padding: 0 8px 8px;
+    border-bottom: 1px solid var(--border, #21262d);
+    margin-bottom: 4px;
+  }
+
+  .nav-search {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border, #21262d);
+    border-radius: 4px;
+    color: var(--fg, #e6edf3);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .nav-search::placeholder { color: var(--fg-muted, #7d8590); }
+  .nav-search:focus { border-color: var(--accent, #FF6B35); }
+
+  .nav-empty {
+    font-size: 11px;
+    color: var(--fg-muted, #7d8590);
+    padding: 8px 16px;
+    opacity: 0.6;
   }
 
   .nav-item {

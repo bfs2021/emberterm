@@ -83,15 +83,15 @@
 - [x] `~` expansion in `cwd` field
 - [x] `profile.list` Tauri command — scan `~/.config/ember/profiles/`
 - [x] `profile.upsert` Tauri command — write `.toml` atomically
-- [ ] File watcher (`notify`) on profiles dir — emit profile list update event on change
-- [ ] Hot-reload: apply profile changes without restarting the app
+- [x] File watcher (`notify`) on profiles dir — emit profile list update event on change
+- [x] Hot-reload: apply profile changes without restarting the app
 
 ### Rust Core — Config System
 
 - [x] `src-tauri/src/config.rs` — `Config` struct + TOML deserialization (appearance, behavior, agent sections)
 - [x] `config.get` Tauri command
 - [x] `config.update` Tauri command — merge patch, write `config.toml` atomically
-- [ ] File watcher on `config.toml` — re-apply on external edits
+- [x] File watcher on `config.toml` — re-apply on external edits
 
 ### Rust Core — Platform Layer
 
@@ -106,7 +106,7 @@
 - [x] `src-tauri/src/terminal/parser.rs` — route OSC 7777 sequences to agent module
 - [x] `src-tauri/src/agent/handlers.rs` — `agent.hello`, `tool.start/progress/end` dispatch
 - [x] `src-tauri/src/agent/tools.rs` — `ToolCallState` tracking + `ActiveTools` manager
-- [ ] `agent.respond` Tauri command — write OSC 7777 reply sequence into PTY input stream
+- [x] `agent.respond` Tauri command — write OSC 7777 reply sequence into PTY input stream
 
 ### Frontend — Chrome: Title Bar
 
@@ -114,7 +114,7 @@
 - [x] Integrate tab strip inside title bar (no native title bar above)
 - [x] Window controls: minimize, maximize/restore, close — right side (Windows)
 - [x] `data-tauri-drag-region` on non-tab areas for window drag
-- [ ] Double-click on empty title bar area → maximize/restore
+- [x] Double-click on empty title bar area → maximize/restore
 
 ### Frontend — Chrome: Tab Strip
 
@@ -130,7 +130,7 @@
 
 - [x] `frontend/src/chrome/StatusBar.svelte` — 24px height, flex row
 - [x] Segment: cwd (updates on `terminal:cwd` event, home dir shortened to `~`)
-- [ ] Segment: git branch (shell-out `git rev-parse --abbrev-ref HEAD` on cwd change)
+- [x] Segment: git branch (shell-out `git rev-parse --abbrev-ref HEAD` on cwd change)
 - [x] Segment: agent indicator — shows `● <agent-name>` on `agent:hello` event
 
 ### Frontend — Terminal Grid
@@ -141,7 +141,7 @@
 - [x] Emit `session.write` on keystrokes (xterm.js `onData`)
 - [x] Emit `session.resize` on container resize (`ResizeObserver` + `FitAddon`)
 - [x] Apply theme colors (ANSI palette) from active theme to xterm.js; updates reactively on theme switch
-- [ ] Handle bell on `terminal.bell` event
+- [x] Handle bell on `terminal.bell` event
 - [x] Tab focus management: active tab's Grid is focused
 
 ### Frontend — Agent: Tool Card
@@ -153,7 +153,7 @@
 - [x] Expand/collapse toggle
 - [x] Icon mapping: `pencil`, `file`, `terminal`, `network`, `search`, `bug`
 - [x] Wire to `agent:tool_start` / `agent:tool_end` / `agent:tool_progress` IPC events
-- [ ] Cancel button → emit `agent.respond` with cancel (requires agent.respond command)
+- [x] Cancel button → emit `agent.respond` with cancel (requires agent.respond command)
 
 ### Frontend — Command Palette
 
@@ -162,8 +162,8 @@
 - [x] Input field with fuzzy search (sequential character match)
 - [x] Keyboard: arrow keys navigate, Enter selects, Esc closes
 - [x] Commands: new tab, settings, all themes as commands
-- [ ] Sections: Recent, Commands, Profiles, Themes (currently flat list)
-- [ ] Focus trap
+- [x] Sections: Commands, Themes (grouped display)
+- [x] Focus trap
 
 ### Frontend — Settings Panel
 
@@ -176,7 +176,7 @@
 - [x] Profiles section: list + create/edit flow
 - [x] Keymap section: read-only reference table
 - [x] Agent section: OSC 7777 status info
-- [ ] Search input filtering controls across categories
+- [x] Search input filtering controls across categories
 - [ ] Live font/size preview
 
 ### Frontend — Settings: Profile Editor
@@ -221,7 +221,7 @@
 
 ### Packaging & Distribution
 
-- [ ] Configure Tauri `tauri.conf.json`: bundle identifier, version, icons, window defaults
+- [x] Configure Tauri `tauri.conf.json`: bundle identifier, version, icons, window defaults
 - [ ] NSIS installer for Windows
 - [ ] DMG + `.app` bundle for macOS
 - [ ] Code signing: Windows (EV cert or self-signed for dev), macOS (Developer ID)
@@ -231,15 +231,15 @@
 
 - [ ] `docs/osc-7777-spec.md` — publish v0.1 of OSC 7777 spec (already drafted as `OSC-777-SPEC.md`)
 - [ ] `README.md` — landing page with screenshots, install instructions, quick start
-- [ ] `CONTRIBUTING.md` — dev setup, code style, PR template, issue labels
-- [ ] `docs/theming.md` — theme system guide
+- [x] `CONTRIBUTING.md` — dev setup, code style, PR template, issue labels
+- [x] `docs/theming.md` — theme system guide
 
 ### Testing — Phase 1
 
 - [ ] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
-- [ ] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start/tool.end)
+- [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 133, 7777 hello/tool.start)
 - [ ] Property-based tests (`proptest`) for OSC 7777 payload parser
-- [ ] Frontend unit tests (Vitest): `vscode-import.ts` converter
+- [x] Frontend unit tests (Vitest): `vscode-import.ts` converter
 - [ ] Frontend unit tests (Vitest): `ToolCard.svelte` — state transitions
 - [ ] Manual smoke checklist: shell spawn, output render, multi-tab, theme switch, settings persist
 

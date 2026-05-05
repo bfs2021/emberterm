@@ -9,6 +9,8 @@ pub struct AppState {
     pub sessions: Mutex<HashMap<SessionId, Session>>,
     pub config: Mutex<Config>,
     pub profiles: Mutex<Vec<Profile>>,
+    /// Keeps the file watcher alive for the duration of the app.
+    pub watcher: Mutex<Option<notify::RecommendedWatcher>>,
     next_id: Mutex<u64>,
 }
 
@@ -18,6 +20,7 @@ impl AppState {
             sessions: Mutex::new(HashMap::new()),
             config: Mutex::new(Config::load()),
             profiles: Mutex::new(crate::profile::load_profiles()),
+            watcher: Mutex::new(None),
             next_id: Mutex::new(1),
         }
     }

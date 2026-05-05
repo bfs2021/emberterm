@@ -10,6 +10,7 @@
     progressPct?: number;
     progressMessage?: string;
     durationMs?: number;
+    onCancel?: () => void;
   }
 
   let {
@@ -20,6 +21,7 @@
     progressPct,
     progressMessage,
     durationMs,
+    onCancel,
   }: Props = $props();
 
   let expanded = $state(false);
@@ -63,6 +65,16 @@
     <span class="tool-status" aria-label={status}>{statusIcon[status]}</span>
     {#if durationMs !== undefined && (status === "ok" || status === "error")}
       <span class="tool-duration">{formatDuration(durationMs)}</span>
+    {/if}
+    {#if status === "running" && onCancel}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <span
+        class="tool-cancel"
+        title="Cancel"
+        aria-label="Cancel tool call"
+        onclick={(e) => { e.stopPropagation(); onCancel!(); }}
+      >✕</span>
     {/if}
     <span class="tool-toggle" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
   </button>
@@ -125,6 +137,20 @@
   .tool-progress { color: var(--accent, #FF6B35); font-size: 11px; flex-shrink: 0; }
   .tool-duration { color: var(--fg-muted, #7d8590); font-size: 11px; flex-shrink: 0; }
   .tool-toggle { color: var(--fg-muted, #7d8590); font-size: 10px; flex-shrink: 0; }
+
+  .tool-cancel {
+    color: var(--fg-muted, #7d8590);
+    font-size: 10px;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .tool-cancel:hover {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--danger, #f85149);
+  }
 
   .tool-status {
     flex-shrink: 0;

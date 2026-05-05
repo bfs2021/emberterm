@@ -6,7 +6,8 @@
   import ToolCard from "./agent/ToolCard.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
-  import { sessionCreate, sessionClose } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc } from "./ipc/client.js";
+  import { listen } from "@tauri-apps/api/event";
   import {
     onTerminalTitle,
     onTerminalCwd,
@@ -14,12 +15,12 @@
     onToolStart,
     onToolProgress,
     onToolEnd,
+    onProfilesUpdated,
+    onConfigUpdated,
   } from "./ipc/events.js";
   import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     tabs,
-    activeTabId,
-    activeSessionId,
     activeCwd,
     activeAgentName,
     addTab,
@@ -41,6 +42,39 @@
   let error = $state<string | null>(null);
   let paletteOpen = $state(false);
   let settingsOpen = $state(false);
+  let currentGitBranch = $state("");
+
+  // ── Git branch — refresh when cwd changes ────────────────────────────────
+
+  $effect(() => {
+    const cwd = $activeCwd;
+    if (cwd) {
+      gitBranchIpc(cwd).then((b) => { currentGitBranch = b ?? ""; }).catch(() => {
+        currentGitBranch = "";
+      });
+    } else {
+      currentGitBranch = "";
+    }
+  });
+
+  // ── Bell ─────────────────────────────────────────────────────────────────
+
+  function playBell() {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {
+      // AudioContext unavailable — silently ignore
+    }
+  }
 
   // ── IPC listeners ────────────────────────────────────────────────────────
 
@@ -82,6 +116,15 @@
           ...(p.summary ? { summary: p.summary } : {}),
         });
       }),
+      // Bell
+      await listen("terminal:bell", () => playBell()),
+      // Hot-reload: profiles and config changed on disk
+      await onProfilesUpdated(() => {
+        // Settings panel will re-fetch via profileList() on next open
+      }),
+      await onConfigUpdated(() => {
+        // Config changed externally — no-op for now; future: re-apply theme/font
+      }),
     );
   });
 
@@ -98,6 +141,7 @@
     if (mod && e.shiftKey && e.key === "W") { e.preventDefault(); closeActiveTab(); return; }
     if (mod && e.key === ",") { e.preventDefault(); settingsOpen = true; return; }
     if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(1); return; }
+    if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
   }
 
   function cycleTab(dir: 1 | -1) {
@@ -124,6 +168,13 @@
     await sessionClose(sessionId).catch(() => {});
     removeTab(tabId);
     if ($tabs.length === 0) await openNewTab();
+  }
+
+  // ── Agent actions ────────────────────────────────────────────────────────
+
+  function cancelTool(sessionId: string, toolId: string) {
+    const payload = JSON.stringify({ v: 1, kind: "tool.cancel", id: toolId });
+    agentRespond(sessionId, "event", payload).catch(() => {});
   }
 </script>
 
@@ -153,6 +204,9 @@
                   progressPct={call.progressPct}
                   progressMessage={call.progressMessage}
                   durationMs={call.durationMs}
+                  onCancel={call.status === "running"
+                    ? () => cancelTool(tab.sessionId, call.id)
+                    : undefined}
                 />
               </div>
             {/each}
@@ -170,6 +224,7 @@
 
   <StatusBar
     cwd={$activeCwd}
+    gitBranch={currentGitBranch}
     agentName={$activeAgentName}
   />
 

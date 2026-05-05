@@ -52,3 +52,25 @@ export async function profileList(): Promise<Profile[]> {
 export async function profileUpsert(profile: Profile): Promise<void> {
   return invoke("profile_upsert", { profile });
 }
+
+// ── Agent commands ────────────────────────────────────────────────────────────
+
+/**
+ * Write an OSC 7777 sequence back into the agent's PTY stdin.
+ * verb: "reply" | "event"
+ * payload: JSON string
+ */
+export async function agentRespond(
+  sessionId: SessionId,
+  verb: string,
+  payload: string
+): Promise<void> {
+  return invoke("agent_respond", { sessionId, verb, payload });
+}
+
+// ── Utility commands ──────────────────────────────────────────────────────────
+
+/** Returns the current git branch for the given directory, or null. */
+export async function gitBranch(cwd: string): Promise<string | null> {
+  return invoke<string | null>("git_branch", { cwd });
+}
