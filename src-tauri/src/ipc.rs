@@ -155,6 +155,15 @@ pub async fn git_branch(cwd: String) -> Result<Option<String>, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Returns true when no `config.toml` exists yet — used to show the welcome screen.
+#[tauri::command]
+pub async fn config_is_first_run() -> bool {
+    match crate::config::config_path() {
+        Some(path) => !path.exists(),
+        None => false,
+    }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn json_merge(base: &mut serde_json::Value, patch: serde_json::Value) {

@@ -37,6 +37,7 @@ fn main() {
             ipc::profile_upsert,
             ipc::agent_respond,
             ipc::git_branch,
+            ipc::config_is_first_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running EmberTerm");

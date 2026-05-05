@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tabs, activateTab, type Tab } from "../stores/app.js";
+  import { tabs, activateTab, renameTab, type Tab } from "../stores/app.js";
 
   interface Props {
     onNewTab: () => void;
@@ -7,6 +7,36 @@
   }
 
   let { onNewTab, onCloseTab }: Props = $props();
+
+  // Inline rename state
+  let renamingTabId = $state<string | null>(null);
+  let renameValue = $state("");
+
+  function startRename(tab: Tab, e: MouseEvent) {
+    e.stopPropagation();
+    renamingTabId = tab.id;
+    renameValue = tab.title;
+  }
+
+  function commitRename() {
+    if (renamingTabId) {
+      renameTab(renamingTabId, renameValue);
+      renamingTabId = null;
+    }
+  }
+
+  function cancelRename() {
+    renamingTabId = null;
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+    if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+  }
+
+  function handleRenameMount(node: HTMLInputElement) {
+    node.select();
+  }
 
   function handleTabKeydown(e: KeyboardEvent, tab: Tab) {
     if (e.key === "Enter" || e.key === " ") activateTab(tab.id);
@@ -34,13 +64,30 @@
       onclick={() => activateTab(tab.id)}
       onkeydown={(e) => handleTabKeydown(e, tab)}
       onmousedown={(e) => e.button === 1 && onCloseTab(tab.id, tab.sessionId)}
+      ondblclick={(e) => startRename(tab, e)}
     >
       {#if tab.agentActive}
         <span class="tab-dot agent-dot" aria-hidden="true"></span>
       {:else if tab.isRunning}
         <span class="tab-dot running-dot" aria-hidden="true"></span>
       {/if}
-      <span class="tab-title">{tab.title}</span>
+
+      {#if renamingTabId === tab.id}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="tab-rename-input"
+          type="text"
+          bind:value={renameValue}
+          onblur={commitRename}
+          onkeydown={handleRenameKeydown}
+          onclick={(e) => e.stopPropagation()}
+          use:handleRenameMount
+          autofocus
+        />
+      {:else}
+        <span class="tab-title">{tab.title}</span>
+      {/if}
+
       <span
         class="tab-close"
         role="button"
@@ -128,6 +175,21 @@
     pointer-events: none;
     flex: 1;
     min-width: 0;
+  }
+
+  .tab-rename-input {
+    background: var(--bg, #0d1117);
+    border: 1px solid var(--accent, #FF6B35);
+    border-radius: 3px;
+    color: var(--fg, #e6edf3);
+    font-size: 12px;
+    font-family: inherit;
+    height: 20px;
+    padding: 0 4px;
+    flex: 1;
+    min-width: 40px;
+    max-width: 160px;
+    outline: none;
   }
 
   .tab-close {

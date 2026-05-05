@@ -32,6 +32,20 @@ pub struct TerminalCwdPayload {
     pub cwd: String,
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct TerminalHyperlinkPayload {
+    pub session_id: SessionId,
+    pub url: String,
+    pub id: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct TerminalClipboardWritePayload {
+    pub session_id: SessionId,
+    /// Plain-text clipboard content (termwiz decodes base64 from the OSC 52 wire format).
+    pub data: String,
+}
+
 /// Spawns a PTY session with the platform-default shell and starts the PTY
 /// reader thread that forwards output bytes to the webview as Tauri events.
 pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
@@ -124,6 +138,25 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         TerminalCwdPayload {
                                             session_id: sid.clone(),
                                             cwd,
+                                        },
+                                    );
+                                }
+                                OscEvent::Hyperlink { url, id } => {
+                                    let _ = app_clone.emit(
+                                        "terminal:hyperlink",
+                                        TerminalHyperlinkPayload {
+                                            session_id: sid.clone(),
+                                            url,
+                                            id,
+                                        },
+                                    );
+                                }
+                                OscEvent::ClipboardWrite(data) => {
+                                    let _ = app_clone.emit(
+                                        "terminal:clipboard-write",
+                                        TerminalClipboardWritePayload {
+                                            session_id: sid.clone(),
+                                            data,
                                         },
                                     );
                                 }

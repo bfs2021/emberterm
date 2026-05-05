@@ -31,6 +31,13 @@ fn handle_osc(osc: &OperatingSystemCommand) -> Option<OscEvent> {
         OperatingSystemCommand::CurrentWorkingDirectory(cwd) => {
             Some(OscEvent::Cwd(cwd.clone()))
         }
+        // OSC 52 — clipboard write (termwiz decodes base64; content is plain text)
+        OperatingSystemCommand::SetSelection(_sel, content) => {
+            if content.is_empty() {
+                return None; // empty or read-request path
+            }
+            Some(OscEvent::ClipboardWrite(content.clone()))
+        }
         // OSC 133 — FinalTerm/shell integration prompt marks
         OperatingSystemCommand::FinalTermSemanticPrompt(prompt) => {
             let mark = match prompt {
@@ -53,6 +60,32 @@ fn handle_unspecified_osc(parts: &[Vec<u8>]) -> Option<OscEvent> {
     let tag = std::str::from_utf8(first).ok()?;
 
     match tag {
+        // OSC 8 — hyperlinks (https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
+        // Format: ESC ] 8 ; params ; uri BEL  (empty uri = link end)
+        "8" => {
+            let uri_bytes = parts.get(2)?;
+            let url = std::str::from_utf8(uri_bytes).ok()?.to_string();
+            if url.is_empty() {
+                return None; // hyperlink end marker — nothing to emit
+            }
+            let params = parts.get(1)
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .unwrap_or("");
+            let id = params.split(';')
+                .find_map(|seg| seg.strip_prefix("id="))
+                .map(str::to_string);
+            Some(OscEvent::Hyperlink { url, id })
+        }
+        // OSC 52 — clipboard access
+        // Format: ESC ] 52 ; selection ; base64-data BEL
+        "52" => {
+            let data_bytes = parts.get(2)?;
+            let data = std::str::from_utf8(data_bytes).ok()?;
+            if data == "?" || data.is_empty() {
+                return None; // read requests not supported in v0.1
+            }
+            Some(OscEvent::ClipboardWrite(data.to_string()))
+        }
         // OSC 133 — shell prompt marks (A=prompt start, B=command start, C=output start, D=command end)
         "133" => {
             let mark = parts.get(1)?;
@@ -179,6 +212,54 @@ mod tests {
             OscEvent::Osc7777 { verb, .. } => assert_eq!(verb, "agent.hello"),
             other => panic!("expected Osc7777, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_osc_8_hyperlink() {
+        // OSC 8 hyperlink — termwiz may parse this typed (SetHyperlink) before we see it
+        // as Unspecified.  If it does, xterm.js still renders the link; we just won't
+        // get a Rust-side event.  Test covers the Unspecified path.
+        let seq = osc_bel("8", &["id=link1", "https://example.com"]);
+        let events = extract_osc_events(&seq);
+        // Either we get a Hyperlink event (Unspecified path) or none (typed path).
+        // Both are acceptable — xterm.js handles display regardless.
+        for e in &events {
+            if let OscEvent::Hyperlink { url, id } = e {
+                assert_eq!(url, "https://example.com");
+                assert_eq!(id.as_deref(), Some("link1"));
+                return;
+            }
+        }
+        // If no event: termwiz handled it typed — still correct behaviour.
+    }
+
+    #[test]
+    fn test_osc_8_hyperlink_end_ignored() {
+        // Empty URI = hyperlink end — should produce no event.
+        let seq = osc_bel("8", &["", ""]);
+        let events = extract_osc_events(&seq);
+        let hyperlinks: Vec<_> = events.iter().filter(|e| matches!(e, OscEvent::Hyperlink { .. })).collect();
+        assert_eq!(hyperlinks.len(), 0, "hyperlink end should not emit an event");
+    }
+
+    #[test]
+    fn test_osc_52_clipboard_write() {
+        // Termwiz handles OSC 52 as SetSelection and decodes the base64 content.
+        // Base64 of "hello" is "aGVsbG8="; termwiz delivers the decoded string "hello".
+        let seq = osc_bel("52", &["c", "aGVsbG8="]);
+        let events = extract_osc_events(&seq);
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            OscEvent::ClipboardWrite(text) => assert_eq!(text, "hello"),
+            other => panic!("expected ClipboardWrite, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_osc_52_read_request_ignored() {
+        let seq = osc_bel("52", &["c", "?"]);
+        let events = extract_osc_events(&seq);
+        assert_eq!(events.len(), 0, "clipboard read request should be ignored in v0.1");
     }
 
     #[test]

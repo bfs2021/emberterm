@@ -87,6 +87,30 @@ export function onToolEnd(cb: (p: ToolEndPayload) => void): Promise<UnlistenFn> 
   return listen<ToolEndPayload>("agent:tool_end", (e) => cb(e.payload));
 }
 
+// ── Hyperlink / clipboard events ──────────────────────────────────────────
+
+export interface TerminalHyperlinkPayload {
+  session_id: string;
+  url: string;
+  id?: string;
+}
+
+export interface ClipboardWritePayload {
+  session_id: string;
+  /** Plain-text clipboard content (termwiz decodes base64 from the OSC 52 wire format). */
+  data: string;
+}
+
+/** Fired when a terminal program emits an OSC 8 hyperlink start sequence. */
+export function onTerminalHyperlink(cb: (p: TerminalHyperlinkPayload) => void): Promise<UnlistenFn> {
+  return listen<TerminalHyperlinkPayload>("terminal:hyperlink", (e) => cb(e.payload));
+}
+
+/** Fired when a terminal program requests a clipboard write via OSC 52. */
+export function onClipboardWrite(cb: (p: ClipboardWritePayload) => void): Promise<UnlistenFn> {
+  return listen<ClipboardWritePayload>("terminal:clipboard-write", (e) => cb(e.payload));
+}
+
 // ── Hot-reload events ──────────────────────────────────────────────────────
 
 /** Fired when ~/.config/ember/profiles/ changes on disk. */

@@ -6,6 +6,10 @@ pub enum OscEvent {
     Title(String),
     Cwd(String),
     PromptMark(char),
+    /// OSC 8 — hyperlink start (`id` from params, `url` is the href).
+    Hyperlink { url: String, id: Option<String> },
+    /// OSC 52 — clipboard write request (base64-encoded data).
+    ClipboardWrite(String),
     Osc7777 { verb: String, payload: String },
 }
 

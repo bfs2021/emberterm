@@ -6,7 +6,7 @@
   import ToolCard from "./agent/ToolCard.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
-  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun } from "./ipc/client.js";
   import { listen } from "@tauri-apps/api/event";
   import {
     onTerminalTitle,
@@ -15,9 +15,11 @@
     onToolStart,
     onToolProgress,
     onToolEnd,
+    onClipboardWrite,
     onProfilesUpdated,
     onConfigUpdated,
   } from "./ipc/events.js";
+  import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     tabs,
@@ -43,6 +45,7 @@
   let paletteOpen = $state(false);
   let settingsOpen = $state(false);
   let currentGitBranch = $state("");
+  let showWelcome = $state(false);
 
   // ── Git branch — refresh when cwd changes ────────────────────────────────
 
@@ -82,6 +85,7 @@
 
   onMount(async () => {
     try {
+      showWelcome = await configIsFirstRun();
       await openNewTab();
     } catch (e) {
       error = String(e);
@@ -115,6 +119,10 @@
           durationMs: p.duration_ms,
           ...(p.summary ? { summary: p.summary } : {}),
         });
+      }),
+      // OSC 52 clipboard write — termwiz already decoded base64; content is plain text
+      await onClipboardWrite((p) => {
+        navigator.clipboard.writeText(p.data).catch(() => {});
       }),
       // Bell
       await listen("terminal:bell", () => playBell()),
@@ -239,6 +247,10 @@
     open={settingsOpen}
     onClose={() => (settingsOpen = false)}
   />
+
+  {#if showWelcome}
+    <WelcomeScreen onComplete={() => (showWelcome = false)} />
+  {/if}
 </div>
 
 <style>

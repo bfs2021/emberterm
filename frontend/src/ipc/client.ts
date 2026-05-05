@@ -74,3 +74,8 @@ export async function agentRespond(
 export async function gitBranch(cwd: string): Promise<string | null> {
   return invoke<string | null>("git_branch", { cwd });
 }
+
+/** Returns true when no config.toml exists yet (first run). */
+export async function configIsFirstRun(): Promise<boolean> {
+  return invoke<boolean>("config_is_first_run");
+}

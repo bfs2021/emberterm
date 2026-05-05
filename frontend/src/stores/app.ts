@@ -104,6 +104,12 @@ export function setTabTitle(sessionId: string, title: string) {
   );
 }
 
+export function renameTab(tabId: string, newTitle: string) {
+  const trimmed = newTitle.trim();
+  if (!trimmed) return;
+  tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)));
+}
+
 export function setTabAgent(sessionId: string, agentName: string) {
   tabs.update((ts) =>
     ts.map((t) =>

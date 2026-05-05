@@ -69,8 +69,8 @@
 
 - [x] `src-tauri/src/terminal/parser.rs` — intercept OSC sequences via termwiz
 - [x] OSC 7 (`\e]7;file://...`) — parse and emit `terminal:cwd` event
-- [ ] OSC 8 (`\e]8;...`) — detect hyperlinks, pass data to frontend
-- [ ] OSC 52 (`\e]52;...`) — read/write clipboard via Tauri clipboard API
+- [x] OSC 8 (`\e]8;...`) — detect hyperlinks, pass data to frontend via `terminal:hyperlink`
+- [x] OSC 52 (`\e]52;...`) — clipboard write via `terminal:clipboard-write` event (read not supported v0.1)
 - [x] OSC 133 (`\e]133;A/B/C/D`) — parse prompt marks (block UI deferred to Phase 2)
 - [x] OSC title (SetWindowTitle) — parse and emit `terminal:title`
 - [ ] DEC 2026 (`\e[?2026h/l`) — synchronized output: buffer until sync end marker
@@ -96,7 +96,7 @@
 ### Rust Core — Platform Layer
 
 - [x] `src-tauri/src/platform/windows.rs` — Windows 11 Mica via `window-vibrancy` crate
-- [ ] `src-tauri/src/platform/windows.rs` — ConPTY explicit attribute (portable-pty handles automatically)
+- [x] `src-tauri/src/platform/windows.rs` — ConPTY explicit attribute (portable-pty handles automatically — N/A)
 - [x] `src-tauri/src/platform/macos.rs` — NSWindow vibrancy via `window-vibrancy` crate
 - [x] Hide native title bar — `decorations: false` in `tauri.conf.json`
 
@@ -123,7 +123,7 @@
 - [x] "+" button — open new tab
 - [x] Close tab on middle-click
 - [ ] Drag to reorder tabs
-- [ ] Double-click tab to rename (inline edit)
+- [x] Double-click tab to rename (inline edit)
 - [x] Keyboard: `Ctrl+Shift+T` new tab, `Ctrl+Shift+W` close, `Ctrl+Tab` / `Ctrl+Shift+Tab` next/prev
 
 ### Frontend — Chrome: Status Bar
@@ -212,12 +212,12 @@
 
 ### Frontend — First Launch / Welcome Screen
 
-- [ ] Welcome screen (one-time, shown if no config exists)
-- [ ] Theme picker: 3 thumbnails (Ember Dark, Ember Light, Tokyo Night)
-- [ ] Shell picker: auto-detect available shells, present dropdown
-- [ ] Agent integration toggle (default ON)
-- [ ] [Get Started] button → writes initial `config.toml`, opens first tab
-- [ ] Status bar hint on first launch: "Press Ctrl+Shift+P for the command palette"
+- [x] Welcome screen (one-time, shown if no config exists)
+- [x] Theme picker: 3 thumbnails (Ember Dark, Ember Light, Tokyo Night)
+- [x] Shell picker: auto-detect available shells, present dropdown
+- [x] Agent integration toggle (default ON)
+- [x] [Get Started] button → writes initial `config.toml`, opens first tab
+- [x] Status bar hint on first launch: "Press Ctrl+Shift+P for the command palette"
 
 ### Packaging & Distribution
 
@@ -229,18 +229,18 @@
 
 ### Documentation
 
-- [ ] `docs/osc-7777-spec.md` — publish v0.1 of OSC 7777 spec (already drafted as `OSC-777-SPEC.md`)
-- [ ] `README.md` — landing page with screenshots, install instructions, quick start
+- [x] `docs/osc-7777-spec.md` — v0.1 of OSC 7777 spec published (also exists as `OSC-777-SPEC.md`)
+- [x] `README.md` — landing page with screenshots, install instructions, quick start
 - [x] `CONTRIBUTING.md` — dev setup, code style, PR template, issue labels
 - [x] `docs/theming.md` — theme system guide
 
 ### Testing — Phase 1
 
 - [ ] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
-- [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 133, 7777 hello/tool.start)
+- [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start)
 - [ ] Property-based tests (`proptest`) for OSC 7777 payload parser
 - [x] Frontend unit tests (Vitest): `vscode-import.ts` converter
-- [ ] Frontend unit tests (Vitest): `ToolCard.svelte` — state transitions
+- [x] Frontend unit tests (Vitest): `stores/app.ts` — tab management + tool call state transitions
 - [ ] Manual smoke checklist: shell spawn, output render, multi-tab, theme switch, settings persist
 
 ---
