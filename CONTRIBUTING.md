@@ -6,7 +6,7 @@
 
 ```bash
 # Clone
-git clone https://github.com/your-org/emberterm
+git clone https://github.com/emberterm/emberterm
 cd emberterm
 
 # Install frontend deps
