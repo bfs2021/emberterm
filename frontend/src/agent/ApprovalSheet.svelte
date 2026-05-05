@@ -20,12 +20,24 @@
     destructive: "Destructive",
   };
 
+  // Map action keys to display labels
+  function formatAction(a: string): string {
+    return a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Button style class per action
+  function btnClass(a: string, i: number): string {
+    if (a === "deny") return "btn btn-danger";
+    if (i === 0 || a.startsWith("allow_session") || a === "allow_always") return "btn btn-primary";
+    if (a.startsWith("allow")) return "btn btn-ghost";
+    return "btn";
+  }
+
   let focusIdx = $state(0);
   let sheetEl = $state<HTMLDivElement | undefined>(undefined);
 
   $effect(() => {
     if (sheetEl) {
-      // Focus first button after mount
       tick().then(() => {
         const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-action");
         btns?.[0]?.focus();
@@ -52,15 +64,17 @@
     } else if (key === "y" || key === "Y") {
       const allow = actions.find(a => a.startsWith("allow"));
       if (allow) { e.preventDefault(); act(allow); }
+    } else if (key === "a" || key === "A") {
+      const always = actions.find(a => a === "allow_always" || a === "allow_session");
+      if (always) { e.preventDefault(); act(always); }
     } else if (key === "n" || key === "N") {
       const deny = actions.find(a => a === "deny");
       if (deny) { e.preventDefault(); act(deny); }
     }
   }
 
-  function formatAction(a: string): string {
-    return a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  }
+  // Check if detail looks like a command (no spaces at start, looks like a shell command)
+  const isCommand = $derived(detail.trim().split("\n").every(l => l.length < 120));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -72,27 +86,34 @@
   <div
     bind:this={sheetEl}
     class="approval-sheet"
-    data-risk={risk}
     role="dialog"
     aria-modal="true"
     aria-label={title}
     tabindex="-1"
   >
+    <!-- Header: risk badge + title -->
     <div class="approval-header">
-      <span class="approval-title">{title}</span>
       <span class="risk-badge" data-risk={risk}>{RISK_LABEL[risk]}</span>
+      <span class="approval-title">{title}</span>
     </div>
 
+    <!-- Body: detail -->
     <div class="approval-body">
+      <p class="approval-detail-text">What would you like to do?</p>
       <pre class="approval-detail">{detail}</pre>
     </div>
 
+    <!-- Footer: hint + actions -->
     <div class="approval-footer">
+      <span class="approval-hint">
+        <span class="kbd">Y</span> allow once
+        · <span class="kbd">A</span> always
+        · <span class="kbd">N</span> deny
+      </span>
+      <span class="footer-spacer"></span>
       {#each actions as action, i}
         <button
-          class="approval-action"
-          class:primary={i === 0}
-          class:danger={action === "deny" || risk === "destructive" && i === 0}
+          class="approval-action {btnClass(action, i)}"
           onclick={() => act(action)}
           onfocus={() => { focusIdx = i; }}
         >
@@ -104,127 +125,193 @@
 </div>
 
 <style>
+  /* ── Backdrop: positions sheet at bottom-center ── */
   .approval-backdrop {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: flex-end;
+    justify-content: center;
+    padding: 24px;
     pointer-events: none;
     z-index: 100;
   }
 
+  /* ── Floating card ────────────────────────────── */
   .approval-sheet {
+    pointer-events: auto;
     width: 100%;
-    background: var(--bg-elev, #010409);
-    border-top: 1px solid var(--border, #30363d);
-    box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
-    pointer-events: all;
-    animation: slide-up 240ms cubic-bezier(.2,.8,.2,1);
+    max-width: 540px;
+    background: var(--bg-elev-2, #161b22);
+    border: 1px solid var(--border, #21262d);
+    border-radius: var(--radius-lg, 14px);
+    box-shadow: var(--shadow-lg, 0 24px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04));
+    overflow: hidden;
+    animation: slide-up 220ms cubic-bezier(.2,.8,.2,1);
     outline: none;
   }
 
   @keyframes slide-up {
-    from { transform: translateY(100%); opacity: 0; }
+    from { transform: translateY(20px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
 
-  .approval-sheet[data-risk="destructive"] {
-    border-top-color: color-mix(in srgb, var(--red, #f85149) 40%, var(--border, #30363d));
-  }
-
-  .approval-sheet[data-risk="caution"] {
-    border-top-color: color-mix(in srgb, var(--yellow, #d29922) 40%, var(--border, #30363d));
-  }
-
+  /* ── Header ───────────────────────────────────── */
   .approval-header {
+    padding: 14px 16px 10px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 14px 0;
-  }
-
-  .approval-title {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--fg, #e6edf3);
+    gap: 10px;
   }
 
   .risk-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 4px;
     flex-shrink: 0;
   }
 
   .risk-badge[data-risk="safe"] {
-    background: color-mix(in srgb, var(--green, #3fb950) 15%, transparent);
-    color: var(--green, #3fb950);
+    background: rgba(126, 231, 135, 0.12);
+    color: var(--green, #7ee787);
+    border: 1px solid rgba(126, 231, 135, 0.3);
   }
 
   .risk-badge[data-risk="caution"] {
-    background: color-mix(in srgb, var(--yellow, #d29922) 15%, transparent);
+    background: rgba(210, 153, 34, 0.12);
     color: var(--yellow, #d29922);
+    border: 1px solid rgba(210, 153, 34, 0.3);
   }
 
   .risk-badge[data-risk="destructive"] {
-    background: color-mix(in srgb, var(--red, #f85149) 15%, transparent);
-    color: var(--red, #f85149);
+    background: rgba(255, 123, 114, 0.12);
+    color: var(--red, #ff7b72);
+    border: 1px solid rgba(255, 123, 114, 0.3);
   }
 
+  .approval-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg, #e6edf3);
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Body ─────────────────────────────────────── */
   .approval-body {
-    padding: 8px 14px;
+    padding: 4px 16px 14px;
+  }
+
+  .approval-detail-text {
+    color: var(--fg-muted, #7d8590);
+    font-size: 12.5px;
+    margin: 0 0 12px;
   }
 
   .approval-detail {
     margin: 0;
-    font-family: monospace;
+    font-family: var(--mono, monospace);
     font-size: 12px;
+    background: var(--bg, #0d1117);
+    border: 1px solid var(--border, #21262d);
+    border-radius: 6px;
+    padding: 9px 12px;
     color: var(--fg-muted, #7d8590);
-    background: var(--bg-block, rgba(255,255,255,0.03));
-    border: 1px solid var(--border, #30363d);
-    border-radius: 4px;
-    padding: 8px 10px;
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
-    max-height: 80px;
+    max-height: 100px;
     overflow-y: auto;
   }
 
+  /* ── Footer ───────────────────────────────────── */
   .approval-footer {
     display: flex;
-    gap: 6px;
-    padding: 8px 14px 12px;
-    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-elev, #010409);
+    border-top: 1px solid var(--border, #21262d);
   }
 
-  .approval-action {
-    padding: 5px 14px;
-    border-radius: 5px;
-    border: 1px solid var(--border, #30363d);
-    background: transparent;
+  .approval-hint {
+    font-size: 11.5px;
     color: var(--fg-muted, #7d8590);
-    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .footer-spacer { flex: 1; min-width: 4px; }
+
+  /* ── kbd spans ────────────────────────────────── */
+  .kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: var(--bg-elev-2, #161b22);
+    border: 1px solid var(--border, #21262d);
+    border-radius: 4px;
+    font-family: var(--mono, monospace);
+    font-size: 10.5px;
+    color: var(--fg-muted, #7d8590);
+  }
+
+  /* ── Buttons ──────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #21262d);
+    background: var(--bg-elev-2, #161b22);
+    color: var(--fg, #e6edf3);
     font-size: 12px;
-    transition: background 0.1s, color 0.1s;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms, color 120ms;
+    white-space: nowrap;
   }
 
-  .approval-action:hover { color: var(--fg, #e6edf3); background: rgba(255,255,255,0.06); }
-  .approval-action:focus { outline: 2px solid var(--accent, #FF6B35); outline-offset: 1px; }
-
-  .approval-action.primary:not(.danger) {
-    background: color-mix(in srgb, var(--accent, #FF6B35) 15%, transparent);
-    border-color: color-mix(in srgb, var(--accent, #FF6B35) 40%, transparent);
-    color: var(--accent, #FF6B35);
+  .btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--fg-dim, #484f58);
   }
 
-  .approval-action.danger {
-    background: color-mix(in srgb, var(--red, #f85149) 12%, transparent);
-    border-color: color-mix(in srgb, var(--red, #f85149) 35%, transparent);
-    color: var(--red, #f85149);
+  .btn:focus {
+    outline: 2px solid var(--accent, #FF6B35);
+    outline-offset: 1px;
+  }
+
+  .btn.btn-primary {
+    background: var(--accent, #FF6B35);
+    border-color: var(--accent, #FF6B35);
+    color: #1a0a04;
+    font-weight: 600;
+  }
+
+  .btn.btn-primary:hover {
+    background: color-mix(in srgb, var(--accent, #FF6B35) 85%, #fff);
+    border-color: color-mix(in srgb, var(--accent, #FF6B35) 85%, #fff);
+  }
+
+  .btn.btn-danger {
+    background: transparent;
+    color: var(--red, #ff7b72);
+    border-color: rgba(255, 123, 114, 0.3);
+  }
+
+  .btn.btn-danger:hover {
+    background: rgba(255, 123, 114, 0.08);
+    border-color: rgba(255, 123, 114, 0.5);
+  }
+
+  .btn.btn-ghost {
+    background: transparent;
+  }
+
+  .btn.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
   }
 </style>

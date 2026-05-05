@@ -49,9 +49,11 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
   const bg = pick("editor.background", "#0d1117");
   const fg = pick("terminal.foreground", "#e6edf3");
   const bgElev = pick("sideBar.background", "#010409");
-  const border = pick("sideBar.border", "#30363d");
+  const border = pick("sideBar.border", "#21262d");
   const accent = pick("focusBorder", "#FF6B35");
   const danger = pick("errorForeground", "#f85149");
+  const fgDim = pick("terminal.ansiBlack", "#484f58");
+  const borderSubtle = pick("panel.border", `color-mix(in srgb, ${border} 60%, transparent)`);
 
   // Semantic status colors mapped from ANSI palette
   const green = pick("terminal.ansiBrightGreen", "#3fb950");
@@ -69,8 +71,8 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
   const tabInactiveFg = pick("tab.inactiveForeground", "#7d8590");
 
   // Computed tokens — CSS color-mix() references resolved at paint time
-  const bgElev2 = `color-mix(in srgb, ${bgElev} 50%, ${bg})`;
-  const bgBlock = `color-mix(in srgb, ${bgElev} 25%, ${bg})`;
+  const bgElev2 = pick("editorWidget.background", `color-mix(in srgb, ${bg} 85%, ${bgElev})`);
+  const bgBlock = pick("editor.lineHighlightBackground", `color-mix(in srgb, ${bg} 92%, ${bgElev})`);
   const accentSoft = `color-mix(in srgb, ${accent} 12%, transparent)`;
   const accentGlow = `color-mix(in srgb, ${accent} 35%, transparent)`;
 
@@ -90,8 +92,10 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
       "--bg-elev-2": bgElev2,
       "--bg-block": bgBlock,
       "--border": border,
+      "--border-subtle": borderSubtle,
       "--fg": fg,
       "--fg-muted": tabInactiveFg,
+      "--fg-dim": fgDim,
       "--accent": accent,
       "--accent-soft": accentSoft,
       "--accent-glow": accentGlow,
@@ -106,6 +110,10 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
       "--diff-add-line": diffAddLine,
       "--diff-del-bg": diffDelBg,
       "--diff-del-line": diffDelLine,
+      "--radius-sm": "6px",
+      "--radius": "10px",
+      "--radius-lg": "14px",
+      "--shadow-lg": "0 24px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04)",
       "--status-bg": statusBg,
       "--status-fg": statusFg,
       "--tab-active-bg": tabActiveBg,

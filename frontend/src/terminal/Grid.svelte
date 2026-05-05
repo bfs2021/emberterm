@@ -15,9 +15,10 @@
     sessionId: string;
     active: boolean;
     onExit?: (code: number) => void;
+    onResize?: (cols: number, rows: number) => void;
   }
 
-  let { sessionId, active, onExit }: Props = $props();
+  let { sessionId, active, onExit, onResize }: Props = $props();
 
   // ── Terminal instance ────────────────────────────────────────────────────
 
@@ -107,10 +108,12 @@
       resizeObserver = new ResizeObserver(() => {
         fitAddon!.fit();
         sessionResize(sessionId, t.cols, t.rows).catch(console.error);
+        onResize?.(t.cols, t.rows);
       });
       resizeObserver.observe(container);
 
       await sessionResize(sessionId, t.cols, t.rows);
+      onResize?.(t.cols, t.rows);
 
       if (!mounted) {
         unlistenOutput?.();

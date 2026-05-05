@@ -39,52 +39,43 @@
 </script>
 
 <footer class="status-bar">
-  <!-- Left segments: shell · cwd · git · agent -->
+  <!-- Left items: shell · cwd · git · agent -->
   {#if hasShell}
     <span class="status-item status-shell">
-      <svg class="status-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <polyline points="2,4 5,6 2,8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="6" y1="8" x2="10" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <!-- shell/terminal icon -->
+      <svg class="status-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <polyline points="4 17 10 11 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="12" y1="19" x2="20" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
       {shell}
     </span>
   {/if}
 
-  {#if hasShell && hasCwd}
-    <span class="status-sep" aria-hidden="true">·</span>
-  {/if}
-
   {#if hasCwd}
-    <span class="status-item status-cwd">
-      <svg class="status-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M6 1L11 5v6H8V8H4v3H1V5L6 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    <span class="status-item status-cwd" class:first-item={!hasShell}>
+      <!-- folder/cwd icon -->
+      <svg class="status-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 7l9-4 9 4M3 7v10l9 4 9-4V7M3 7l9 4 9-4M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       {shortenCwd(cwd)}
     </span>
   {/if}
 
-  {#if (hasShell || hasCwd) && hasGit}
-    <span class="status-sep" aria-hidden="true">·</span>
-  {/if}
-
   {#if hasGit}
-    <span class="status-item status-git">
-      <svg class="status-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <circle cx="3" cy="3" r="1.5" stroke="currentColor" stroke-width="1.2"/>
-        <circle cx="3" cy="9" r="1.5" stroke="currentColor" stroke-width="1.2"/>
-        <circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.2"/>
-        <path d="M3 4.5V7.5M3 4.5C3 6.5 9 5 9 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <span class="status-item status-git" class:first-item={!hasShell && !hasCwd}>
+      <!-- git branch icon -->
+      <svg class="status-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="18" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 9v6M18 9c-3 0-6-1-6-3M18 15c-3 0-6 1-6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
       {gitBranch}
     </span>
   {/if}
 
-  {#if (hasShell || hasCwd || hasGit) && hasAgent}
-    <span class="status-sep" aria-hidden="true">·</span>
-  {/if}
-
   {#if hasAgent}
-    <span class="status-item status-agent">
+    <span class="status-item status-agent" class:first-item={!hasShell && !hasCwd && !hasGit}>
       <span class="agent-dot" aria-hidden="true"></span>
       {agentName}
     </span>
@@ -92,19 +83,22 @@
 
   <span class="status-spacer"></span>
 
-  <!-- Right segments: size · encoding · hint · clock -->
+  <!-- Right items: size · encoding · hint · clock -->
   {#if hasSize}
     <span class="status-item status-size">{termCols}×{termRows}</span>
-    <span class="status-sep" aria-hidden="true">·</span>
   {/if}
 
-  <span class="status-item status-enc">UTF-8</span>
-  <span class="status-sep" aria-hidden="true">·</span>
-
-  <span class="status-item status-hint">
-    <kbd>Ctrl+Shift+P</kbd>
+  <span class="status-item status-enc">
+    <span class="c-dim">UTF-8 · LF</span>
   </span>
-  <span class="status-sep" aria-hidden="true">·</span>
+
+  <span class="status-item status-hint clickable">
+    <svg class="status-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span>Ctrl+Shift+P</span>
+  </span>
 
   {#if clock}
     <span class="status-item status-clock" aria-label="Current time">{clock}</span>
@@ -115,65 +109,61 @@
   .status-bar {
     display: flex;
     align-items: center;
-    gap: 4px;
     height: 26px;
     padding: 0 12px;
-    background: var(--status-bg, #010409);
-    border-top: 1px solid var(--border, #30363d);
-    font-size: 11px;
-    color: var(--status-fg, #7d8590);
+    background: var(--bg-elev, #010409);
+    border-top: 1px solid var(--border, #21262d);
+    font-size: 11.5px;
+    color: var(--fg-muted, #7d8590);
     flex-shrink: 0;
     overflow: hidden;
+    font-family: var(--sans, system-ui, sans-serif);
   }
 
+  /* Each item: flex row, vertically centered, with left border as separator */
   .status-item {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    padding: 0 10px;
+    height: 100%;
     white-space: nowrap;
+    border-left: 1px solid var(--border-subtle, #1a1f27);
+  }
+
+  /* First item on each side has no left border */
+  .status-item:first-child,
+  .status-item.first-item {
+    border-left: none;
+  }
+
+  /* Spacer pushes right items to the right; items after it reset border */
+  .status-spacer { flex: 1; min-width: 8px; }
+
+  /* Items after spacer (right side) — first right item should have no extra border */
+  .status-spacer + .status-item {
+    border-left: none;
+  }
+
+  /* Clickable items */
+  .clickable {
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .clickable:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--fg, #e6edf3);
   }
 
   .status-icon {
-    width: 10px;
-    height: 10px;
     opacity: 0.7;
     flex-shrink: 0;
   }
 
-  .status-sep { opacity: 0.35; }
-
-  .status-spacer { flex: 1; min-width: 8px; }
-
-  .status-agent { color: var(--accent, #FF6B35); }
-
-  .status-size {
-    font-family: monospace;
-    font-size: 10px;
-    opacity: 0.6;
-  }
-
-  .status-enc {
-    font-size: 10px;
-    opacity: 0.55;
-  }
-
-  .status-hint {
-    opacity: 0.5;
-  }
-
-  .status-hint kbd {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 3px;
-    font-family: inherit;
-    font-size: 10px;
-    padding: 0px 4px;
-    line-height: 1.6;
-  }
-
-  .status-clock {
-    font-variant-numeric: tabular-nums;
-    opacity: 0.7;
+  /* Agent item */
+  .status-agent {
+    color: var(--accent, #FF6B35);
   }
 
   .agent-dot {
@@ -181,12 +171,17 @@
     height: 6px;
     border-radius: 50%;
     background: var(--accent, #FF6B35);
-    animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--accent-glow, rgba(255, 107, 53, 0.35));
     flex-shrink: 0;
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  /* Dim helper */
+  .c-dim {
+    color: var(--fg-dim, #484f58);
+  }
+
+  /* Clock */
+  .status-clock {
+    font-variant-numeric: tabular-nums;
   }
 </style>

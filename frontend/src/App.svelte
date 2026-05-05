@@ -59,6 +59,8 @@
   let settingsOpen = $state(false);
   let currentGitBranch = $state("");
   let showWelcome = $state(false);
+  let termCols = $state(0);
+  let termRows = $state(0);
 
   // Profile cache — populated lazily on first tab open
   let profileCache: Profile[] = [];
@@ -131,7 +133,11 @@
       if (!active) return;
 
       const fns = await Promise.all([
-        onTerminalTitle((p) => setTabTitle(p.session_id, p.title)),
+        onTerminalTitle((p) => {
+          const t = p.title;
+          const title = /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : t;
+          setTabTitle(p.session_id, title || t);
+        }),
         onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
         onAgentHello((p) => {
           setTabAgent(p.session_id, p.name);
@@ -246,17 +252,21 @@
   // ── Tab management ───────────────────────────────────────────────────────
 
   async function openNewTab(profileId?: string) {
-    if (!profileCache.length) {
-      try { profileCache = await profileList(); } catch { /* ignore */ }
-    }
-    const profile = profileId
-      ? profileCache.find((p) => p.id === profileId)
-      : profileCache[0];
-    const shell = profile ? shellBasename(profile.shell) : "";
+    try {
+      if (!profileCache.length) {
+        try { profileCache = await profileList(); } catch { /* ignore */ }
+      }
+      const profile = profileId
+        ? profileCache.find((p) => p.id === profileId)
+        : profileCache[0];
+      const shell = profile ? shellBasename(profile.shell) : "";
 
-    const sessionId = await sessionCreate(profileId);
-    createOutputBuffer(sessionId); // start buffering immediately before Grid mounts
-    addTab(sessionId, shell || "Shell", shell);
+      const sessionId = await sessionCreate(profileId);
+      createOutputBuffer(sessionId);
+      addTab(sessionId, shell || "Shell", shell);
+    } catch (e) {
+      error = `Failed to open tab: ${e}`;
+    }
   }
 
   async function closeTab(tabId: string, sessionId: string) {
@@ -290,6 +300,7 @@
             sessionId={tab.sessionId}
             active={tab.isActive}
             onExit={() => closeTab(tab.id, tab.sessionId)}
+            onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
           />
 
           {#if tab.isActive}
@@ -360,6 +371,8 @@
     cwd={$activeCwd}
     gitBranch={currentGitBranch}
     agentName={$activeAgentName}
+    {termCols}
+    {termRows}
   />
 
   <CommandPalette

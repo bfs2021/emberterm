@@ -34,17 +34,20 @@
 
   <!-- Branding -->
   <div class="title-brand">
-    <svg class="brand-flame" viewBox="0 0 16 20" fill="none" aria-hidden="true">
-      <path d="M8 0 C8 0, 14 5, 14 11 C14 15.4 11.3 18 8 18 C4.7 18 2 15.4 2 11 C2 7 6 3 6 3 C6 3 6 7 8 8 C8 8 10 6 8 0Z" fill="#FF6B35"/>
-      <path d="M8 9 C8 9, 10 10.5 10 13 C10 14.7 9.1 16 8 16 C6.9 16 6 14.7 6 13 C6 11 8 9 8 9Z" fill="rgba(255,255,255,0.45)"/>
+    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5 C 13 6, 16 7, 16.5 11 C 17 14.5, 14.8 17, 12 17 C 9.2 17, 7 14.5, 7.5 11 C 8 7.5, 12 7, 12 2.5 Z" fill="currentColor" opacity="0.95"/>
+      <path d="M12 8.5 C 12.5 10.5, 14 11.2, 14 13.2 C 14 14.8, 13 16, 12 16 C 11 16, 10 14.8, 10 13.2 C 10 11.2, 11.5 11, 12 8.5 Z" fill="#fff" opacity="0.55"/>
     </svg>
-    <span class="brand-name">EMBER</span>
+    <span class="brand-name">Ember</span>
   </div>
 
-  <!-- Tabs -->
+  <!-- Tabs (new-tab button lives inside TabStrip) -->
   <div class="tab-area">
     <TabStrip {onNewTab} {onCloseTab} />
   </div>
+
+  <!-- Spacer -->
+  <div class="titlebar-spacer" data-tauri-drag-region></div>
 
   <!-- Window controls -->
   <div class="win-controls">
@@ -89,6 +92,7 @@
   /* All interactive sections sit above the drag overlay */
   .title-brand,
   .tab-area,
+  .titlebar-spacer,
   .win-controls {
     position: relative;
     z-index: 1;
@@ -104,26 +108,34 @@
     border-right: 1px solid var(--border, #21262d);
   }
 
-  .brand-flame {
-    width: 12px;
-    height: 15px;
+  .brand-mark {
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
+    color: var(--accent, #FF6B35);
+    filter: drop-shadow(0 0 6px var(--accent-glow, rgba(255,107,53,0.35)));
   }
 
   .brand-name {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     color: var(--fg-muted, #7d8590);
-    text-transform: uppercase;
   }
 
   /* ── Tab area ─────────────────────────────── */
   .tab-area {
     flex: 1;
     min-width: 0;
-    display: flex;
     overflow: hidden;
+    display: flex;
+    align-items: stretch;
+  }
+
+  /* ── Spacer ───────────────────────────────── */
+  .titlebar-spacer {
+    flex: 0 1 auto;
+    min-width: 8px;
   }
 
   /* ── Window controls ──────────────────────── */
