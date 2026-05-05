@@ -1,5 +1,5 @@
 # Claude local settings
-.claude/
+.claude/settings.local.json
 
 # Rust build artifacts
 src-tauri/target/
