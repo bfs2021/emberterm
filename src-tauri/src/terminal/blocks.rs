@@ -3,13 +3,18 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub type BlockId = String;
 
 /// Persistent block record stored on the session for `block_get` IPC queries.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, Default)]
 pub struct Block {
     pub id: BlockId,
     pub command: String,
     pub started_at_ms: u64,
     pub exit_code: Option<i32>,
     pub duration_ms: Option<u64>,
+    /// Set by `block.annotate` OSC 7777 verb.
+    pub agent_id: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub fold: Option<String>,
 }
 
 /// Data returned by `on_output_start` — used by the caller to emit `block:start`.
@@ -34,6 +39,8 @@ enum State {
         id: BlockId,
         started_at: Instant,
         started_at_ms: u64,
+        /// Command text captured from the B mark (if any), used as fallback in `on_output_start`.
+        pending_command: Option<String>,
     },
     /// OSC 133 C received — command is executing, waiting for D.
     Executing {
@@ -76,17 +83,29 @@ impl BlockManager {
             id,
             started_at: Instant::now(),
             started_at_ms: unix_now_ms(),
+            pending_command: None,
         };
     }
 
+    /// OSC 133 B — end of prompt, start of user input.
+    /// Some shells embed the typed command here via `aid=`; store it as a fallback
+    /// for `on_output_start` in case C arrives without its own `aid=` parameter.
+    pub fn on_command_start(&mut self, command: Option<String>) {
+        if let State::Prompting { ref mut pending_command, .. } = self.state {
+            *pending_command = command;
+        }
+    }
+
     /// OSC 133 C — end of user input, start of command output.
-    /// `command_aid` is the optional `aid=...` value the shell may embed.
+    /// `command_aid` is the optional `aid=...` value from the C mark (takes precedence
+    /// over any command captured at the B mark).
     /// Returns `BlockStartData` to emit as `block:start`.
     pub fn on_output_start(&mut self, command_aid: Option<String>) -> Option<BlockStartData> {
         let prev = std::mem::replace(&mut self.state, State::Idle);
         match prev {
-            State::Prompting { id, started_at, started_at_ms } => {
-                let command = command_aid.unwrap_or_default();
+            State::Prompting { id, started_at, started_at_ms, pending_command } => {
+                // C's aid= takes precedence; B's pending_command is the fallback.
+                let command = command_aid.or(pending_command).unwrap_or_default();
                 self.state = State::Executing {
                     id: id.clone(),
                     started_at,
@@ -98,6 +117,15 @@ impl BlockManager {
                 self.state = other;
                 None
             }
+        }
+    }
+
+    /// Returns the ID of the block currently executing, if any.
+    /// Used by the OSC 7777 `block.annotate` handler to target the right block.
+    pub fn current_block_id(&self) -> Option<&BlockId> {
+        match &self.state {
+            State::Executing { id, .. } => Some(id),
+            _ => None,
         }
     }
 
@@ -117,3 +145,7 @@ impl BlockManager {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "blocks_test.rs"]
+mod tests;

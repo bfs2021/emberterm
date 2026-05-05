@@ -38,6 +38,58 @@ export function parseDiff(patch: string): DiffLine[] {
   return result;
 }
 
+// ── Side-by-side view ─────────────────────────────────────────────────────────
+
+export interface SideBySideLine {
+  type: "hunk" | "meta" | "content";
+  text?: string; // for hunk / meta rows
+  // Left (old) side
+  oldNum?: number;
+  oldType?: "del" | "ctx" | "empty";
+  oldText?: string;
+  // Right (new) side
+  newNum?: number;
+  newType?: "add" | "ctx" | "empty";
+  newText?: string;
+}
+
+/**
+ * Converts a flat list of unified-diff lines into side-by-side rows.
+ * Consecutive del/add blocks are paired so changed lines sit on the same row.
+ */
+export function toSideBySide(lines: DiffLine[]): SideBySideLine[] {
+  const result: SideBySideLine[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.type === "meta" || line.type === "hunk") {
+      result.push({ type: line.type, text: line.text });
+      i++;
+    } else if (line.type === "ctx") {
+      result.push({ type: "content", oldNum: line.oldNum, oldType: "ctx", oldText: line.text,
+                    newNum: line.newNum, newType: "ctx", newText: line.text });
+      i++;
+    } else {
+      // Consume a contiguous del+add block and pair them row-by-row.
+      const dels: DiffLine[] = [];
+      const adds: DiffLine[] = [];
+      while (i < lines.length && (lines[i].type === "del" || lines[i].type === "add")) {
+        if (lines[i].type === "del") dels.push(lines[i]);
+        else adds.push(lines[i]);
+        i++;
+      }
+      for (let j = 0; j < Math.max(dels.length, adds.length); j++) {
+        const d = dels[j];
+        const a = adds[j];
+        result.push({ type: "content",
+          oldNum: d?.oldNum, oldType: d ? "del" : "empty", oldText: d?.text ?? "",
+          newNum: a?.newNum, newType: a ? "add" : "empty", newText: a?.text ?? "" });
+      }
+    }
+  }
+  return result;
+}
+
 /** Count add/del lines in a parsed diff. */
 export function diffStats(lines: DiffLine[]): DiffStats {
   let add = 0;

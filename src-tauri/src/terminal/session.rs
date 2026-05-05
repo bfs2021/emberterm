@@ -10,8 +10,9 @@ pub struct Session {
     pub id: SessionId,
     /// PTY master — used for resize.
     pub master: Box<dyn portable_pty::MasterPty + Send>,
-    /// Write half of the PTY master — used for sending keystrokes.
-    pub writer: Mutex<Box<dyn std::io::Write + Send>>,
+    /// Write half of the PTY master — shared with the PTY reader thread for
+    /// OSC 7777 `agent.query` replies and usable by IPC commands.
+    pub writer: Arc<Mutex<Box<dyn std::io::Write + Send>>>,
     pub title: String,
     pub cwd: Option<PathBuf>,
     /// Active tool calls from any agent running in this session.

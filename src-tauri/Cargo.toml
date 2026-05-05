@@ -23,6 +23,13 @@ dirs = "6"
 notify = "6"
 window-vibrancy = "0.6"
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "osc_parser"
+harness = false
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseDiff, diffStats } from "./diff-utils.js";
+  import { parseDiff, diffStats, toSideBySide } from "./diff-utils.js";
 
   interface Props {
     id: string;
@@ -13,6 +13,9 @@
 
   const lines = $derived(parseDiff(patch));
   const stats = $derived(diffStats(lines));
+  const sideBySideLines = $derived(toSideBySide(lines));
+
+  let sideBySide = $state(false);
 
   const fileName = $derived(path.split(/[\\/]/).pop() ?? path);
 
@@ -50,6 +53,14 @@
       {#if stats.add > 0}<span class="stat-add">+{stats.add}</span>{/if}
       {#if stats.del > 0}<span class="stat-del">-{stats.del}</span>{/if}
     </span>
+    {#if !resolved}
+      <button
+        class="view-toggle"
+        onclick={() => (sideBySide = !sideBySide)}
+        title={sideBySide ? "Switch to unified view" : "Switch to side-by-side view"}
+        aria-label={sideBySide ? "Unified view" : "Side-by-side view"}
+      >{sideBySide ? "≡" : "⧉"}</button>
+    {/if}
     {#if resolved}
       <span class="resolved-badge">
         {resolvedResult === "accept" ? "✓ Applied" : resolvedResult === "reject" ? "✕ Rejected" : "Editing…"}
@@ -58,19 +69,40 @@
   </div>
 
   {#if !resolved}
-    <div class="diff-body">
-      {#each lines as line}
-        {#if line.type === "hunk"}
-          <div class="diff-hunk">{line.text}</div>
-        {:else if line.type !== "meta"}
-          <div class="diff-line" data-type={line.type}>
-            <span class="line-gutter">{line.type !== "add" ? (line.oldNum ?? "") : ""}</span>
-            <span class="line-gutter">{line.type !== "del" ? (line.newNum ?? "") : ""}</span>
-            <span class="line-sign">{line.type === "add" ? "+" : line.type === "del" ? "−" : " "}</span>
-            <span class="line-text">{line.text}</span>
-          </div>
-        {/if}
-      {/each}
+    <div class="diff-body" class:side-by-side={sideBySide}>
+      {#if !sideBySide}
+        {#each lines as line}
+          {#if line.type === "hunk"}
+            <div class="diff-hunk">{line.text}</div>
+          {:else if line.type !== "meta"}
+            <div class="diff-line" data-type={line.type}>
+              <span class="line-gutter">{line.type !== "add" ? (line.oldNum ?? "") : ""}</span>
+              <span class="line-gutter">{line.type !== "del" ? (line.newNum ?? "") : ""}</span>
+              <span class="line-sign">{line.type === "add" ? "+" : line.type === "del" ? "−" : " "}</span>
+              <span class="line-text">{line.text}</span>
+            </div>
+          {/if}
+        {/each}
+      {:else}
+        {#each sideBySideLines as row}
+          {#if row.type === "hunk" || row.type === "meta"}
+            <div class="diff-hunk sbs-full">{row.text}</div>
+          {:else}
+            <div class="sbs-row">
+              <div class="sbs-cell" data-type={row.oldType}>
+                <span class="line-gutter">{row.oldNum ?? ""}</span>
+                <span class="line-sign">{row.oldType === "del" ? "−" : " "}</span>
+                <span class="line-text">{row.oldText}</span>
+              </div>
+              <div class="sbs-cell" data-type={row.newType}>
+                <span class="line-gutter">{row.newNum ?? ""}</span>
+                <span class="line-sign">{row.newType === "add" ? "+" : " "}</span>
+                <span class="line-text">{row.newText}</span>
+              </div>
+            </div>
+          {/if}
+        {/each}
+      {/if}
     </div>
 
     <div class="diff-footer">
@@ -234,4 +266,33 @@
   }
 
   .resolved .diff-header { opacity: 0.6; }
+
+  .view-toggle {
+    background: transparent;
+    border: 1px solid var(--border, #30363d);
+    border-radius: 3px;
+    color: var(--fg-muted, #7d8590);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+  .view-toggle:hover { color: var(--fg, #e6edf3); }
+
+  /* Side-by-side rows */
+  .sbs-row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: none; }
+
+  .sbs-cell {
+    display: flex;
+    min-width: 0;
+    border-right: 1px solid var(--border, #30363d);
+  }
+  .sbs-cell:last-child { border-right: none; }
+  .sbs-cell[data-type="del"] { background: var(--diff-del-bg, rgba(248,81,73,0.12)); }
+  .sbs-cell[data-type="add"] { background: var(--diff-add-bg, rgba(63,185,80,0.12)); }
+  .sbs-cell[data-type="del"] .line-sign { color: var(--red, #f85149); }
+  .sbs-cell[data-type="add"] .line-sign { color: var(--green, #3fb950); }
+
+  .sbs-full { grid-column: 1 / -1; }
 </style>

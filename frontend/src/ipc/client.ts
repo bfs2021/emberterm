@@ -68,6 +68,14 @@ export async function blockGet(sessionId: SessionId): Promise<BlockRecord[]> {
   return invoke("block_get", { sessionId });
 }
 
+/**
+ * Searches blocks by command text (case-insensitive substring match).
+ * An empty query returns all blocks.
+ */
+export async function blockSearch(sessionId: SessionId, query: string): Promise<BlockRecord[]> {
+  return invoke("block_search", { sessionId, query });
+}
+
 // ── Agent commands ────────────────────────────────────────────────────────────
 
 /**

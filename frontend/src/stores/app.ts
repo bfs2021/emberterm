@@ -39,6 +39,8 @@ export interface Block {
   exitCode?: number;
   durationMs?: number;
   agentId?: string;
+  tags?: string[];
+  fold?: string;
 }
 
 export const tabs = writable<Tab[]>([]);
@@ -172,6 +174,18 @@ export function addBlock(sessionId: string, block: Block) {
   blocks.update((m) => {
     const existing = m.get(sessionId) ?? [];
     m.set(sessionId, [...existing, block]);
+    return new Map(m);
+  });
+}
+
+export function annotateBlock(
+  sessionId: string,
+  blockId: string,
+  patch: Pick<Block, "agentId" | "tags" | "fold">,
+) {
+  blocks.update((m) => {
+    const list = m.get(sessionId) ?? [];
+    m.set(sessionId, list.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
     return new Map(m);
   });
 }

@@ -30,6 +30,8 @@ pub enum OscVerb {
     Diff(DiffPayload),
     Approval(ApprovalPayload),
     AgentBye,
+    AgentQuery(AgentQueryPayload),
+    BlockAnnotate(BlockAnnotatePayload),
     SessionMark(SessionMarkPayload),
     Unknown { verb: String, payload: String },
 }
@@ -91,6 +93,22 @@ pub struct ApprovalPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentQueryPayload {
+    pub v: u32,
+    pub id: String,
+    pub ask: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockAnnotatePayload {
+    pub v: u32,
+    pub agent_id: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub fold: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionMarkPayload {
     pub v: u32,
     pub label: Option<String>,
@@ -137,6 +155,18 @@ pub fn parse_verb(verb: &str, payload: &str) -> OscVerb {
                 payload: payload.to_string(),
             }),
         "agent.bye" => OscVerb::AgentBye,
+        "block.annotate" => serde_json::from_str::<BlockAnnotatePayload>(payload)
+            .map(OscVerb::BlockAnnotate)
+            .unwrap_or_else(|_| OscVerb::Unknown {
+                verb: verb.to_string(),
+                payload: payload.to_string(),
+            }),
+        "agent.query" => serde_json::from_str::<AgentQueryPayload>(payload)
+            .map(OscVerb::AgentQuery)
+            .unwrap_or_else(|_| OscVerb::Unknown {
+                verb: verb.to_string(),
+                payload: payload.to_string(),
+            }),
         "session.mark" => serde_json::from_str::<SessionMarkPayload>(payload)
             .map(OscVerb::SessionMark)
             .unwrap_or(OscVerb::SessionMark(SessionMarkPayload { v: 1, label: None, kind: None })),
@@ -146,3 +176,7 @@ pub fn parse_verb(verb: &str, payload: &str) -> OscVerb {
         },
     }
 }
+
+#[cfg(test)]
+#[path = "protocol_test.rs"]
+mod tests;

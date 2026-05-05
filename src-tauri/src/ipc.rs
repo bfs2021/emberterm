@@ -29,9 +29,14 @@ pub async fn session_write(
     data: Vec<u8>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
-    let session = sessions.get(&id).ok_or_else(|| format!("session {id} not found"))?;
-    let mut writer = session.writer.lock().unwrap();
+    // Clone Arc while holding sessions lock, then release before locking writer.
+    let writer_arc = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions.get(&id)
+            .ok_or_else(|| format!("session {id} not found"))?
+            .writer.clone()
+    };
+    let mut writer = writer_arc.lock().unwrap();
     use std::io::Write;
     writer.write_all(&data).map_err(|e| e.to_string())?;
     writer.flush().map_err(|e| e.to_string())?;
@@ -128,6 +133,32 @@ pub async fn block_get(
     Ok(blocks)
 }
 
+/// Searches blocks for a session by command text (case-insensitive substring match).
+/// An empty query returns all blocks.
+#[tauri::command]
+pub async fn block_search(
+    session_id: SessionId,
+    query: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::terminal::blocks::Block>, String> {
+    let blocks_arc = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions
+            .get(&session_id)
+            .ok_or_else(|| format!("session {session_id} not found"))?
+            .blocks
+            .clone()
+    };
+    let blocks = blocks_arc.lock().unwrap();
+    let q = query.to_lowercase();
+    let results = if q.is_empty() {
+        blocks.clone()
+    } else {
+        blocks.iter().filter(|b| b.command.to_lowercase().contains(&q)).cloned().collect()
+    };
+    Ok(results)
+}
+
 // ── Agent commands ───────────────────────────────────────────────────────────
 
 /// Write an OSC 7777 message back into the agent's PTY input stream.
@@ -141,11 +172,14 @@ pub async fn agent_respond(
 ) -> Result<(), String> {
     // Format: ESC ] 7777 ; <verb> ; <payload> ESC \
     let sequence = format!("\x1b]7777;{};{}\x1b\\", verb, payload);
-    let sessions = state.sessions.lock().unwrap();
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| format!("session {session_id} not found"))?;
-    let mut writer = session.writer.lock().unwrap();
+    // Clone Arc while holding sessions lock, then release before locking writer.
+    let writer_arc = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions.get(&session_id)
+            .ok_or_else(|| format!("session {session_id} not found"))?
+            .writer.clone()
+    };
+    let mut writer = writer_arc.lock().unwrap();
     use std::io::Write;
     writer.write_all(sequence.as_bytes()).map_err(|e| e.to_string())?;
     writer.flush().map_err(|e| e.to_string())?;

@@ -237,7 +237,7 @@
 ### Testing — Phase 1
 
 - [ ] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
-- [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start)
+- [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start) — moved to `parser_test.rs`
 - [ ] Property-based tests (`proptest`) for OSC 7777 payload parser
 - [x] Frontend unit tests (Vitest): `vscode-import.ts` converter
 - [x] Frontend unit tests (Vitest): `stores/app.ts` — tab management + tool call state transitions
@@ -251,12 +251,12 @@
 
 - [x] `src-tauri/src/terminal/blocks.rs` — `BlockManager` state machine (Idle → Prompting → Executing)
 - [x] OSC 133 `A` mark → `on_prompt_start()`, emits `block:start` via PTY reader
-- [ ] OSC 133 `B` mark → command text captured (B mark currently unhandled in pty.rs)
+- [x] OSC 133 `B` mark → command text captured (B mark currently unhandled in pty.rs)
 - [x] OSC 133 `C` mark → `on_output_start()`, emits `block:start` IPC event
 - [x] OSC 133 `D;<exit>` mark → `on_command_end()`, emits `block:end` IPC event with exit code + duration
 - [x] `block.get` Tauri command — returns all blocks for a session (ordered by start)
 - [x] Store blocks on `Session` via `Arc<Mutex<Vec<Block>>>`, shared with PTY reader thread
-- [ ] `block.search` Tauri command
+- [x] `block.search` Tauri command — case-insensitive command substring filter
 - [ ] Store blocks on `Session` indexed by `BlockId` (HashMap lookup, deferred)
 
 ### Rust Core — OSC 7777 Full
@@ -264,11 +264,11 @@
 - [x] `tool.progress` — update `ToolCallState`, emit `agent:tool_progress` event (pct + message)
 - [x] `diff` verb — parse `DiffPayload`, emit `agent:diff` event; `agentRespond` writes OSC reply on user action
 - [x] `approval` verb — parse `ApprovalPayload`, emit `agent:approval` event; `agentRespond` writes OSC reply on user action
-- [ ] `block.annotate` — apply tags/fold/title to current open block
+- [x] `block.annotate` — apply tags/fold/title to current open block
 - [x] `session.mark` — emit `agent:session_mark` event + inject ANSI separator into `terminal:output`
 - [x] `agent.bye` — emit `agent:bye`, frontend clears agent state and dismisses hello banner
-- [ ] `agent.query` — reply with capabilities JSON written into PTY input
-- [ ] Rate-limit OSC 7777 processing: max 1000 sequences/sec/session
+- [x] `agent.query` — reply with capabilities JSON written into PTY input
+- [x] Rate-limit OSC 7777 processing: max 1000 sequences/sec/session
 - [x] `tool.cancel` event: `cancelTool()` in App.svelte writes `ESC ] 7777 ; event ; {"kind":"tool.cancel","id":...} ESC \` to PTY input
 
 ### Frontend — Block UI
@@ -285,7 +285,7 @@
 - [x] `frontend/src/agent/DiffView.svelte` — inline unified diff renderer
 - [x] Header: file path, `+N/-N` stats
 - [x] Body: line-by-line diff with `+`/`-` gutter (no Shiki — plain ANSI colors)
-- [ ] Toggle: unified / side-by-side view
+- [x] Toggle: unified / side-by-side view
 - [x] Footer: [Accept] [Reject] [Edit] action buttons (from `actions` payload)
 - [x] Keyboard: `Y` = accept, `N` = reject, `E` = edit
 - [x] On action: emit `agent.respond` with result → backend writes OSC reply to PTY
@@ -339,13 +339,13 @@
 
 ### Testing — Phase 2
 
-- [ ] Rust integration tests: spawn shell, emit OSC 133 marks, assert block events
-- [ ] Rust integration tests: emit OSC 7777 `diff` + simulate user reply, assert PTY input bytes
+- [x] Rust integration tests: OSC 133 pipeline — `extract_osc_events` + `BlockManager` (A→B→C→D full cycle, multiple blocks, interleaved OSC, edge cases — 7 tests in `blocks_test.rs`)
+- [x] Rust integration tests: OSC 7777 roundtrip — diff/approval parse, reply sequence format, agent.query roundtrip, tool.cancel event format — 5 tests in `protocol_test.rs`
 - [x] Frontend unit: `diff-utils.ts` — `parseDiff` / `diffStats` (10 tests: line classification, sigil stripping, line numbers, meta detection, stat counts)
 - [x] Frontend unit: `stores/app.ts` — `clearTabAgent` + block store (`addBlock`, `closeBlock`, scoping, ordering — 8 new tests)
-- [ ] Frontend unit: `ApprovalSheet.svelte` — keyboard nav, action dispatch (needs @testing-library/svelte)
+- [x] Frontend unit: `approval-utils.ts` — `formatAction`, `btnClass`, `resolveKey` keyboard bindings (21 tests)
 - [ ] Playwright E2E: open tab, run command, verify block appears
-- [ ] Criterion benchmark: OSC 7777 parser throughput
+- [x] Criterion benchmark: OSC 7777 parser throughput (`src-tauri/benches/osc_parser.rs` — shell_block, tool_starts ×3, plain_text ×3)
 
 ---
 
@@ -477,7 +477,7 @@
 
 - [ ] Audit: no OSC 7777 payload content in logs or telemetry
 - [ ] Sanitize untrusted bytes printed by agent (strip `ESC` before rendering in tool card summaries)
-- [ ] OSC 7777 rate limiting: 1000 seq/sec/session enforcement
+- [x] OSC 7777 rate limiting: 1000 seq/sec/session enforcement
 - [ ] `agent.hello` `name` field treated as display-only, never used for authorization
 
 ---

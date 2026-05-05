@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -5,64 +6,14 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::{AppHandle, Emitter};
 
 use super::blocks::{Block, BlockManager};
+use super::events::{
+    BlockAnnotateIpcPayload, BlockEndIpcPayload, BlockStartIpcPayload, SessionExitPayload,
+    TerminalClipboardWritePayload, TerminalCwdPayload, TerminalHyperlinkPayload,
+    TerminalOutputPayload, TerminalTitlePayload,
+};
 use super::session::{Session, SessionId};
 use crate::agent::handlers;
 use crate::agent::tools::ActiveTools;
-
-#[derive(serde::Serialize, Clone)]
-struct BlockStartIpcPayload {
-    session_id: SessionId,
-    id: String,
-    command: String,
-    started_at: u64,
-    agent_id: Option<String>,
-}
-
-#[derive(serde::Serialize, Clone)]
-struct BlockEndIpcPayload {
-    session_id: SessionId,
-    id: String,
-    exit_code: i32,
-    duration_ms: u64,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct TerminalOutputPayload {
-    pub session_id: SessionId,
-    pub data: Vec<u8>,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct SessionExitPayload {
-    pub session_id: SessionId,
-    pub code: i32,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct TerminalTitlePayload {
-    pub session_id: SessionId,
-    pub title: String,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct TerminalCwdPayload {
-    pub session_id: SessionId,
-    pub cwd: String,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct TerminalHyperlinkPayload {
-    pub session_id: SessionId,
-    pub url: String,
-    pub id: Option<String>,
-}
-
-#[derive(serde::Serialize, Clone)]
-pub struct TerminalClipboardWritePayload {
-    pub session_id: SessionId,
-    /// Plain-text clipboard content (termwiz decodes base64 from the OSC 52 wire format).
-    pub data: String,
-}
 
 /// Spawns a PTY session with the platform-default shell and starts the PTY
 /// reader thread that forwards output bytes to the webview as Tauri events.
@@ -100,10 +51,12 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         .try_clone_reader()
         .context("failed to clone PTY reader")?;
 
-    let writer = pty_pair
-        .master
-        .take_writer()
-        .context("failed to take PTY writer")?;
+    let writer: Arc<Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(Mutex::new(
+        pty_pair.master.take_writer().context("failed to take PTY writer")?,
+    ));
+    // Shared with the reader thread so agent.query replies can be written to
+    // PTY stdin without going through the full IPC command path.
+    let writer_for_thread = writer.clone();
 
     let app_clone = app.clone();
     let sid = session_id.clone();
@@ -124,6 +77,9 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
             let mut buf = vec![0u8; 8192];
             // BlockManager tracks OSC 133 prompt marks for this session.
             let mut block_mgr = BlockManager::default();
+            // Rate-limit OSC 7777 processing: max 1000 sequences per second.
+            let mut osc7777_count: u32 = 0;
+            let mut osc7777_window = std::time::Instant::now();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
@@ -187,6 +143,8 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                 OscEvent::PromptMark { mark, exit_code, command } => {
                                     match mark {
                                         'A' => block_mgr.on_prompt_start(),
+                                        // B mark: end-of-prompt, some shells embed command text here.
+                                        'B' => block_mgr.on_command_start(command),
                                         'C' => {
                                             if let Some(data) = block_mgr.on_output_start(command) {
                                                 // Store the new block for IPC queries.
@@ -194,8 +152,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                                     id: data.id.clone(),
                                                     command: data.command.clone(),
                                                     started_at_ms: data.started_at_ms,
-                                                    exit_code: None,
-                                                    duration_ms: None,
+                                                    ..Default::default()
                                                 });
                                                 let _ = app_clone.emit("block:start", BlockStartIpcPayload {
                                                     session_id: sid.clone(),
@@ -227,20 +184,48 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                     }
                                 }
                                 OscEvent::Osc7777 { verb, payload } => {
-                                    if let Some(inject) = handlers::dispatch(
-                                        &verb,
-                                        &payload,
-                                        &sid,
-                                        &mut tools,
-                                        &app_clone,
-                                    ) {
-                                        let _ = app_clone.emit(
-                                            "terminal:output",
-                                            TerminalOutputPayload {
-                                                session_id: sid.clone(),
-                                                data: inject,
-                                            },
-                                        );
+                                    // Enforce 1000 sequences/sec rate limit.
+                                    if osc7777_window.elapsed().as_secs() >= 1 {
+                                        osc7777_window = std::time::Instant::now();
+                                        osc7777_count = 0;
+                                    }
+                                    osc7777_count += 1;
+                                    if osc7777_count > 1000 {
+                                        tracing::warn!(session_id = %sid, "OSC 7777 rate limit exceeded, dropping sequence");
+                                    } else {
+                                        match handlers::dispatch(&verb, &payload, &sid, &mut tools, &app_clone) {
+                                            Some(handlers::DispatchEffect::TerminalOutput(data)) => {
+                                                let _ = app_clone.emit("terminal:output", TerminalOutputPayload {
+                                                    session_id: sid.clone(), data,
+                                                });
+                                            }
+                                            Some(handlers::DispatchEffect::PtyInput(data)) => {
+                                                let mut w = writer_for_thread.lock().unwrap();
+                                                let _ = w.write_all(&data);
+                                                let _ = w.flush();
+                                            }
+                                            Some(handlers::DispatchEffect::AnnotateBlock(p)) => {
+                                                if let Some(block_id) = block_mgr.current_block_id() {
+                                                    let block_id = block_id.clone();
+                                                    // Update the stored block.
+                                                    let mut blks = blocks_for_thread.lock().unwrap();
+                                                    if let Some(b) = blks.iter_mut().find(|b| b.id == block_id) {
+                                                        if p.agent_id.is_some() { b.agent_id = p.agent_id.clone(); }
+                                                        if !p.tags.is_empty() { b.tags = p.tags.clone(); }
+                                                        if p.fold.is_some() { b.fold = p.fold.clone(); }
+                                                    }
+                                                    drop(blks);
+                                                    let _ = app_clone.emit("block:annotate", BlockAnnotateIpcPayload {
+                                                        session_id: sid.clone(),
+                                                        id: block_id,
+                                                        agent_id: p.agent_id,
+                                                        tags: p.tags,
+                                                        fold: p.fold,
+                                                    });
+                                                }
+                                            }
+                                            None => {}
+                                        }
                                     }
                                 }
                             }
@@ -262,7 +247,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
     Ok(Session {
         id: session_id,
         master: pty_pair.master,
-        writer: Mutex::new(writer),
+        writer,
         title: shell,
         cwd: None,
         active_tools: Mutex::new(ActiveTools::default()),
@@ -297,4 +282,3 @@ fn which_shell(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-use std::io::Read;

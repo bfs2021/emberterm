@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDiff, diffStats } from "./diff-utils.js";
+import { parseDiff, diffStats, toSideBySide } from "./diff-utils.js";
 
 const SIMPLE_PATCH = `--- a/src/main.rs
 +++ b/src/main.rs
@@ -61,6 +61,50 @@ describe("parseDiff", () => {
   it("does not treat +++ / --- as add/del lines", () => {
     const lines = parseDiff("--- a/x\n+++ b/x\n");
     expect(lines.every((l) => l.type === "meta")).toBe(true);
+  });
+});
+
+describe("toSideBySide", () => {
+  it("returns empty array for empty input", () => {
+    expect(toSideBySide([])).toEqual([]);
+  });
+
+  it("pairs del and add lines from same hunk", () => {
+    const lines = parseDiff("@@ -1 +1 @@\n-old\n+new\n");
+    const sbs = toSideBySide(lines);
+    const content = sbs.filter((r) => r.type === "content");
+    expect(content).toHaveLength(1);
+    expect(content[0].oldType).toBe("del");
+    expect(content[0].newType).toBe("add");
+    expect(content[0].oldText).toBe("old");
+    expect(content[0].newText).toBe("new");
+  });
+
+  it("pads unmatched del with empty right side", () => {
+    const lines = parseDiff("@@ -1,2 +1 @@\n-line1\n-line2\n+only\n");
+    const sbs = toSideBySide(lines);
+    const content = sbs.filter((r) => r.type === "content");
+    expect(content).toHaveLength(2);
+    expect(content[0].oldType).toBe("del");
+    expect(content[0].newType).toBe("add");
+    expect(content[1].oldType).toBe("del");
+    expect(content[1].newType).toBe("empty");
+  });
+
+  it("ctx lines appear on both sides", () => {
+    const lines = parseDiff("@@ -1 +1 @@\n same\n");
+    const sbs = toSideBySide(lines);
+    const content = sbs.filter((r) => r.type === "content");
+    expect(content).toHaveLength(1);
+    expect(content[0].oldType).toBe("ctx");
+    expect(content[0].newType).toBe("ctx");
+    expect(content[0].oldText).toBe(content[0].newText);
+  });
+
+  it("hunk header emits a hunk-type row", () => {
+    const lines = parseDiff("@@ -1 +1 @@\n");
+    const sbs = toSideBySide(lines);
+    expect(sbs[0].type).toBe("hunk");
   });
 });
 

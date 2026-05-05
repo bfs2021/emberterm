@@ -144,7 +144,11 @@ portable-pty (PTY master)
 - One public `mod` per file; `pub(crate)` over `pub` where the symbol doesn't cross the crate boundary
 
 **Tests**
-- Unit tests in `mod tests` at the bottom of each source file, guarded by `#[cfg(test)]`
+- Unit tests live in a **separate `*_test.rs` file** alongside the source file:
+  - Place tests in `src/terminal/blocks_test.rs`, `src/agent/protocol_test.rs`, etc.
+  - Reference it from the source file with `#[cfg(test)] #[path = "blocks_test.rs"] mod tests;`
+  - The test file starts with `use super::*;` to access the parent module's items
+  - This keeps each source file under the 300-line limit and makes tests easy to locate
 - Integration tests in `src-tauri/tests/`
 - No `#[ignore]` without a comment explaining why and a tracking issue
 

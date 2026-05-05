@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { formatAction, btnClass, resolveKey } from "./approval-utils.js";
 
   type Risk = "safe" | "caution" | "destructive";
 
@@ -20,19 +21,6 @@
     destructive: "Destructive",
   };
 
-  // Map action keys to display labels
-  function formatAction(a: string): string {
-    return a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  // Button style class per action
-  function btnClass(a: string, i: number): string {
-    if (a === "deny") return "btn btn-danger";
-    if (i === 0 || a.startsWith("allow_session") || a === "allow_always") return "btn btn-primary";
-    if (a.startsWith("allow")) return "btn btn-ghost";
-    return "btn";
-  }
-
   let focusIdx = $state(0);
   let sheetEl = $state<HTMLDivElement | undefined>(undefined);
 
@@ -51,25 +39,18 @@
 
   function handleKeydown(e: KeyboardEvent) {
     const key = e.key;
-    if (key === "Escape") {
-      e.preventDefault();
-      const deny = actions.find(a => a === "deny") ?? actions.at(-1);
-      if (deny) act(deny);
-    } else if (key === "ArrowLeft" || key === "ArrowRight") {
+    if (key === "ArrowLeft" || key === "ArrowRight") {
       e.preventDefault();
       const delta = key === "ArrowRight" ? 1 : -1;
       focusIdx = Math.max(0, Math.min(actions.length - 1, focusIdx + delta));
       const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-action");
       btns?.[focusIdx]?.focus();
-    } else if (key === "y" || key === "Y") {
-      const allow = actions.find(a => a.startsWith("allow"));
-      if (allow) { e.preventDefault(); act(allow); }
-    } else if (key === "a" || key === "A") {
-      const always = actions.find(a => a === "allow_always" || a === "allow_session");
-      if (always) { e.preventDefault(); act(always); }
-    } else if (key === "n" || key === "N") {
-      const deny = actions.find(a => a === "deny");
-      if (deny) { e.preventDefault(); act(deny); }
+      return;
+    }
+    const resolved = resolveKey(key, actions);
+    if (resolved !== null) {
+      e.preventDefault();
+      act(resolved);
     }
   }
 

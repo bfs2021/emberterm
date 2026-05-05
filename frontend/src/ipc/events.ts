@@ -188,10 +188,22 @@ export interface BlockEndPayload {
   duration_ms: number;
 }
 
+export interface BlockAnnotatePayload {
+  session_id: string;
+  id: string;
+  agent_id?: string;
+  tags: string[];
+  fold?: string;
+}
+
 export function onBlockStart(cb: (p: BlockStartPayload) => void): Promise<UnlistenFn> {
   return listen<BlockStartPayload>("block:start", (e) => cb(e.payload));
 }
 
 export function onBlockEnd(cb: (p: BlockEndPayload) => void): Promise<UnlistenFn> {
   return listen<BlockEndPayload>("block:end", (e) => cb(e.payload));
+}
+
+export function onBlockAnnotate(cb: (p: BlockAnnotatePayload) => void): Promise<UnlistenFn> {
+  return listen<BlockAnnotatePayload>("block:annotate", (e) => cb(e.payload));
 }

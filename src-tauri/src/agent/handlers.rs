@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use super::protocol::{OscVerb, parse_verb};
+pub use super::protocol::BlockAnnotatePayload;
 use super::tools::{ActiveTools, ToolStatus};
 use crate::terminal::session::SessionId;
 
@@ -74,16 +75,26 @@ pub struct AgentSessionMarkEvent {
     pub kind: Option<String>,
 }
 
+/// Effect returned by `dispatch()` telling the PTY reader thread what to do
+/// with any bytes the terminal needs to produce.
+pub enum DispatchEffect {
+    /// Inject bytes into the terminal output stream (renders in xterm.js).
+    TerminalOutput(Vec<u8>),
+    /// Write bytes into the PTY input stream so the agent reads them as stdin.
+    PtyInput(Vec<u8>),
+    /// Annotate the current executing block with agent metadata.
+    AnnotateBlock(BlockAnnotatePayload),
+}
+
 /// Dispatches a parsed OSC 7777 verb to the webview and updates tool state.
-/// Returns optional bytes that should be injected into the terminal output stream
-/// (currently used by `session.mark` to render a visual separator in xterm.js).
+/// Returns an optional `DispatchEffect` describing side-channel bytes to produce.
 pub fn dispatch(
     verb: &str,
     payload: &str,
     session_id: &SessionId,
     tools: &mut ActiveTools,
     app: &AppHandle,
-) -> Option<Vec<u8>> {
+) -> Option<DispatchEffect> {
     match parse_verb(verb, payload) {
         OscVerb::AgentHello(p) => {
             tracing::info!(session_id = %session_id, agent = %p.name, "agent connected");
@@ -163,6 +174,30 @@ pub fn dispatch(
             let _ = app.emit("agent:bye", AgentByeEvent { session_id: session_id.clone() });
             None
         }
+        OscVerb::BlockAnnotate(p) => {
+            tracing::debug!(
+                session_id = %session_id,
+                agent_id = ?p.agent_id,
+                "block annotate"
+            );
+            Some(DispatchEffect::AnnotateBlock(p))
+        }
+        OscVerb::AgentQuery(p) => {
+            tracing::debug!(session_id = %session_id, id = %p.id, ask = %p.ask, "agent query");
+            let reply_json = serde_json::json!({
+                "v": 1,
+                "id": p.id,
+                "result": {
+                    "osc_7777": [
+                        "tool.start", "tool.progress", "tool.end",
+                        "diff", "approval", "session.mark", "agent.bye"
+                    ],
+                    "blocks": true
+                }
+            });
+            let sequence = format!("\x1b]7777;reply;{}\x1b\\", reply_json);
+            Some(DispatchEffect::PtyInput(sequence.into_bytes()))
+        }
         OscVerb::SessionMark(p) => {
             tracing::debug!(session_id = %session_id, label = ?p.label, "session mark");
             let _ = app.emit("agent:session_mark", AgentSessionMarkEvent {
@@ -170,7 +205,7 @@ pub fn dispatch(
                 label: p.label.clone(),
                 kind: p.kind,
             });
-            Some(make_separator(p.label.as_deref()))
+            Some(DispatchEffect::TerminalOutput(make_separator(p.label.as_deref())))
         }
         OscVerb::Unknown { verb, .. } => {
             tracing::debug!(session_id = %session_id, verb = %verb, "unknown OSC 7777 verb");

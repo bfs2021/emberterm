@@ -27,6 +27,7 @@
     onAgentBye,
     onBlockStart,
     onBlockEnd,
+    onBlockAnnotate,
     type AgentDiffPayload,
     type AgentApprovalPayload,
   } from "./ipc/events.js";
@@ -46,6 +47,7 @@
     updateToolCall,
     toolCalls,
     addBlock,
+    annotateBlock,
     closeBlock,
     createOutputBuffer,
     appendOutputBuffer,
@@ -196,6 +198,13 @@
         }),
         onBlockEnd((p) => {
           closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms);
+        }),
+        onBlockAnnotate((p) => {
+          annotateBlock(p.session_id, p.id, {
+            agentId: p.agent_id,
+            tags: p.tags,
+            fold: p.fold,
+          });
         }),
         onProfilesUpdated(() => {}),
         onConfigUpdated(() => {}),
