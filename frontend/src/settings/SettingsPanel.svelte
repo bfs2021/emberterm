@@ -1,6 +1,7 @@
 <script lang="ts">
   import ThemeEditor from "./ThemeEditor.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
+  import Btn from "../lib/Btn.svelte";
   import { profileList, type Profile } from "../ipc/client.js";
 
   interface Props {
@@ -112,10 +113,10 @@
                 <div class="profile-row">
                   <span class="profile-name">{p.name}</span>
                   <span class="profile-shell">{p.shell}</span>
-                  <button class="btn-small" onclick={() => (editingProfile = p)}>Edit</button>
+                  <Btn variant="ghost" size="sm" onclick={() => (editingProfile = p)}>Edit</Btn>
                 </div>
               {/each}
-              <button class="btn-primary" onclick={() => (creatingProfile = true)}>+ New Profile</button>
+              <Btn variant="primary" onclick={() => (creatingProfile = true)}>+ New Profile</Btn>
             </div>
           {/if}
 
@@ -154,11 +155,19 @@
   .settings-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 900;
+    animation: fade-in 120ms ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .settings-panel {
@@ -167,12 +176,18 @@
     max-width: calc(100vw - 48px);
     height: 500px;
     max-height: calc(100vh - 96px);
-    background: var(--bg-elevated, #010409);
+    background: var(--bg-elev, #010409);
     border: 1px solid var(--border, #21262d);
     border-radius: 10px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
     overflow: hidden;
     position: relative;
+    animation: slide-in 220ms cubic-bezier(.2,.8,.2,1);
+  }
+
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   .settings-nav {
@@ -268,29 +283,7 @@
   .profile-name { flex: 1; font-size: 13px; color: var(--fg, #e6edf3); }
   .profile-shell { font-size: 11px; color: var(--fg-muted, #7d8590); font-family: monospace; }
 
-  .btn-small {
-    background: transparent;
-    border: 1px solid var(--border, #21262d);
-    border-radius: 3px;
-    color: var(--fg-muted, #7d8590);
-    cursor: pointer;
-    font-size: 11px;
-    padding: 3px 8px;
-  }
-
-  .btn-small:hover { color: var(--fg, #e6edf3); }
-
-  .btn-primary {
-    align-self: flex-start;
-    background: var(--accent, #FF6B35);
-    border: none;
-    border-radius: 4px;
-    color: white;
-    cursor: pointer;
-    font-size: 13px;
-    padding: 6px 16px;
-    margin-top: 4px;
-  }
+  .profiles-list :global(.btn) { align-self: flex-start; margin-top: 4px; }
 
   /* Keymap */
   .keymap-section { display: flex; flex-direction: column; gap: 12px; }

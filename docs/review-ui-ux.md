@@ -229,42 +229,42 @@ Standalone progress bar component distinct from the tool card usage — used in 
 
 ### P0 — Correctness (affects all components)
 
-- [ ] **Rename `--bg-elevated` → `--bg-elev` in `vscode-import.ts` and all component usages** — aligns variable names with design spec so future components work without manual mapping
-- [ ] **Add missing design tokens** to `tokens.ts` and `ember-dark.json`: `--bg-elev-2`, `--bg-block`, `--accent-soft`, `--accent-glow`, `--green`, `--red`, `--yellow`, `--blue`, `--cyan`, `--magenta`, `--diff-add-bg`, `--diff-add-line`, `--diff-del-bg`, `--diff-del-line`
-- [ ] **Fix `--border` value** from `#21262d` to `#30363d` in `ember-dark.json`
+- [x] **Rename `--bg-elevated` → `--bg-elev` in `vscode-import.ts` and all component usages** — aligns variable names with design spec so future components work without manual mapping
+- [x] **Add missing design tokens** to `tokens.ts` and `ember-dark.json`: `--bg-elev-2`, `--bg-block`, `--accent-soft`, `--accent-glow`, `--green`, `--red`, `--yellow`, `--blue`, `--cyan`, `--magenta`, `--diff-add-bg`, `--diff-add-line`, `--diff-del-bg`, `--diff-del-line`
+- [x] **Fix `--border` value** from `#21262d` to `#30363d` in `ember-dark.json`
 
 ### P1 — Visible gaps in implemented components
 
-- [ ] **Status bar: add `.status-clock`** — right-aligned time display, updates every minute via `setInterval`
-- [ ] **Status bar: add `.status-shell`** — expose shell name from session (currently in `Session.title` on Rust side, needs IPC event or command)
-- [ ] **Status bar: increase height** from 24px to 26px
-- [ ] **Tool card: add `.tool-args`** — collapsible key/value arg display in expanded state; add expand/collapse chevron
-- [ ] **Tool card: add `.tool-time` badge** — show duration in monospace badge after `tool.end`
-- [ ] **Tool card: add progress bar** — full-width `--accent`-filled bar, shown during `tool.progress`, hidden after `tool.end`
-- [ ] **Tool card: replace emoji icons** with a minimal SVG icon set or CSS-based icons keyed on `tool.name`
-- [ ] **Tool card: add status dot** — colored dot (green/red/orange) indicating status state
-- [ ] **Tabs: show close `×` only on hover** for inactive tabs; always show for active tab
-- [ ] **Tabs: add `.agent-active` state** — ember-orange dot when agent is connected on that session
-- [ ] **Command palette: add section headers** — "Commands", "Recent", "Profiles" groupings
+- [x] **Status bar: add `.status-clock`** — right-aligned time display, updates every minute via `setInterval`
+- [x] **Status bar: add `.status-shell`** — expose shell name from session (currently in `Session.title` on Rust side, needs IPC event or command)
+- [x] **Status bar: increase height** from 24px to 26px
+- [x] **Tool card: add `.tool-args`** — collapsible key/value arg display in expanded state; add expand/collapse chevron
+- [x] **Tool card: add `.tool-time` badge** — show duration in monospace badge after `tool.end`
+- [x] **Tool card: add progress bar** — full-width `--accent`-filled bar, shown during `tool.progress`, hidden after `tool.end`
+- [x] **Tool card: replace emoji icons** with a minimal SVG icon set or CSS-based icons keyed on `tool.name`
+- [x] **Tool card: add status dot** — colored dot (green/red/orange) indicating status state
+- [x] **Tabs: show close `×` only on hover** for inactive tabs; always show for active tab
+- [x] **Tabs: add `.agent-active` state** — ember-orange dot when agent is connected on that session
+- [x] **Command palette: add section headers** — "Commands", "Themes" groupings with section dividers
 
 ### P2 — Polish and interaction quality
 
-- [ ] **Add `backdrop-filter: blur(4px)`** to: CommandPalette, SettingsPanel, WelcomeScreen overlays
-- [ ] **Update panel/overlay transitions** to `220ms cubic-bezier(.2,.8,.2,1)` (settings slide-in from right, approval slide-up from bottom)
-- [ ] **Extract shared `.btn` component** with `.primary`, `.danger`, `.ghost` variants; replace ad-hoc button styles in ToolCard, WelcomeScreen, CommandPalette, SettingsPanel
-- [ ] **Add `:focus-visible` ring** — `2px solid var(--accent)` on all interactive elements
-- [ ] **Welcome screen: improve theme swatches** — small rendered terminal previews instead of color circles
-- [ ] **Tabs: add `running` pulse animation** — subtle CSS keyframe animation on tab dot when PTY is active
-- [ ] **Settings panel: live preview** — apply theme/font changes immediately as the user drags/selects; revert on cancel
+- [x] **Add `backdrop-filter: blur(4px)`** to: CommandPalette, SettingsPanel, WelcomeScreen overlays
+- [x] **Update panel/overlay transitions** to `220ms cubic-bezier(.2,.8,.2,1)` (settings slide-in, palette slide-down, welcome slide-up)
+- [x] **Extract shared `.btn` component** with `.primary`, `.danger`, `.ghost` variants; replace ad-hoc button styles in ToolCard, WelcomeScreen, CommandPalette, SettingsPanel
+- [x] **Add `:focus-visible` ring** — `2px solid var(--accent)` on all interactive elements, via `app.css`
+- [x] **Welcome screen: improve theme swatches** — small rendered terminal previews instead of color circles
+- [x] **Tabs: add `running` pulse animation** — subtle CSS keyframe animation on tab dot when PTY is active
+- [x] **Settings panel: live preview** — apply theme/font changes immediately as the user drags/selects; revert on cancel
 
 ### P3 — Phase 2 components (new files required)
 
-- [ ] **`ApprovalSheet.svelte`** — bottom-anchored overlay, slide-up transition, risk badge, action buttons; wire to `approval` OSC 7777 verb handler and `agentRespond()` IPC
-- [ ] **`DiffView.svelte`** — unified diff renderer with syntax highlighting, accept/reject/edit actions; wire to `diff` OSC 7777 verb handler
-- [ ] **Block model + `Block.svelte`** — drive from OSC 133 `PromptMark` events; collapsible command+output units with header, exit code badge, agent-id badge
-- [ ] **Agent hello banner** — transient slide-in banner on `agent.hello`; auto-dismiss after 3s
+- [x] **`ApprovalSheet.svelte`** — bottom-anchored overlay, slide-up transition, risk badge, action buttons; wire to `approval` OSC 7777 verb handler and `agentRespond()` IPC
+- [x] **`DiffView.svelte`** — unified diff renderer with `--diff-add-bg`/`--diff-del-bg` coloring, accept/reject/edit actions (Y/N/E); wire to `diff` OSC 7777 verb handler
+- [x] **Block model + `Block.svelte`** — drive from OSC 133 `PromptMark` events; collapsible command+output units with header, exit code badge, agent-id badge
+- [x] **Agent hello banner** — transient pill banner on `agent.hello`; auto-dismiss after 3s; wired in App.svelte
 - [ ] **Session mark** — horizontal divider injected on `session.mark` verb; scrollback-navigable
-- [ ] **Custom scrollbar styles** — 4px-wide overlay scrollbar using `--fg-muted` thumb
+- [x] **Custom scrollbar styles** — 4px-wide overlay scrollbar using `--fg-muted` thumb, via `app.css`
 
 ---
 

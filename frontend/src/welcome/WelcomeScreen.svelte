@@ -70,12 +70,19 @@
             onclick={() => (selectedTheme = theme.id)}
             aria-pressed={selectedTheme === theme.id}
           >
-            <span class="swatch-preview" aria-hidden="true">
-              <span class="swatch-bar" style="background: {theme.accent}"></span>
-              <span class="swatch-lines">
-                <span class="swatch-line" style="background: {theme.fg}; opacity:0.6; width:60%"></span>
-                <span class="swatch-line" style="background: {theme.accent}; opacity:0.8; width:40%"></span>
-                <span class="swatch-line" style="background: {theme.fg}; opacity:0.4; width:75%"></span>
+            <span class="swatch-preview" aria-hidden="true" style="background:{theme.bg}">
+              <span class="swatch-topbar" style="background:color-mix(in srgb,{theme.bg} 55%,#000 45%)">
+                <span class="swatch-td"></span>
+                <span class="swatch-td"></span>
+                <span class="swatch-td"></span>
+              </span>
+              <span class="swatch-term">
+                <span class="swatch-prow">
+                  <span class="swatch-ps" style="color:{theme.accent}">$</span>
+                  <span class="swatch-cur" style="background:{theme.fg}"></span>
+                </span>
+                <span class="swatch-ol" style="background:{theme.fg};width:72%"></span>
+                <span class="swatch-ol" style="background:{theme.fg};width:50%"></span>
               </span>
             </span>
             <span class="swatch-label">{theme.label}</span>
@@ -127,10 +134,17 @@
     justify-content: center;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: fade-in 160ms ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .card {
-    background: var(--bg-elevated, #010409);
+    background: var(--bg-elev, #010409);
     border: 1px solid var(--border, #21262d);
     border-radius: 12px;
     padding: 32px 36px;
@@ -139,6 +153,12 @@
     display: flex;
     flex-direction: column;
     gap: 24px;
+    animation: slide-up 260ms cubic-bezier(.2,.8,.2,1);
+  }
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   .header {
@@ -209,33 +229,64 @@
 
   .swatch-preview {
     width: 100%;
-    height: 48px;
+    height: 54px;
     border-radius: 4px;
-    background: var(--swatch-bg);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    border: 1px solid rgba(255,255,255,0.06);
   }
 
-  .swatch-bar {
-    height: 6px;
-    width: 100%;
-    display: block;
+  .swatch-topbar {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 5px;
+    height: 10px;
+    flex-shrink: 0;
   }
 
-  .swatch-lines {
+  .swatch-td {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+  }
+
+  .swatch-term {
     flex: 1;
+    padding: 4px 6px 3px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-    padding: 0 6px;
+    gap: 3px;
   }
 
-  .swatch-line {
-    height: 3px;
-    border-radius: 2px;
+  .swatch-prow {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .swatch-ps {
+    font-size: 8px;
+    font-family: monospace;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .swatch-cur {
+    width: 4px;
+    height: 7px;
+    opacity: 0.85;
+    flex-shrink: 0;
+  }
+
+  .swatch-ol {
     display: block;
+    height: 2px;
+    border-radius: 1px;
+    opacity: 0.22;
   }
 
   .swatch-label {

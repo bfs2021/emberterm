@@ -1,5 +1,6 @@
 <script lang="ts">
   import { profileUpsert } from "../ipc/client.js";
+  import Btn from "../lib/Btn.svelte";
 
   interface Profile {
     id: string;
@@ -85,10 +86,8 @@
   {/if}
 
   <div class="actions">
-    <button class="btn-secondary" onclick={onCancel} disabled={saving}>Cancel</button>
-    <button class="btn-primary" onclick={save} disabled={saving}>
-      {saving ? "Saving…" : "Save"}
-    </button>
+    <Btn variant="ghost" onclick={onCancel} disabled={saving}>Cancel</Btn>
+    <Btn variant="primary" onclick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
   </div>
 </div>
 
@@ -124,27 +123,4 @@
   .error { color: var(--danger, #f85149); font-size: 12px; margin: 0; }
 
   .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
-
-  .btn-primary, .btn-secondary {
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    padding: 6px 16px;
-  }
-
-  .btn-primary {
-    background: var(--accent, #FF6B35);
-    color: white;
-  }
-
-  .btn-primary:disabled { opacity: 0.5; }
-
-  .btn-secondary {
-    background: transparent;
-    border: 1px solid var(--border, #21262d);
-    color: var(--fg-muted, #7d8590);
-  }
-
-  .btn-secondary:hover { color: var(--fg, #e6edf3); }
 </style>

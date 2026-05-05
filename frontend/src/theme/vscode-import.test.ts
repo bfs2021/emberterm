@@ -46,7 +46,7 @@ describe("vscodeToTheme", () => {
   it("maps background and foreground CSS vars", () => {
     const theme = vscodeToTheme(minimalDark, "t");
     expect(theme.vars["--bg"]).toBe("#1a1a2e");
-    expect(theme.vars["--bg-elevated"]).toBe("#111122");
+    expect(theme.vars["--bg-elev"]).toBe("#111122");
     expect(theme.vars["--border"]).toBe("#333344");
     expect(theme.vars["--accent"]).toBe("#ff4500");
     expect(theme.vars["--danger"]).toBe("#ff3333");

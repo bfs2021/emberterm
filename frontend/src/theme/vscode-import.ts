@@ -44,21 +44,41 @@ export function parseVscodeTheme(json: string): VsCodeTheme {
 /** Convert a VS Code-format theme JSON into an EmberTheme. */
 export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
   const c = vsc.colors;
-  const get = (key: string, fallback: string) => c[key] ?? fallback;
+  const pick = (key: string, fallback: string) => c[key] ?? fallback;
 
-  const bg = get("editor.background", "#0d1117");
-  const fg = get("terminal.foreground", "#e6edf3");
-  const elevatedBg = get("sideBar.background", "#010409");
-  const border = get("sideBar.border", "#21262d");
-  const accent = get("focusBorder", "#FF6B35");
-  const danger = get("errorForeground", "#f85149");
-  const green = get("terminal.ansiBrightGreen", "#3fb950");
-  const statusBg = get("statusBar.background", elevatedBg);
-  const statusFg = get("statusBar.foreground", "#7d8590");
-  const tabActiveBg = get("tab.activeBackground", bg);
-  const tabInactiveBg = get("tab.inactiveBackground", elevatedBg);
-  const tabActiveFg = get("tab.activeForeground", fg);
-  const tabInactiveFg = get("tab.inactiveForeground", "#7d8590");
+  const bg = pick("editor.background", "#0d1117");
+  const fg = pick("terminal.foreground", "#e6edf3");
+  const bgElev = pick("sideBar.background", "#010409");
+  const border = pick("sideBar.border", "#30363d");
+  const accent = pick("focusBorder", "#FF6B35");
+  const danger = pick("errorForeground", "#f85149");
+
+  // Semantic status colors mapped from ANSI palette
+  const green = pick("terminal.ansiBrightGreen", "#3fb950");
+  const red = pick("terminal.ansiRed", "#ff7b72");
+  const yellow = pick("terminal.ansiYellow", "#d29922");
+  const blue = pick("terminal.ansiBlue", "#58a6ff");
+  const cyan = pick("terminal.ansiCyan", "#39c5cf");
+  const magenta = pick("terminal.ansiMagenta", "#bc8cff");
+
+  const statusBg = pick("statusBar.background", bgElev);
+  const statusFg = pick("statusBar.foreground", "#7d8590");
+  const tabActiveBg = pick("tab.activeBackground", bg);
+  const tabInactiveBg = pick("tab.inactiveBackground", bgElev);
+  const tabActiveFg = pick("tab.activeForeground", fg);
+  const tabInactiveFg = pick("tab.inactiveForeground", "#7d8590");
+
+  // Computed tokens — CSS color-mix() references resolved at paint time
+  const bgElev2 = `color-mix(in srgb, ${bgElev} 50%, ${bg})`;
+  const bgBlock = `color-mix(in srgb, ${bgElev} 25%, ${bg})`;
+  const accentSoft = `color-mix(in srgb, ${accent} 12%, transparent)`;
+  const accentGlow = `color-mix(in srgb, ${accent} 35%, transparent)`;
+
+  // Diff line colors — transparent overlays, theme-adaptive
+  const diffAddBg = `color-mix(in srgb, ${green} 12%, transparent)`;
+  const diffAddLine = `color-mix(in srgb, ${green} 35%, transparent)`;
+  const diffDelBg = `color-mix(in srgb, ${danger} 12%, transparent)`;
+  const diffDelLine = `color-mix(in srgb, ${danger} 35%, transparent)`;
 
   return {
     id: id ?? vsc.name.toLowerCase().replace(/\s+/g, "-"),
@@ -66,13 +86,26 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
     kind: vsc.type,
     vars: {
       "--bg": bg,
-      "--bg-elevated": elevatedBg,
+      "--bg-elev": bgElev,
+      "--bg-elev-2": bgElev2,
+      "--bg-block": bgBlock,
       "--border": border,
       "--fg": fg,
       "--fg-muted": tabInactiveFg,
       "--accent": accent,
+      "--accent-soft": accentSoft,
+      "--accent-glow": accentGlow,
       "--danger": danger,
       "--green": green,
+      "--red": red,
+      "--yellow": yellow,
+      "--blue": blue,
+      "--cyan": cyan,
+      "--magenta": magenta,
+      "--diff-add-bg": diffAddBg,
+      "--diff-add-line": diffAddLine,
+      "--diff-del-bg": diffDelBg,
+      "--diff-del-line": diffDelLine,
       "--status-bg": statusBg,
       "--status-fg": statusFg,
       "--tab-active-bg": tabActiveBg,
@@ -81,26 +114,26 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
       "--tab-inactive-fg": tabInactiveFg,
     },
     xterm: {
-      background: get("terminal.background", bg),
+      background: pick("terminal.background", bg),
       foreground: fg,
-      cursor: get("terminalCursor.foreground", fg),
-      cursorAccent: get("terminalCursor.background", bg),
-      black: get("terminal.ansiBlack", "#484f58"),
-      red: get("terminal.ansiRed", "#ff7b72"),
-      green: get("terminal.ansiGreen", "#7ee787"),
-      yellow: get("terminal.ansiYellow", "#d29922"),
-      blue: get("terminal.ansiBlue", "#58a6ff"),
-      magenta: get("terminal.ansiMagenta", "#bc8cff"),
-      cyan: get("terminal.ansiCyan", "#39c5cf"),
-      white: get("terminal.ansiWhite", "#b1bac4"),
-      brightBlack: get("terminal.ansiBrightBlack", "#6e7681"),
-      brightRed: get("terminal.ansiBrightRed", "#ffa198"),
-      brightGreen: get("terminal.ansiBrightGreen", "#56d364"),
-      brightYellow: get("terminal.ansiBrightYellow", "#e3b341"),
-      brightBlue: get("terminal.ansiBrightBlue", "#79c0ff"),
-      brightMagenta: get("terminal.ansiBrightMagenta", "#d2a8ff"),
-      brightCyan: get("terminal.ansiBrightCyan", "#56d4dd"),
-      brightWhite: get("terminal.ansiBrightWhite", "#f0f6fc"),
+      cursor: pick("terminalCursor.foreground", fg),
+      cursorAccent: pick("terminalCursor.background", bg),
+      black: pick("terminal.ansiBlack", "#484f58"),
+      red: pick("terminal.ansiRed", "#ff7b72"),
+      green: pick("terminal.ansiGreen", "#7ee787"),
+      yellow: pick("terminal.ansiYellow", "#d29922"),
+      blue: pick("terminal.ansiBlue", "#58a6ff"),
+      magenta: pick("terminal.ansiMagenta", "#bc8cff"),
+      cyan: pick("terminal.ansiCyan", "#39c5cf"),
+      white: pick("terminal.ansiWhite", "#b1bac4"),
+      brightBlack: pick("terminal.ansiBrightBlack", "#6e7681"),
+      brightRed: pick("terminal.ansiBrightRed", "#ffa198"),
+      brightGreen: pick("terminal.ansiBrightGreen", "#56d364"),
+      brightYellow: pick("terminal.ansiBrightYellow", "#e3b341"),
+      brightBlue: pick("terminal.ansiBrightBlue", "#79c0ff"),
+      brightMagenta: pick("terminal.ansiBrightMagenta", "#d2a8ff"),
+      brightCyan: pick("terminal.ansiBrightCyan", "#56d4dd"),
+      brightWhite: pick("terminal.ansiBrightWhite", "#f0f6fc"),
     },
   };
 }

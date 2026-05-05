@@ -39,7 +39,7 @@
     display: flex;
     align-items: stretch;
     height: 36px;
-    background: var(--bg-elevated, #010409);
+    background: var(--bg-elev, #010409);
     border-bottom: 1px solid var(--border, #21262d);
     flex-shrink: 0;
     -webkit-app-region: drag;

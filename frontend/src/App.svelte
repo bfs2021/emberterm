@@ -2,10 +2,14 @@
   import Grid from "./terminal/Grid.svelte";
   import TitleBar from "./chrome/TitleBar.svelte";
   import StatusBar from "./chrome/StatusBar.svelte";
+  import HelloBanner from "./chrome/HelloBanner.svelte";
   import ToolCard from "./agent/ToolCard.svelte";
+  import DiffView from "./agent/DiffView.svelte";
+  import ApprovalSheet from "./agent/ApprovalSheet.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
-  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun } from "./ipc/client.js";
+  import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
+  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, type Profile } from "./ipc/client.js";
   import {
     onTerminalTitle,
     onTerminalCwd,
@@ -17,12 +21,18 @@
     onClipboardWrite,
     onProfilesUpdated,
     onConfigUpdated,
+    onAgentDiff,
+    onAgentApproval,
+    onBlockStart,
+    onBlockEnd,
+    type AgentDiffPayload,
+    type AgentApprovalPayload,
   } from "./ipc/events.js";
-  import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import {
     tabs,
     activeCwd,
     activeAgentName,
+    activeShell,
     addTab,
     removeTab,
     activateTab,
@@ -32,6 +42,8 @@
     addToolCall,
     updateToolCall,
     toolCalls,
+    addBlock,
+    closeBlock,
   } from "./stores/app.js";
   // Initialize the theme system on import — applies ember-dark CSS vars.
   import "./theme/store.js";
@@ -44,6 +56,18 @@
   let settingsOpen = $state(false);
   let currentGitBranch = $state("");
   let showWelcome = $state(false);
+
+  // Profile cache — populated lazily on first tab open
+  let profileCache: Profile[] = [];
+
+  function shellBasename(path: string): string {
+    return (path.split(/[\\/]/).pop() ?? path).replace(/\.exe$/i, "");
+  }
+
+  // Per-session pending agent UI (Map keyed by sessionId)
+  let pendingHellos = $state(new Map<string, { name: string; version: string }>());
+  let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
+  let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
 
   // ── Git branch — refresh when cwd changes ────────────────────────────────
 
@@ -98,7 +122,13 @@
       const fns = await Promise.all([
         onTerminalTitle((p) => setTabTitle(p.session_id, p.title)),
         onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
-        onAgentHello((p) => setTabAgent(p.session_id, p.name)),
+        onAgentHello((p) => {
+          setTabAgent(p.session_id, p.name);
+          pendingHellos = new Map(pendingHellos).set(p.session_id, {
+            name: p.name,
+            version: p.version,
+          });
+        }),
         onToolStart((p) => {
           addToolCall(p.session_id, {
             id: p.id,
@@ -106,6 +136,7 @@
             summary: p.summary,
             icon: p.icon,
             status: "running",
+            args: p.args,
           });
         }),
         onToolProgress((p) => {
@@ -122,11 +153,27 @@
             ...(p.summary ? { summary: p.summary } : {}),
           });
         }),
-        // OSC 52 clipboard write — termwiz already decoded base64; content is plain text
         onClipboardWrite((p) => {
           navigator.clipboard.writeText(p.data).catch(() => {});
         }),
         onTerminalBell(() => playBell()),
+        onAgentDiff((p) => {
+          pendingDiffs = new Map(pendingDiffs).set(p.session_id, p);
+        }),
+        onAgentApproval((p) => {
+          pendingApprovals = new Map(pendingApprovals).set(p.session_id, p);
+        }),
+        onBlockStart((p) => {
+          addBlock(p.session_id, {
+            id: p.id,
+            command: p.command,
+            startedAt: p.started_at,
+            agentId: p.agent_id,
+          });
+        }),
+        onBlockEnd((p) => {
+          closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms);
+        }),
         onProfilesUpdated(() => {}),
         onConfigUpdated(() => {}),
       ]);
@@ -143,6 +190,22 @@
       cleanup.forEach((f) => f());
     };
   });
+
+  // ── Agent action helpers ─────────────────────────────────────────────────
+
+  function handleDiffAction(sessionId: string, id: string, result: string) {
+    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
+    pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId));
+  }
+
+  function handleApprovalAction(sessionId: string, id: string, result: string) {
+    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
+    pendingApprovals = new Map([...pendingApprovals].filter(([k]) => k !== sessionId));
+  }
+
+  function dismissHello(sessionId: string) {
+    pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== sessionId));
+  }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
 
@@ -171,9 +234,17 @@
 
   // ── Tab management ───────────────────────────────────────────────────────
 
-  async function openNewTab() {
-    const sessionId = await sessionCreate();
-    addTab(sessionId, "Shell");
+  async function openNewTab(profileId?: string) {
+    if (!profileCache.length) {
+      try { profileCache = await profileList(); } catch { /* ignore */ }
+    }
+    const profile = profileId
+      ? profileCache.find((p) => p.id === profileId)
+      : profileCache[0];
+    const shell = profile ? shellBasename(profile.shell) : "";
+
+    const sessionId = await sessionCreate(profileId);
+    addTab(sessionId, "Shell", shell);
   }
 
   async function closeTab(tabId: string, sessionId: string) {
@@ -182,7 +253,7 @@
     if ($tabs.length === 0) await openNewTab();
   }
 
-  // ── Agent actions ────────────────────────────────────────────────────────
+  // ── Tool cancel ──────────────────────────────────────────────────────────
 
   function cancelTool(sessionId: string, toolId: string) {
     const payload = JSON.stringify({ v: 1, kind: "tool.cancel", id: toolId });
@@ -203,10 +274,16 @@
     {:else}
       {#each $tabs as tab (tab.id)}
         <div class="tab-pane" class:hidden={!tab.isActive}>
-          <!-- Tool cards for this session -->
+          <Grid
+            sessionId={tab.sessionId}
+            active={tab.isActive}
+            onExit={() => closeTab(tab.id, tab.sessionId)}
+          />
+
           {#if tab.isActive}
+            <!-- Tool cards -->
             {#each ($toolCalls.get(tab.sessionId) ?? []).slice(-5) as call (call.id)}
-              <div class="tool-overlay">
+              <div class="agent-overlay agent-overlay--cards">
                 <ToolCard
                   id={call.id}
                   name={call.name}
@@ -216,25 +293,58 @@
                   progressPct={call.progressPct}
                   progressMessage={call.progressMessage}
                   durationMs={call.durationMs}
+                  args={call.args}
                   onCancel={call.status === "running"
                     ? () => cancelTool(tab.sessionId, call.id)
                     : undefined}
                 />
               </div>
             {/each}
-          {/if}
 
-          <Grid
-            sessionId={tab.sessionId}
-            active={tab.isActive}
-            onExit={() => closeTab(tab.id, tab.sessionId)}
-          />
+            <!-- Diff viewer -->
+            {@const diff = pendingDiffs.get(tab.sessionId)}
+            {#if diff}
+              <div class="agent-overlay agent-overlay--diff">
+                <DiffView
+                  id={diff.id}
+                  path={diff.path}
+                  patch={diff.patch}
+                  actions={diff.actions}
+                  onAction={(id, result) => handleDiffAction(tab.sessionId, id, result)}
+                />
+              </div>
+            {/if}
+
+            <!-- Approval sheet -->
+            {@const approval = pendingApprovals.get(tab.sessionId)}
+            {#if approval}
+              <ApprovalSheet
+                id={approval.id}
+                title={approval.title}
+                detail={approval.detail}
+                risk={approval.risk}
+                actions={approval.actions}
+                onAction={(id, result) => handleApprovalAction(tab.sessionId, id, result)}
+              />
+            {/if}
+
+            <!-- Agent hello banner -->
+            {@const hello = pendingHellos.get(tab.sessionId)}
+            {#if hello}
+              <HelloBanner
+                name={hello.name}
+                version={hello.version}
+                onDismiss={() => dismissHello(tab.sessionId)}
+              />
+            {/if}
+          {/if}
         </div>
       {/each}
     {/if}
   </main>
 
   <StatusBar
+    shell={$activeShell}
     cwd={$activeCwd}
     gitBranch={currentGitBranch}
     agentName={$activeAgentName}
@@ -284,16 +394,27 @@
 
   .tab-pane.hidden { display: none; }
 
-  .tool-overlay {
+  /* Shared overlay base — all agent UI floats above the terminal */
+  .agent-overlay {
     position: absolute;
-    bottom: 8px;
     left: 8px;
     right: 8px;
     z-index: 10;
     pointer-events: none;
   }
 
-  .tool-overlay > :global(*) { pointer-events: all; }
+  .agent-overlay > :global(*) { pointer-events: all; }
+
+  /* Tool cards: bottom-right stack */
+  .agent-overlay--cards {
+    bottom: 8px;
+  }
+
+  /* Diff viewer: above the tool card area */
+  .agent-overlay--diff {
+    bottom: 80px;
+    max-width: 680px;
+  }
 
   .splash {
     display: flex;
@@ -304,5 +425,5 @@
     font-size: 14px;
   }
 
-  .splash.error { color: var(--danger, #f85149); }
+  .splash.error { color: var(--red, #f85149); }
 </style>

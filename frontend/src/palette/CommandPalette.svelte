@@ -181,23 +181,37 @@
   .palette-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: flex-start;
     justify-content: center;
     padding-top: 80px;
     z-index: 1000;
+    animation: fade-in 120ms ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .palette {
     width: 600px;
     max-width: calc(100vw - 32px);
-    background: var(--bg-elevated, #010409);
-    border: 1px solid var(--border, #21262d);
+    background: var(--bg-elev, #010409);
+    border: 1px solid var(--border, #30363d);
     border-radius: 8px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
     overflow: hidden;
     outline: none;
+    animation: slide-down 220ms cubic-bezier(.2,.8,.2,1);
+  }
+
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   .palette-input {

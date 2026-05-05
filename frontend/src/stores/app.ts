@@ -4,6 +4,7 @@ export interface Tab {
   id: string;
   sessionId: string;
   title: string;
+  shell?: string;
   cwd?: string;
   isActive: boolean;
   hasUnread: boolean;
@@ -27,12 +28,25 @@ export interface ToolCall {
   progressPct?: number;
   progressMessage?: string;
   durationMs?: number;
+  args?: Record<string, unknown>;
+}
+
+export interface Block {
+  id: string;
+  command: string;
+  startedAt: number;
+  endedAt?: number;
+  exitCode?: number;
+  durationMs?: number;
+  agentId?: string;
 }
 
 export const tabs = writable<Tab[]>([]);
 export const activeTabId = writable<string | null>(null);
 // Map sessionId → list of tool calls for that session
 export const toolCalls = writable<Map<string, ToolCall[]>>(new Map());
+// Map sessionId → list of blocks for that session (Phase 2)
+export const blocks = writable<Map<string, Block[]>>(new Map());
 
 export const activeTab = derived(
   [tabs, activeTabId],
@@ -54,15 +68,20 @@ export const activeAgentName = derived(
   ($tab) => $tab?.agentName ?? "",
 );
 
+export const activeShell = derived(
+  activeTab,
+  ($tab) => $tab?.shell ?? "",
+);
+
 let tabCounter = 0;
 
-export function addTab(sessionId: string, title: string): string {
+export function addTab(sessionId: string, title: string, shell?: string): string {
   const id = `tab-${++tabCounter}`;
   tabs.update((ts) => {
     const updated = ts.map((t) => ({ ...t, isActive: false }));
     return [
       ...updated,
-      { id, sessionId, title, isActive: true, hasUnread: false, isRunning: true, agentActive: false },
+      { id, sessionId, title, shell, isActive: true, hasUnread: false, isRunning: true, agentActive: false },
     ];
   });
   activeTabId.set(id);
@@ -135,6 +154,24 @@ export function updateToolCall(sessionId: string, id: string, patch: Partial<Too
       sessionId,
       calls.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     );
+    return new Map(m);
+  });
+}
+
+export function addBlock(sessionId: string, block: Block) {
+  blocks.update((m) => {
+    const existing = m.get(sessionId) ?? [];
+    m.set(sessionId, [...existing, block]);
+    return new Map(m);
+  });
+}
+
+export function closeBlock(sessionId: string, blockId: string, exitCode: number, durationMs: number) {
+  blocks.update((m) => {
+    const list = m.get(sessionId) ?? [];
+    m.set(sessionId, list.map((b) =>
+      b.id === blockId ? { ...b, endedAt: Date.now(), exitCode, durationMs } : b,
+    ));
     return new Map(m);
   });
 }

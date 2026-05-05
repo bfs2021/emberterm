@@ -1,4 +1,5 @@
 import "@xterm/xterm/css/xterm.css";
+import "./app.css";
 import App from "./App.svelte";
 import { mount } from "svelte";
 

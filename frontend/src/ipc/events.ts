@@ -36,6 +36,7 @@ export interface ToolStartPayload {
   summary: string;
   icon?: string;
   parent_id?: string;
+  args?: Record<string, unknown>;
 }
 
 export interface ToolProgressPayload {
@@ -111,6 +112,33 @@ export function onClipboardWrite(cb: (p: ClipboardWritePayload) => void): Promis
   return listen<ClipboardWritePayload>("terminal:clipboard-write", (e) => cb(e.payload));
 }
 
+// ── Agent diff / approval (Phase 2) ──────────────────────────────────────
+
+export interface AgentDiffPayload {
+  session_id: string;
+  id: string;
+  path: string;
+  patch: string;
+  actions: string[];
+}
+
+export interface AgentApprovalPayload {
+  session_id: string;
+  id: string;
+  title: string;
+  detail: string;
+  risk: "safe" | "caution" | "destructive";
+  actions: string[];
+}
+
+export function onAgentDiff(cb: (p: AgentDiffPayload) => void): Promise<UnlistenFn> {
+  return listen<AgentDiffPayload>("agent:diff", (e) => cb(e.payload));
+}
+
+export function onAgentApproval(cb: (p: AgentApprovalPayload) => void): Promise<UnlistenFn> {
+  return listen<AgentApprovalPayload>("agent:approval", (e) => cb(e.payload));
+}
+
 // ── Bell ──────────────────────────────────────────────────────────────────
 
 export interface TerminalBellPayload {
@@ -131,4 +159,29 @@ export function onProfilesUpdated(cb: () => void): Promise<UnlistenFn> {
 /** Fired when ~/.config/ember/config.toml changes on disk. */
 export function onConfigUpdated(cb: () => void): Promise<UnlistenFn> {
   return listen("config:updated", () => cb());
+}
+
+// ── Block events (Phase 2 — emitted when Rust block tracking is enabled) ──
+
+export interface BlockStartPayload {
+  session_id: string;
+  id: string;
+  command: string;
+  started_at: number;
+  agent_id?: string;
+}
+
+export interface BlockEndPayload {
+  session_id: string;
+  id: string;
+  exit_code: number;
+  duration_ms: number;
+}
+
+export function onBlockStart(cb: (p: BlockStartPayload) => void): Promise<UnlistenFn> {
+  return listen<BlockStartPayload>("block:start", (e) => cb(e.payload));
+}
+
+export function onBlockEnd(cb: (p: BlockEndPayload) => void): Promise<UnlistenFn> {
+  return listen<BlockEndPayload>("block:end", (e) => cb(e.payload));
 }

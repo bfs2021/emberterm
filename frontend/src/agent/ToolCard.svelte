@@ -10,6 +10,7 @@
     progressPct?: number;
     progressMessage?: string;
     durationMs?: number;
+    args?: Record<string, unknown>;
     onCancel?: () => void;
   }
 
@@ -21,32 +22,33 @@
     progressPct,
     progressMessage,
     durationMs,
+    args,
     onCancel,
   }: Props = $props();
 
   let expanded = $state(false);
 
-  const ICONS: Record<string, string> = {
-    pencil: "✏",
-    file: "📄",
-    terminal: "⚡",
-    network: "🌐",
-    search: "🔍",
-    bug: "🐛",
+  // Minimal inline SVG paths keyed by icon name
+  const ICON_PATHS: Record<string, string> = {
+    pencil: "M9.3 2.7a1 1 0 0 1 1.4 1.4L4 10.8 1.5 11 1.7 8.5zm0 0",
+    file: "M4 1h5l2 2v9a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM8.5 1.5V4H11",
+    terminal: "M2 4l4 4-4 4M7 12h5",
+    network: "M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1zM1 6h10M6 1c-2 2-2 6 0 10M6 1c2 2 2 6 0 10",
+    search: "M7.5 7.5a4 4 0 1 0-5.66-5.66 4 4 0 0 0 5.66 5.66zM7.5 7.5L11 11",
+    bug: "M4 4a2 2 0 0 1 4 0v3H4zM1 7h3M8 7h3M2 4L1 2M10 4l1-2M6 7v4M4 11a2 2 0 0 0 4 0",
+    default: "M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1zM6 4v4M6 9v1",
   };
 
-  const statusIcon: Record<ToolStatus, string> = {
-    pending: "⏳",
-    running: "⟳",
-    ok: "✓",
-    error: "✗",
-    cancelled: "⊘",
-  };
+  function iconPath(key: string): string {
+    return ICON_PATHS[key] ?? ICON_PATHS.default;
+  }
 
   function formatDuration(ms: number): string {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
   }
+
+  const hasArgs = $derived(!!args && Object.keys(args).length > 0);
 </script>
 
 <div class="tool-card" class:expanded data-status={status}>
@@ -55,17 +57,30 @@
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}
   >
-    <span class="tool-icon">{ICONS[icon] ?? "⚙"}</span>
+    <!-- Status dot -->
+    <span class="status-dot" aria-hidden="true"></span>
+
+    <!-- Tool icon -->
+    <svg class="tool-icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d={iconPath(icon)} />
+    </svg>
+
     <span class="tool-name">{name}</span>
-    <span class="tool-summary">{expanded ? "" : summary}</span>
+    <span class="tool-summary">{summary}</span>
+
     <span class="tool-spacer"></span>
-    {#if status === "running" && progressPct !== undefined}
-      <span class="tool-progress">{progressPct}%</span>
-    {/if}
-    <span class="tool-status" aria-label={status}>{statusIcon[status]}</span>
+
+    <!-- Duration badge shown after completion -->
     {#if durationMs !== undefined && (status === "ok" || status === "error")}
-      <span class="tool-duration">{formatDuration(durationMs)}</span>
+      <span class="tool-time">{formatDuration(durationMs)}</span>
     {/if}
+
+    <!-- Progress percentage during run -->
+    {#if status === "running" && progressPct !== undefined}
+      <span class="tool-pct">{progressPct}%</span>
+    {/if}
+
+    <!-- Cancel button (running only) -->
     {#if status === "running" && onCancel}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -76,29 +91,44 @@
         onclick={(e) => { e.stopPropagation(); onCancel!(); }}
       >✕</span>
     {/if}
-    <span class="tool-toggle" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
+
+    <span class="tool-chevron" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
   </button>
 
-  {#if expanded}
-    <div class="tool-body">
-      <p class="tool-detail">{summary}</p>
-      {#if progressMessage}
-        <p class="tool-progress-msg">{progressMessage}</p>
-      {/if}
+  <!-- Progress bar (running with known progress) -->
+  {#if status === "running" && progressPct !== undefined}
+    <div class="tool-progress-bar" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
+      <div class="tool-progress-fill" style="width: {progressPct}%"></div>
     </div>
   {/if}
 
-  {#if status === "running" && progressPct !== undefined}
-    <div class="tool-progress-bar">
-      <div class="tool-progress-fill" style="width: {progressPct}%"></div>
+  <!-- Expanded body -->
+  {#if expanded}
+    <div class="tool-body">
+      <p class="tool-detail">{summary}</p>
+
+      {#if progressMessage}
+        <p class="tool-progress-msg">{progressMessage}</p>
+      {/if}
+
+      {#if hasArgs}
+        <dl class="tool-args">
+          {#each Object.entries(args!) as [k, v]}
+            <div class="arg-row">
+              <dt class="arg-key">{k}</dt>
+              <dd class="arg-val">{typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+            </div>
+          {/each}
+        </dl>
+      {/if}
     </div>
   {/if}
 </div>
 
 <style>
   .tool-card {
-    background: color-mix(in srgb, var(--bg-elevated, #010409) 80%, transparent);
-    border: 1px solid var(--border, #21262d);
+    background: color-mix(in srgb, var(--bg-elev, #010409) 80%, transparent);
+    border: 1px solid var(--border, #30363d);
     border-radius: 6px;
     margin: 4px 0;
     font-size: 12px;
@@ -106,11 +136,11 @@
   }
 
   .tool-card[data-status="running"] {
-    border-color: color-mix(in srgb, var(--accent, #FF6B35) 40%, var(--border, #21262d));
+    border-color: color-mix(in srgb, var(--accent, #FF6B35) 40%, var(--border, #30363d));
   }
 
   .tool-card[data-status="error"] {
-    border-color: color-mix(in srgb, var(--danger, #f85149) 40%, var(--border, #21262d));
+    border-color: color-mix(in srgb, var(--danger, #f85149) 40%, var(--border, #30363d));
   }
 
   .tool-header {
@@ -127,16 +157,65 @@
   }
 
   .tool-header:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--accent-soft, rgba(255, 255, 255, 0.03));
   }
 
-  .tool-icon { font-size: 13px; flex-shrink: 0; }
+  /* Status dot */
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--fg-muted, #7d8590);
+  }
+
+  [data-status="running"] .status-dot {
+    background: var(--accent, #FF6B35);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  [data-status="ok"] .status-dot { background: var(--green, #3fb950); }
+  [data-status="error"] .status-dot { background: var(--danger, #f85149); }
+  [data-status="cancelled"] .status-dot { background: var(--fg-muted, #7d8590); opacity: 0.5; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+  }
+
+  .tool-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
   .tool-name { font-weight: 500; flex-shrink: 0; }
-  .tool-summary { color: var(--fg-muted, #7d8590); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tool-spacer { flex: 1; }
-  .tool-progress { color: var(--accent, #FF6B35); font-size: 11px; flex-shrink: 0; }
-  .tool-duration { color: var(--fg-muted, #7d8590); font-size: 11px; flex-shrink: 0; }
-  .tool-toggle { color: var(--fg-muted, #7d8590); font-size: 10px; flex-shrink: 0; }
+  .tool-summary {
+    color: var(--fg-muted, #7d8590);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tool-spacer { flex: 1; min-width: 8px; }
+
+  .tool-time {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg-muted, #7d8590);
+    background: var(--bg-block, rgba(255,255,255,0.04));
+    border-radius: 3px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+
+  .tool-pct {
+    font-size: 10px;
+    color: var(--accent, #FF6B35);
+    flex-shrink: 0;
+  }
 
   .tool-cancel {
     color: var(--fg-muted, #7d8590);
@@ -148,52 +227,71 @@
   }
 
   .tool-cancel:hover {
-    background: rgba(248, 81, 73, 0.15);
+    background: color-mix(in srgb, var(--danger, #f85149) 15%, transparent);
     color: var(--danger, #f85149);
   }
 
-  .tool-status {
-    flex-shrink: 0;
-    font-size: 13px;
-  }
-
-  [data-status="running"] .tool-status {
-    color: var(--accent, #FF6B35);
-    display: inline-block;
-    animation: spin 1s linear infinite;
-  }
-
-  [data-status="ok"] .tool-status { color: var(--green, #3fb950); }
-  [data-status="error"] .tool-status { color: var(--danger, #f85149); }
-  [data-status="cancelled"] .tool-status { color: var(--fg-muted, #7d8590); }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  .tool-body {
-    padding: 6px 10px 8px;
-    border-top: 1px solid var(--border, #21262d);
-  }
-
-  .tool-detail, .tool-progress-msg {
-    margin: 0;
-    color: var(--fg-muted, #7d8590);
-    font-size: 11px;
-    line-height: 1.5;
-  }
-
-  .tool-progress-msg { margin-top: 4px; color: var(--accent, #FF6B35); }
+  .tool-chevron { color: var(--fg-muted, #7d8590); font-size: 9px; flex-shrink: 0; }
 
   .tool-progress-bar {
-    height: 2px;
-    background: var(--border, #21262d);
+    height: 3px;
+    background: var(--border, #30363d);
   }
 
   .tool-progress-fill {
     height: 100%;
     background: var(--accent, #FF6B35);
     transition: width 0.3s ease;
+  }
+
+  .tool-body {
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--border, #30363d);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tool-detail {
+    margin: 0;
+    color: var(--fg-muted, #7d8590);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .tool-progress-msg {
+    margin: 0;
+    color: var(--accent, #FF6B35);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .tool-args {
+    margin: 4px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .arg-row {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .arg-key {
+    color: var(--blue, #58a6ff);
+    flex-shrink: 0;
+    font-family: monospace;
+    min-width: 60px;
+  }
+
+  .arg-val {
+    color: var(--fg-muted, #7d8590);
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin: 0;
   }
 </style>

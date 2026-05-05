@@ -1,5 +1,6 @@
 <script lang="ts">
   import { allThemes, activeThemeId, setTheme, importTheme } from "../theme/store.js";
+  import Btn from "../lib/Btn.svelte";
 
   interface Props {
     onClose?: () => void;
@@ -54,9 +55,7 @@
     {#if importError}
       <p class="import-error">{importError}</p>
     {/if}
-    <button class="btn-primary" onclick={handleImport} disabled={!importJson.trim()}>
-      Import
-    </button>
+    <Btn variant="primary" onclick={handleImport} disabled={!importJson.trim()}>Import</Btn>
   </div>
 </div>
 
@@ -129,16 +128,5 @@
 
   .import-error { color: var(--danger, #f85149); font-size: 12px; margin: 0; }
 
-  .btn-primary {
-    align-self: flex-start;
-    background: var(--accent, #FF6B35);
-    border: none;
-    border-radius: 4px;
-    color: white;
-    cursor: pointer;
-    font-size: 13px;
-    padding: 6px 16px;
-  }
-
-  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .import-section :global(.btn) { align-self: flex-start; }
 </style>
