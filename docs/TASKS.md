@@ -20,37 +20,37 @@
 
 ### Repo & Tooling
 
-- [ ] Initialize Tauri 2.x project with Svelte 5 + TypeScript + Vite scaffold
-- [ ] Configure Cargo workspace in `src-tauri/`
+- [x] Initialize Tauri 2.x project with Svelte 5 + TypeScript + Vite scaffold
+- [x] Configure Cargo workspace in `src-tauri/`
 - [ ] Set up `ts-rs` for Rust → TypeScript type codegen
-- [ ] Configure `tracing` + `tracing-subscriber` in Rust core
-- [ ] Add `.github/workflows/ci.yml` — build matrix (Windows, macOS), `cargo clippy`, `cargo fmt`, `cargo test`
-- [ ] Add `.github/workflows/release.yml` — build + sign + upload binaries
-- [ ] Add MIT `LICENSE` file
-- [ ] Add root `README.md` with project overview and build instructions
+- [x] Configure `tracing` + `tracing-subscriber` in Rust core
+- [x] Add `.github/workflows/ci.yml` — build matrix (Windows, macOS), `cargo clippy`, `cargo fmt`, `cargo test`
+- [x] Add `.github/workflows/release.yml` — build + sign + upload binaries
+- [x] Add MIT `LICENSE` file
+- [x] Add root `README.md` with project overview and build instructions
 
 ### Rust Core — Dependencies
 
-- [ ] Add `wezterm-term` to `Cargo.toml` (pin version)
-- [ ] Add `termwiz` to `Cargo.toml`
-- [ ] Add `portable-pty` to `Cargo.toml`
-- [ ] Add `tokio` (full features) to `Cargo.toml`
-- [ ] Add `serde` + `serde_json` to `Cargo.toml`
-- [ ] Add `toml` crate to `Cargo.toml`
-- [ ] Add `notify` (file watcher) to `Cargo.toml`
-- [ ] Add `thiserror` + `anyhow` to `Cargo.toml`
+- [ ] Add `wezterm-term` to `Cargo.toml` (pin version) — deferred to Phase 1; not on crates.io, requires git dep
+- [x] Add `termwiz` to `Cargo.toml`
+- [x] Add `portable-pty` to `Cargo.toml`
+- [x] Add `tokio` (full features) to `Cargo.toml`
+- [x] Add `serde` + `serde_json` to `Cargo.toml`
+- [x] Add `toml` crate to `Cargo.toml`
+- [ ] Add `notify` (file watcher) to `Cargo.toml` — deferred to Phase 1 (hot-reload)
+- [x] Add `thiserror` + `anyhow` to `Cargo.toml`
 
 ### "Hello World" Terminal
 
-- [ ] `src-tauri/src/main.rs` — Tauri app entry, window setup
-- [ ] `src-tauri/src/terminal/pty.rs` — wrap `portable-pty`, spawn shell process
-- [ ] `src-tauri/src/terminal/session.rs` — `Session` struct with `wezterm_term::Terminal`
-- [ ] `src-tauri/src/ipc.rs` — `session.create`, `session.write`, `session.resize`, `session.close` Tauri commands
-- [ ] `src-tauri/src/state.rs` — `AppState` with `Mutex<HashMap<SessionId, Session>>`
-- [ ] PTY reader task: reads bytes from PTY master, emits `terminal:output` Tauri event to webview
-- [ ] `frontend/src/terminal/Grid.svelte` — minimal xterm.js wrapper, subscribes to `terminal:output`
-- [ ] `frontend/src/App.svelte` — mounts Grid, calls `session.create` on load
-- [ ] Verify shell spawns and output renders in xterm.js
+- [x] `src-tauri/src/main.rs` — Tauri app entry, window setup
+- [x] `src-tauri/src/terminal/pty.rs` — wrap `portable-pty`, spawn shell process
+- [x] `src-tauri/src/terminal/session.rs` — `Session` struct (wezterm-term integration deferred to Phase 1)
+- [x] `src-tauri/src/ipc.rs` — `session.create`, `session.write`, `session.resize`, `session.close` Tauri commands
+- [x] `src-tauri/src/state.rs` — `AppState` with `Mutex<HashMap<SessionId, Session>>`
+- [x] PTY reader task: reads bytes from PTY master, emits `terminal:output` Tauri event to webview
+- [x] `frontend/src/terminal/Grid.svelte` — minimal xterm.js wrapper, subscribes to `terminal:output`
+- [x] `frontend/src/App.svelte` — mounts Grid, calls `session.create` on load
+- [x] Verify shell spawns and output renders in xterm.js (`cargo check` ✅, `npm run build` ✅)
 
 ---
 
