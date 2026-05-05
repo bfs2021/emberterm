@@ -52,6 +52,7 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
   const border = get("sideBar.border", "#21262d");
   const accent = get("focusBorder", "#FF6B35");
   const danger = get("errorForeground", "#f85149");
+  const green = get("terminal.ansiBrightGreen", "#3fb950");
   const statusBg = get("statusBar.background", elevatedBg);
   const statusFg = get("statusBar.foreground", "#7d8590");
   const tabActiveBg = get("tab.activeBackground", bg);
@@ -71,6 +72,7 @@ export function vscodeToTheme(vsc: VsCodeTheme, id?: string): EmberTheme {
       "--fg-muted": tabInactiveFg,
       "--accent": accent,
       "--danger": danger,
+      "--green": green,
       "--status-bg": statusBg,
       "--status-fg": statusFg,
       "--tab-active-bg": tabActiveBg,

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { allThemes, setTheme } from "../theme/store.js";
-  import { get } from "svelte/store";
 
   interface Props {
     open: boolean;
@@ -42,7 +41,7 @@
       },
     ];
 
-    for (const theme of get(allThemes)) {
+    for (const theme of $allThemes) {
       items.push({
         id: `theme.${theme.id}`,
         label: `Theme: ${theme.name}`,
@@ -77,7 +76,7 @@
   );
 
   // Group filtered items into sections
-  const sections = $derived(() => {
+  const sections = $derived.by(() => {
     const map = new Map<string, PaletteItem[]>();
     for (const item of filtered) {
       const list = map.get(item.section) ?? [];
@@ -122,7 +121,7 @@
   function itemFlatIndex(sectionIdx: number, itemIdx: number): number {
     let n = 0;
     for (let s = 0; s < sectionIdx; s++) {
-      n += sections().at(s)?.items.length ?? 0;
+      n += sections.at(s)?.items.length ?? 0;
     }
     return n + itemIdx;
   }
@@ -151,7 +150,7 @@
         spellcheck={false}
       />
       <div class="palette-list" role="listbox">
-        {#each sections() as section, si}
+        {#each sections as section, si}
           <div class="section-header">{section.label}</div>
           {#each section.items as item, ii (item.id)}
             {@const flatIdx = itemFlatIndex(si, ii)}

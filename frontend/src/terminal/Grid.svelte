@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -7,7 +7,6 @@
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onTerminalOutput, onSessionExit } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
-  import type { UnlistenFn } from "@tauri-apps/api/event";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -22,71 +21,92 @@
   // ── Terminal instance ────────────────────────────────────────────────────
 
   let container: HTMLDivElement;
-  let term: Terminal;
-  let fitAddon: FitAddon;
-  let unlistenOutput: UnlistenFn;
-  let unlistenExit: UnlistenFn;
-  let resizeObserver: ResizeObserver;
+  let term = $state<Terminal | undefined>(undefined);
 
-  onMount(async () => {
-    const theme = $activeTheme;
+  $effect(() => {
+    let mounted = true;
+    let fitAddon: FitAddon | undefined;
+    let unlistenOutput: (() => void) | undefined;
+    let unlistenExit: (() => void) | undefined;
+    let resizeObserver: ResizeObserver | undefined;
 
-    term = new Terminal({
-      allowProposedApi: true,
-      fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
-      fontSize: 13,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      cursorStyle: "block",
-      scrollback: 10000,
-      theme: theme.xterm,
-    });
+    (async () => {
+      const t = new Terminal({
+        allowProposedApi: true,
+        fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
+        fontSize: 13,
+        lineHeight: 1.2,
+        cursorBlink: true,
+        cursorStyle: "block",
+        scrollback: 10000,
+        theme: get(activeTheme).xterm,
+      });
 
-    fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(new WebLinksAddon());
+      fitAddon = new FitAddon();
+      t.loadAddon(fitAddon);
+      t.loadAddon(new WebLinksAddon());
 
-    term.open(container);
+      t.open(container);
 
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => webgl.dispose());
-      term.loadAddon(webgl);
-    } catch {
-      // canvas fallback
-    }
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => webgl.dispose());
+        t.loadAddon(webgl);
+      } catch {
+        // canvas fallback
+      }
 
-    fitAddon.fit();
-
-    term.onData((data) => {
-      const bytes = new TextEncoder().encode(data);
-      sessionWrite(sessionId, bytes).catch(console.error);
-    });
-
-    term.onBinary((data) => {
-      const bytes = Uint8Array.from(data, (c) => c.charCodeAt(0));
-      sessionWrite(sessionId, bytes).catch(console.error);
-    });
-
-    unlistenOutput = await onTerminalOutput((payload) => {
-      if (payload.session_id !== sessionId) return;
-      const bytes = new Uint8Array(payload.data);
-      term.write(bytes);
-    });
-
-    unlistenExit = await onSessionExit((payload) => {
-      if (payload.session_id !== sessionId) return;
-      term.writeln("\r\n\x1b[2m[process exited with code " + payload.code + "]\x1b[0m");
-      onExit?.(payload.code);
-    });
-
-    resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
-      sessionResize(sessionId, term.cols, term.rows).catch(console.error);
-    });
-    resizeObserver.observe(container);
 
-    await sessionResize(sessionId, term.cols, term.rows);
+      t.onData((data) => {
+        const bytes = new TextEncoder().encode(data);
+        sessionWrite(sessionId, bytes).catch(console.error);
+      });
+
+      t.onBinary((data) => {
+        const bytes = Uint8Array.from(data, (c) => c.charCodeAt(0));
+        sessionWrite(sessionId, bytes).catch(console.error);
+      });
+
+      unlistenOutput = await onTerminalOutput((payload) => {
+        if (payload.session_id !== sessionId) return;
+        const bytes = new Uint8Array(payload.data);
+        t.write(bytes);
+      });
+
+      unlistenExit = await onSessionExit((payload) => {
+        if (payload.session_id !== sessionId) return;
+        t.writeln("\r\n\x1b[2m[process exited with code " + payload.code + "]\x1b[0m");
+        onExit?.(payload.code);
+      });
+
+      resizeObserver = new ResizeObserver(() => {
+        fitAddon!.fit();
+        sessionResize(sessionId, t.cols, t.rows).catch(console.error);
+      });
+      resizeObserver.observe(container);
+
+      await sessionResize(sessionId, t.cols, t.rows);
+
+      if (!mounted) {
+        unlistenOutput?.();
+        unlistenExit?.();
+        resizeObserver.disconnect();
+        t.dispose();
+        return;
+      }
+
+      term = t;
+    })();
+
+    return () => {
+      mounted = false;
+      unlistenOutput?.();
+      unlistenExit?.();
+      resizeObserver?.disconnect();
+      term?.dispose();
+      term = undefined;
+    };
   });
 
   // Update xterm theme when the active theme changes.
@@ -101,13 +121,6 @@
     if (active && term) {
       term.focus();
     }
-  });
-
-  onDestroy(() => {
-    unlistenOutput?.();
-    unlistenExit?.();
-    resizeObserver?.disconnect();
-    term?.dispose();
   });
 </script>
 

@@ -71,7 +71,7 @@
   }
 
   .close-btn:hover {
-    background: #c42b1c;
-    color: #fff;
+    background: var(--win-close-hover, #c42b1c);
+    color: white;
   }
 </style>

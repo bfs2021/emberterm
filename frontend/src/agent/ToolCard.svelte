@@ -163,7 +163,7 @@
     animation: spin 1s linear infinite;
   }
 
-  [data-status="ok"] .tool-status { color: #3fb950; }
+  [data-status="ok"] .tool-status { color: var(--green, #3fb950); }
   [data-status="error"] .tool-status { color: var(--danger, #f85149); }
   [data-status="cancelled"] .tool-status { color: var(--fg-muted, #7d8590); }
 

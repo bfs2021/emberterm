@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
   import Grid from "./terminal/Grid.svelte";
   import TitleBar from "./chrome/TitleBar.svelte";
   import StatusBar from "./chrome/StatusBar.svelte";
@@ -7,10 +6,10 @@
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun } from "./ipc/client.js";
-  import { listen } from "@tauri-apps/api/event";
   import {
     onTerminalTitle,
     onTerminalCwd,
+    onTerminalBell,
     onAgentHello,
     onToolStart,
     onToolProgress,
@@ -20,7 +19,6 @@
     onConfigUpdated,
   } from "./ipc/events.js";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
-  import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     tabs,
     activeCwd,
@@ -81,63 +79,69 @@
 
   // ── IPC listeners ────────────────────────────────────────────────────────
 
-  let unlisteners: UnlistenFn[] = [];
+  $effect(() => {
+    let active = true;
+    const cleanup: Array<() => void> = [];
 
-  onMount(async () => {
-    try {
-      showWelcome = await configIsFirstRun();
-      await openNewTab();
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
+    (async () => {
+      try {
+        showWelcome = await configIsFirstRun();
+        await openNewTab();
+      } catch (e) {
+        error = String(e);
+      } finally {
+        loading = false;
+      }
 
-    unlisteners.push(
-      await onTerminalTitle((p) => setTabTitle(p.session_id, p.title)),
-      await onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
-      await onAgentHello((p) => setTabAgent(p.session_id, p.name)),
-      await onToolStart((p) => {
-        addToolCall(p.session_id, {
-          id: p.id,
-          name: p.name,
-          summary: p.summary,
-          icon: p.icon,
-          status: "running",
-        });
-      }),
-      await onToolProgress((p) => {
-        updateToolCall(p.session_id, p.id, {
-          progressPct: p.pct,
-          progressMessage: p.message,
-        });
-      }),
-      await onToolEnd((p) => {
-        updateToolCall(p.session_id, p.id, {
-          status: p.status as "ok" | "error" | "cancelled",
-          progressPct: undefined,
-          durationMs: p.duration_ms,
-          ...(p.summary ? { summary: p.summary } : {}),
-        });
-      }),
-      // OSC 52 clipboard write — termwiz already decoded base64; content is plain text
-      await onClipboardWrite((p) => {
-        navigator.clipboard.writeText(p.data).catch(() => {});
-      }),
-      // Bell
-      await listen("terminal:bell", () => playBell()),
-      // Hot-reload: profiles and config changed on disk
-      await onProfilesUpdated(() => {
-        // Settings panel will re-fetch via profileList() on next open
-      }),
-      await onConfigUpdated(() => {
-        // Config changed externally — no-op for now; future: re-apply theme/font
-      }),
-    );
-  });
+      if (!active) return;
 
-  onDestroy(() => {
-    unlisteners.forEach((f) => f());
+      const fns = await Promise.all([
+        onTerminalTitle((p) => setTabTitle(p.session_id, p.title)),
+        onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
+        onAgentHello((p) => setTabAgent(p.session_id, p.name)),
+        onToolStart((p) => {
+          addToolCall(p.session_id, {
+            id: p.id,
+            name: p.name,
+            summary: p.summary,
+            icon: p.icon,
+            status: "running",
+          });
+        }),
+        onToolProgress((p) => {
+          updateToolCall(p.session_id, p.id, {
+            progressPct: p.pct,
+            progressMessage: p.message,
+          });
+        }),
+        onToolEnd((p) => {
+          updateToolCall(p.session_id, p.id, {
+            status: p.status as "ok" | "error" | "cancelled",
+            progressPct: undefined,
+            durationMs: p.duration_ms,
+            ...(p.summary ? { summary: p.summary } : {}),
+          });
+        }),
+        // OSC 52 clipboard write — termwiz already decoded base64; content is plain text
+        onClipboardWrite((p) => {
+          navigator.clipboard.writeText(p.data).catch(() => {});
+        }),
+        onTerminalBell(() => playBell()),
+        onProfilesUpdated(() => {}),
+        onConfigUpdated(() => {}),
+      ]);
+
+      if (!active) {
+        fns.forEach((f) => f());
+        return;
+      }
+      cleanup.push(...fns);
+    })();
+
+    return () => {
+      active = false;
+      cleanup.forEach((f) => f());
+    };
   });
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────

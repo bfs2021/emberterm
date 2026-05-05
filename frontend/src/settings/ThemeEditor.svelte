@@ -134,7 +134,7 @@
     background: var(--accent, #FF6B35);
     border: none;
     border-radius: 4px;
-    color: #fff;
+    color: white;
     cursor: pointer;
     font-size: 13px;
     padding: 6px 16px;

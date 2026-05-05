@@ -324,7 +324,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #fff;
+    background: white;
     transition: transform 0.2s;
   }
 
@@ -341,7 +341,7 @@
     background: var(--accent, #FF6B35);
     border: none;
     border-radius: 8px;
-    color: #fff;
+    color: white;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;

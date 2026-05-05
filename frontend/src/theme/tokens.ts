@@ -7,6 +7,7 @@ export const TOKENS = {
   fgMuted: "--fg-muted",
   accent: "--accent",
   danger: "--danger",
+  green: "--green",
   statusBg: "--status-bg",
   statusFg: "--status-fg",
   tabActiveBg: "--tab-active-bg",

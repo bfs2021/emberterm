@@ -2,7 +2,6 @@
   import ThemeEditor from "./ThemeEditor.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
   import { profileList, type Profile } from "../ipc/client.js";
-  import { onMount } from "svelte";
 
   interface Props {
     open: boolean;
@@ -38,12 +37,8 @@
       : CATEGORIES
   );
 
-  onMount(async () => {
-    try {
-      profiles = await profileList();
-    } catch {
-      // profiles dir may not exist yet
-    }
+  $effect(() => {
+    profileList().then((p) => { profiles = p; }).catch(() => {});
   });
 
   const KEYMAP = [
@@ -290,7 +285,7 @@
     background: var(--accent, #FF6B35);
     border: none;
     border-radius: 4px;
-    color: #fff;
+    color: white;
     cursor: pointer;
     font-size: 13px;
     padding: 6px 16px;

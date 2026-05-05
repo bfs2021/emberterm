@@ -135,7 +135,7 @@
 
   .btn-primary {
     background: var(--accent, #FF6B35);
-    color: #fff;
+    color: white;
   }
 
   .btn-primary:disabled { opacity: 0.5; }
