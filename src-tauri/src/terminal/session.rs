@@ -1,7 +1,8 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::agent::tools::ActiveTools;
+use super::blocks::Block;
 
 pub type SessionId = String;
 
@@ -17,4 +18,6 @@ pub struct Session {
     pub active_tools: Mutex<ActiveTools>,
     /// Name/version of the connected agent, if any.
     pub agent_name: Mutex<Option<String>>,
+    /// All completed and in-progress blocks for this session (OSC 133 driven).
+    pub blocks: Arc<Mutex<Vec<Block>>>,
 }

@@ -254,8 +254,10 @@
 - [ ] OSC 133 `B` mark → command text captured (B mark currently unhandled in pty.rs)
 - [x] OSC 133 `C` mark → `on_output_start()`, emits `block:start` IPC event
 - [x] OSC 133 `D;<exit>` mark → `on_command_end()`, emits `block:end` IPC event with exit code + duration
-- [ ] `block.get` and `block.search` Tauri commands
-- [ ] Store blocks on `Session`, index by `BlockId`
+- [x] `block.get` Tauri command — returns all blocks for a session (ordered by start)
+- [x] Store blocks on `Session` via `Arc<Mutex<Vec<Block>>>`, shared with PTY reader thread
+- [ ] `block.search` Tauri command
+- [ ] Store blocks on `Session` indexed by `BlockId` (HashMap lookup, deferred)
 
 ### Rust Core — OSC 7777 Full
 
@@ -273,7 +275,7 @@
 
 - [x] `frontend/src/agent/Block.svelte` — collapsible block chrome with expand/collapse toggle
 - [x] Block header: command text, duration label, exit code badge (green/red), agent badge
-- [ ] Fold/unfold animation (respects `prefers-reduced-motion`)
+- [x] Fold/unfold animation — `svelte/transition:slide`, duration=0 when `prefers-reduced-motion`
 - [x] Agent-annotated blocks: accent left-border + agent badge chip
 - [ ] Keyboard navigation between blocks (e.g., `Alt+Up/Down`)
 - [ ] Per-block context menu (right-click): Copy command, Copy output, Share block
@@ -287,7 +289,7 @@
 - [x] Footer: [Accept] [Reject] [Edit] action buttons (from `actions` payload)
 - [x] Keyboard: `Y` = accept, `N` = reject, `E` = edit
 - [x] On action: emit `agent.respond` with result → backend writes OSC reply to PTY
-- [ ] Collapse to one-line summary on resolution: `✓ Applied to src/main.rs`
+- [x] Collapse to one-line summary on resolution: header shows `✓ Applied` / `✕ Rejected`, body/footer hidden; App.svelte delays removal by 2s
 
 ### Frontend — Approval Sheet
 
@@ -339,8 +341,9 @@
 
 - [ ] Rust integration tests: spawn shell, emit OSC 133 marks, assert block events
 - [ ] Rust integration tests: emit OSC 7777 `diff` + simulate user reply, assert PTY input bytes
-- [ ] Frontend unit: `DiffView.svelte` — renders patch, fires events
-- [ ] Frontend unit: `ApprovalSheet.svelte` — keyboard nav, action dispatch
+- [x] Frontend unit: `diff-utils.ts` — `parseDiff` / `diffStats` (10 tests: line classification, sigil stripping, line numbers, meta detection, stat counts)
+- [x] Frontend unit: `stores/app.ts` — `clearTabAgent` + block store (`addBlock`, `closeBlock`, scoping, ordering — 8 new tests)
+- [ ] Frontend unit: `ApprovalSheet.svelte` — keyboard nav, action dispatch (needs @testing-library/svelte)
 - [ ] Playwright E2E: open tab, run command, verify block appears
 - [ ] Criterion benchmark: OSC 7777 parser throughput
 

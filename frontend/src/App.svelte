@@ -218,7 +218,11 @@
 
   function handleDiffAction(sessionId: string, id: string, result: string) {
     agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId));
+    // Keep the resolved DiffView visible for 2s so the user sees "✓ Applied" / "✕ Rejected"
+    // before it disappears. DiffView hides its body/footer when resolved = true internally.
+    setTimeout(() => {
+      pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId));
+    }, 2000);
   }
 
   function handleApprovalAction(sessionId: string, id: string, result: string) {

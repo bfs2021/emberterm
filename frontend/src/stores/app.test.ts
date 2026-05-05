@@ -3,15 +3,19 @@ import { get } from "svelte/store";
 import {
   tabs,
   toolCalls,
+  blocks,
   addTab,
   removeTab,
   activateTab,
   setTabTitle,
   setTabCwd,
   setTabAgent,
+  clearTabAgent,
   renameTab,
   addToolCall,
   updateToolCall,
+  addBlock,
+  closeBlock,
   activeTab,
   activeCwd,
   activeAgentName,
@@ -20,6 +24,7 @@ import {
 beforeEach(() => {
   tabs.set([]);
   toolCalls.set(new Map());
+  blocks.set(new Map());
 });
 
 // ── Tab management ────────────────────────────────────────────────────────────
@@ -180,5 +185,80 @@ describe("tool call state transitions", () => {
     updateToolCall("s1", "tc1", { status: "ok" });
     expect(get(toolCalls).get("s1")![0].status).toBe("ok");
     expect(get(toolCalls).get("s2")![0].status).toBe("running");
+  });
+});
+
+// ── clearTabAgent ─────────────────────────────────────────────────────────────
+
+describe("clearTabAgent", () => {
+  it("clears agentActive and agentName after agent.bye", () => {
+    addTab("s1", "Shell");
+    setTabAgent("s1", "claude-code");
+    expect(get(tabs)[0].agentActive).toBe(true);
+    expect(get(tabs)[0].agentName).toBe("claude-code");
+
+    clearTabAgent("s1");
+    expect(get(tabs)[0].agentActive).toBe(false);
+    expect(get(tabs)[0].agentName).toBeUndefined();
+  });
+
+  it("does not affect other sessions", () => {
+    addTab("s1", "Shell 1");
+    addTab("s2", "Shell 2");
+    setTabAgent("s1", "aider");
+    setTabAgent("s2", "codex");
+
+    clearTabAgent("s1");
+    expect(get(tabs).find((t) => t.sessionId === "s2")?.agentName).toBe("codex");
+  });
+});
+
+// ── Block store ───────────────────────────────────────────────────────────────
+
+describe("block store", () => {
+  it("addBlock inserts a block for the session", () => {
+    addBlock("s1", { id: "blk-1", command: "npm test", startedAt: 1000 });
+    const list = get(blocks).get("s1");
+    expect(list).toHaveLength(1);
+    expect(list![0].id).toBe("blk-1");
+    expect(list![0].command).toBe("npm test");
+  });
+
+  it("closeBlock sets exitCode and durationMs", () => {
+    addBlock("s1", { id: "blk-1", command: "ls", startedAt: 1000 });
+    closeBlock("s1", "blk-1", 0, 42);
+    const b = get(blocks).get("s1")![0];
+    expect(b.exitCode).toBe(0);
+    expect(b.durationMs).toBe(42);
+  });
+
+  it("closeBlock with non-zero exit code", () => {
+    addBlock("s1", { id: "blk-1", command: "false", startedAt: 1000 });
+    closeBlock("s1", "blk-1", 1, 10);
+    expect(get(blocks).get("s1")![0].exitCode).toBe(1);
+  });
+
+  it("blocks are scoped per session", () => {
+    addBlock("s1", { id: "blk-1", command: "a", startedAt: 1 });
+    addBlock("s2", { id: "blk-2", command: "b", startedAt: 2 });
+    expect(get(blocks).get("s1")).toHaveLength(1);
+    expect(get(blocks).get("s2")).toHaveLength(1);
+  });
+
+  it("multiple blocks per session are ordered by insertion", () => {
+    addBlock("s1", { id: "blk-1", command: "first", startedAt: 100 });
+    addBlock("s1", { id: "blk-2", command: "second", startedAt: 200 });
+    const list = get(blocks).get("s1")!;
+    expect(list[0].id).toBe("blk-1");
+    expect(list[1].id).toBe("blk-2");
+  });
+
+  it("closeBlock only updates the target block", () => {
+    addBlock("s1", { id: "blk-1", command: "a", startedAt: 1 });
+    addBlock("s1", { id: "blk-2", command: "b", startedAt: 2 });
+    closeBlock("s1", "blk-1", 0, 100);
+    const list = get(blocks).get("s1")!;
+    expect(list[0].exitCode).toBe(0);
+    expect(list[1].exitCode).toBeUndefined();
   });
 });

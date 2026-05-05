@@ -35,6 +35,7 @@ fn main() {
             ipc::config_update,
             ipc::profile_list,
             ipc::profile_upsert,
+            ipc::block_get,
             ipc::agent_respond,
             ipc::git_branch,
             ipc::config_is_first_run,

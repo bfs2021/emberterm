@@ -53,6 +53,21 @@ export async function profileUpsert(profile: Profile): Promise<void> {
   return invoke("profile_upsert", { profile });
 }
 
+// ── Block commands ────────────────────────────────────────────────────────────
+
+export interface BlockRecord {
+  id: string;
+  command: string;
+  started_at_ms: number;
+  exit_code: number | null;
+  duration_ms: number | null;
+}
+
+/** Returns all blocks recorded for a session in start order. */
+export async function blockGet(sessionId: SessionId): Promise<BlockRecord[]> {
+  return invoke("block_get", { sessionId });
+}
+
 // ── Agent commands ────────────────────────────────────────────────────────────
 
 /**

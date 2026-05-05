@@ -105,6 +105,29 @@ pub async fn profile_upsert(
     Ok(())
 }
 
+// ── Block commands ───────────────────────────────────────────────────────────
+
+/// Returns all blocks recorded for a session, ordered by start time.
+/// Useful for the block UI to restore state after reconnecting.
+#[tauri::command]
+pub async fn block_get(
+    session_id: SessionId,
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::terminal::blocks::Block>, String> {
+    // Clone the Arc while holding the sessions lock, then release it before
+    // locking blocks — avoids holding two locks simultaneously.
+    let blocks_arc = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions
+            .get(&session_id)
+            .ok_or_else(|| format!("session {session_id} not found"))?
+            .blocks
+            .clone()
+    };
+    let blocks = blocks_arc.lock().unwrap().clone();
+    Ok(blocks)
+}
+
 // ── Agent commands ───────────────────────────────────────────────────────────
 
 /// Write an OSC 7777 message back into the agent's PTY input stream.

@@ -1,10 +1,10 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::{AppHandle, Emitter};
 
-use super::blocks::BlockManager;
+use super::blocks::{Block, BlockManager};
 use super::session::{Session, SessionId};
 use crate::agent::handlers;
 use crate::agent::tools::ActiveTools;
@@ -114,6 +114,10 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
     let tools_arc = std::sync::Arc::new(Mutex::new(ActiveTools::default()));
     let tools_for_thread = tools_arc.clone();
 
+    // Blocks are shared via Arc so the session can serve `block_get` IPC queries.
+    let blocks_arc: Arc<Mutex<Vec<Block>>> = Arc::new(Mutex::new(Vec::new()));
+    let blocks_for_thread = blocks_arc.clone();
+
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
@@ -185,6 +189,14 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         'A' => block_mgr.on_prompt_start(),
                                         'C' => {
                                             if let Some(data) = block_mgr.on_output_start(command) {
+                                                // Store the new block for IPC queries.
+                                                blocks_for_thread.lock().unwrap().push(Block {
+                                                    id: data.id.clone(),
+                                                    command: data.command.clone(),
+                                                    started_at_ms: data.started_at_ms,
+                                                    exit_code: None,
+                                                    duration_ms: None,
+                                                });
                                                 let _ = app_clone.emit("block:start", BlockStartIpcPayload {
                                                     session_id: sid.clone(),
                                                     id: data.id,
@@ -196,6 +208,13 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         }
                                         'D' => {
                                             if let Some(data) = block_mgr.on_command_end(exit_code.unwrap_or(0)) {
+                                                // Update the stored block with exit code and duration.
+                                                let mut blks = blocks_for_thread.lock().unwrap();
+                                                if let Some(b) = blks.iter_mut().find(|b| b.id == data.id) {
+                                                    b.exit_code = Some(data.exit_code);
+                                                    b.duration_ms = Some(data.duration_ms);
+                                                }
+                                                drop(blks);
                                                 let _ = app_clone.emit("block:end", BlockEndIpcPayload {
                                                     session_id: sid.clone(),
                                                     id: data.id,
@@ -248,6 +267,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         cwd: None,
         active_tools: Mutex::new(ActiveTools::default()),
         agent_name: Mutex::new(None),
+        blocks: blocks_arc,
     })
 }
 

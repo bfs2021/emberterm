@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slide } from "svelte/transition";
   import type { Snippet } from "svelte";
   import type { Block } from "../stores/app.js";
 
@@ -10,6 +11,21 @@
   let { block, children }: Props = $props();
 
   let expanded = $state(true);
+
+  // Respect prefers-reduced-motion — drive transition duration to 0.
+  let reducedMotion = $state(
+    typeof window !== "undefined"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false,
+  );
+
+  $effect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotion = mq.matches;
+    const handler = (e: MediaQueryListEvent) => { reducedMotion = e.matches; };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  });
 
   const exitOk = $derived(block.exitCode === 0 || block.exitCode == null);
   const durationLabel = $derived(
@@ -50,7 +66,7 @@
   </div>
 
   {#if expanded}
-    <div class="block-body">
+    <div class="block-body" transition:slide={{ duration: reducedMotion ? 0 : 150 }}>
       <!-- Terminal output is rendered by xterm.js into Grid.svelte.
            Block.svelte provides collapsible chrome; scrollback byte ranges are
            Phase 2 once the Rust block model is wired. -->

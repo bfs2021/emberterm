@@ -2,6 +2,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub type BlockId = String;
 
+/// Persistent block record stored on the session for `block_get` IPC queries.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Block {
+    pub id: BlockId,
+    pub command: String,
+    pub started_at_ms: u64,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<u64>,
+}
+
 /// Data returned by `on_output_start` — used by the caller to emit `block:start`.
 pub struct BlockStartData {
     pub id: BlockId,
