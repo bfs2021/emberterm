@@ -9,6 +9,10 @@
 
 EmberTerm is an agent-native terminal emulator built with Tauri 2 (Rust) + Svelte 5. It uses `wezterm-term`/`termwiz`/`portable-pty` for the terminal core and defines OSC 7777, an open protocol for AI agent integration.
 
+## UI Design Reference
+
+**`references/design.html`** is the canonical design mockup for EmberTerm's UI. Open it in a browser to inspect the visual target — colors, layout, component shapes, spacing, and interaction patterns. All frontend work should match or align with this mockup. When implementing or reviewing UI components, check them against `references/design.html` first.
+
 ## Key Conventions
 
 - Rust core lives in `src-tauri/`, frontend in `frontend/`
