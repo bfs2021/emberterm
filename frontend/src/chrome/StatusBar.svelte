@@ -4,13 +4,15 @@
     cwd?: string;
     gitBranch?: string;
     agentName?: string;
+    termCols?: number;
+    termRows?: number;
   }
 
-  let { shell = "", cwd = "", gitBranch = "", agentName = "" }: Props = $props();
+  let { shell = "", cwd = "", gitBranch = "", agentName = "", termCols = 0, termRows = 0 }: Props = $props();
 
   function shortenCwd(path: string): string {
     if (!path) return "~";
-    const home = path.match(/^[A-Za-z]:\\Users\\[^\\]+/) ?? path.match(/^\/Users\/[^\/]+/) ?? path.match(/^\/home\/[^\/]+/);
+    const home = path.match(/^[A-Za-z]:\\Users\\[^\\]+/) ?? path.match(/^\/Users\/[^/]+/) ?? path.match(/^\/home\/[^/]+/);
     if (home) return "~" + path.slice(home[0].length);
     return path;
   }
@@ -29,14 +31,15 @@
     return () => clearInterval(id);
   });
 
-  // Track whether any segment has been rendered (for separator logic)
   const hasShell = $derived(!!shell);
   const hasCwd = $derived(!!cwd);
   const hasGit = $derived(!!gitBranch);
   const hasAgent = $derived(!!agentName);
+  const hasSize = $derived(termCols > 0 && termRows > 0);
 </script>
 
 <footer class="status-bar">
+  <!-- Left segments: shell · cwd · git · agent -->
   {#if hasShell}
     <span class="status-item status-shell">
       <svg class="status-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -89,6 +92,20 @@
 
   <span class="status-spacer"></span>
 
+  <!-- Right segments: size · encoding · hint · clock -->
+  {#if hasSize}
+    <span class="status-item status-size">{termCols}×{termRows}</span>
+    <span class="status-sep" aria-hidden="true">·</span>
+  {/if}
+
+  <span class="status-item status-enc">UTF-8</span>
+  <span class="status-sep" aria-hidden="true">·</span>
+
+  <span class="status-item status-hint">
+    <kbd>Ctrl+Shift+P</kbd>
+  </span>
+  <span class="status-sep" aria-hidden="true">·</span>
+
   {#if clock}
     <span class="status-item status-clock" aria-label="Current time">{clock}</span>
   {/if}
@@ -123,11 +140,36 @@
     flex-shrink: 0;
   }
 
-  .status-sep { opacity: 0.4; }
+  .status-sep { opacity: 0.35; }
 
-  .status-spacer { flex: 1; }
+  .status-spacer { flex: 1; min-width: 8px; }
 
   .status-agent { color: var(--accent, #FF6B35); }
+
+  .status-size {
+    font-family: monospace;
+    font-size: 10px;
+    opacity: 0.6;
+  }
+
+  .status-enc {
+    font-size: 10px;
+    opacity: 0.55;
+  }
+
+  .status-hint {
+    opacity: 0.5;
+  }
+
+  .status-hint kbd {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 0px 4px;
+    line-height: 1.6;
+  }
 
   .status-clock {
     font-variant-numeric: tabular-nums;

@@ -7,6 +7,7 @@
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onTerminalOutput, onSessionExit } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
+  import { drainOutputBuffer } from "../stores/app.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,22 @@
     let resizeObserver: ResizeObserver | undefined;
 
     (async () => {
+      // Buffer for the tiny gap between listener registration and terminal open.
+      const earlyBuf: Uint8Array[] = [];
+      let liveTerminal: Terminal | undefined;
+
+      // Register BEFORE creating the terminal so no bytes are missed.
+      // Bytes arriving before liveTerminal is set go into earlyBuf.
+      unlistenOutput = await onTerminalOutput((payload) => {
+        if (payload.session_id !== sessionId) return;
+        const bytes = new Uint8Array(payload.data);
+        if (liveTerminal) {
+          liveTerminal.write(bytes);
+        } else {
+          earlyBuf.push(bytes);
+        }
+      });
+
       const t = new Terminal({
         allowProposedApi: true,
         fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
@@ -68,11 +85,18 @@
         sessionWrite(sessionId, bytes).catch(console.error);
       });
 
-      unlistenOutput = await onTerminalOutput((payload) => {
-        if (payload.session_id !== sessionId) return;
-        const bytes = new Uint8Array(payload.data);
+      // Drain App.svelte's pre-mount buffer (bytes emitted before Grid mounted).
+      for (const bytes of drainOutputBuffer(sessionId)) {
         t.write(bytes);
-      });
+      }
+      // Replay the tiny early buffer from the listener-registration gap.
+      for (const bytes of earlyBuf) {
+        t.write(bytes);
+      }
+      earlyBuf.length = 0;
+
+      // Go live — all future terminal:output events write directly.
+      liveTerminal = t;
 
       unlistenExit = await onSessionExit((payload) => {
         if (payload.session_id !== sessionId) return;

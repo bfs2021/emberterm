@@ -11,6 +11,7 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, type Profile } from "./ipc/client.js";
   import {
+    onTerminalOutput,
     onTerminalTitle,
     onTerminalCwd,
     onTerminalBell,
@@ -44,6 +45,8 @@
     toolCalls,
     addBlock,
     closeBlock,
+    createOutputBuffer,
+    appendOutputBuffer,
   } from "./stores/app.js";
   // Initialize the theme system on import — applies ember-dark CSS vars.
   import "./theme/store.js";
@@ -108,6 +111,14 @@
     const cleanup: Array<() => void> = [];
 
     (async () => {
+      // Pre-register buffer listener BEFORE creating any sessions so initial
+      // PTY output isn't lost while Grid.svelte is still mounting.
+      // appendOutputBuffer is a no-op when no buffer exists for that session.
+      const unlistenPreBuffer = await onTerminalOutput((p) => {
+        appendOutputBuffer(p.session_id, new Uint8Array(p.data));
+      });
+      cleanup.push(unlistenPreBuffer);
+
       try {
         showWelcome = await configIsFirstRun();
         await openNewTab();
@@ -244,7 +255,8 @@
     const shell = profile ? shellBasename(profile.shell) : "";
 
     const sessionId = await sessionCreate(profileId);
-    addTab(sessionId, "Shell", shell);
+    createOutputBuffer(sessionId); // start buffering immediately before Grid mounts
+    addTab(sessionId, shell || "Shell", shell);
   }
 
   async function closeTab(tabId: string, sessionId: string) {
