@@ -18,11 +18,19 @@ fn main() {
 
     tauri::Builder::default()
         .manage(state::AppState::new())
+        .setup(|app| {
+            platform::setup_window(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ipc::session_create,
             ipc::session_write,
             ipc::session_resize,
             ipc::session_close,
+            ipc::config_get,
+            ipc::config_update,
+            ipc::profile_list,
+            ipc::profile_upsert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running EmberTerm");

@@ -1,22 +1,50 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import Grid from "./terminal/Grid.svelte";
-  import { sessionCreate, sessionClose } from "./ipc/client";
+  import TitleBar from "./chrome/TitleBar.svelte";
+  import StatusBar from "./chrome/StatusBar.svelte";
+  import ToolCard from "./agent/ToolCard.svelte";
+  import CommandPalette from "./palette/CommandPalette.svelte";
+  import SettingsPanel from "./settings/SettingsPanel.svelte";
+  import { sessionCreate, sessionClose } from "./ipc/client.js";
+  import {
+    onTerminalTitle,
+    onTerminalCwd,
+    onAgentHello,
+    onToolStart,
+    onToolProgress,
+    onToolEnd,
+  } from "./ipc/events.js";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import {
     tabs,
     activeTabId,
+    activeSessionId,
+    activeCwd,
+    activeAgentName,
     addTab,
     removeTab,
     activateTab,
-    activeSessionId,
-  } from "./stores/app";
+    setTabCwd,
+    setTabTitle,
+    setTabAgent,
+    addToolCall,
+    updateToolCall,
+    toolCalls,
+  } from "./stores/app.js";
+  // Initialize the theme system on import — applies ember-dark CSS vars.
+  import "./theme/store.js";
 
   // ── State ────────────────────────────────────────────────────────────────
 
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let paletteOpen = $state(false);
+  let settingsOpen = $state(false);
 
-  // ── Bootstrap ────────────────────────────────────────────────────────────
+  // ── IPC listeners ────────────────────────────────────────────────────────
+
+  let unlisteners: UnlistenFn[] = [];
 
   onMount(async () => {
     try {
@@ -26,7 +54,64 @@
     } finally {
       loading = false;
     }
+
+    unlisteners.push(
+      await onTerminalTitle((p) => setTabTitle(p.session_id, p.title)),
+      await onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
+      await onAgentHello((p) => setTabAgent(p.session_id, p.name)),
+      await onToolStart((p) => {
+        addToolCall(p.session_id, {
+          id: p.id,
+          name: p.name,
+          summary: p.summary,
+          icon: p.icon,
+          status: "running",
+        });
+      }),
+      await onToolProgress((p) => {
+        updateToolCall(p.session_id, p.id, {
+          progressPct: p.pct,
+          progressMessage: p.message,
+        });
+      }),
+      await onToolEnd((p) => {
+        updateToolCall(p.session_id, p.id, {
+          status: p.status as "ok" | "error" | "cancelled",
+          progressPct: undefined,
+          durationMs: p.duration_ms,
+          ...(p.summary ? { summary: p.summary } : {}),
+        });
+      }),
+    );
   });
+
+  onDestroy(() => {
+    unlisteners.forEach((f) => f());
+  });
+
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+
+  function handleWindowKeydown(e: KeyboardEvent) {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.shiftKey && e.key === "P") { e.preventDefault(); paletteOpen = !paletteOpen; return; }
+    if (mod && e.shiftKey && e.key === "T") { e.preventDefault(); openNewTab(); return; }
+    if (mod && e.shiftKey && e.key === "W") { e.preventDefault(); closeActiveTab(); return; }
+    if (mod && e.key === ",") { e.preventDefault(); settingsOpen = true; return; }
+    if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(1); return; }
+  }
+
+  function cycleTab(dir: 1 | -1) {
+    const ts = $tabs;
+    if (ts.length < 2) return;
+    const idx = ts.findIndex((t) => t.isActive);
+    const next = (idx + dir + ts.length) % ts.length;
+    activateTab(ts[next].id);
+  }
+
+  async function closeActiveTab() {
+    const tab = $tabs.find((t) => t.isActive);
+    if (tab) await closeTab(tab.id, tab.sessionId);
+  }
 
   // ── Tab management ───────────────────────────────────────────────────────
 
@@ -38,48 +123,15 @@
   async function closeTab(tabId: string, sessionId: string) {
     await sessionClose(sessionId).catch(() => {});
     removeTab(tabId);
-    if ($tabs.length === 0) {
-      // Re-open a tab so the window is never empty.
-      await openNewTab();
-    }
-  }
-
-  function handleTabExit(tabId: string, sessionId: string) {
-    closeTab(tabId, sessionId);
+    if ($tabs.length === 0) await openNewTab();
   }
 </script>
 
-<div class="app">
-  <!-- Title bar (custom, Phase 1 component goes here) -->
-  <header class="title-bar" data-tauri-drag-region>
-    <div class="tab-strip" data-tauri-drag-region>
-      {#each $tabs as tab (tab.id)}
-        <div
-          class="tab"
-          class:active={tab.isActive}
-          role="tab"
-          tabindex="0"
-          aria-selected={tab.isActive}
-          onclick={() => activateTab(tab.id)}
-          onkeydown={(e) => e.key === "Enter" && activateTab(tab.id)}
-        >
-          <span class="tab-title">{tab.title}</span>
-          <span
-            class="tab-close"
-            role="button"
-            tabindex="0"
-            aria-label="Close tab"
-            onclick={(e) => { e.stopPropagation(); closeTab(tab.id, tab.sessionId); }}
-            onkeydown={(e) => e.key === "Enter" && (e.stopPropagation(), closeTab(tab.id, tab.sessionId))}
-          >×</span>
-        </div>
-      {/each}
-      <button class="tab-new" aria-label="New tab" onclick={openNewTab}>+</button>
-    </div>
-    <!-- Window controls live here in Phase 1 (TitleBar.svelte) -->
-  </header>
+<svelte:window onkeydown={handleWindowKeydown} />
 
-  <!-- Terminal grid area -->
+<div class="app">
+  <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} />
+
   <main class="terminal-area">
     {#if loading}
       <div class="splash">Starting shell…</div>
@@ -87,132 +139,99 @@
       <div class="splash error">{error}</div>
     {:else}
       {#each $tabs as tab (tab.id)}
-        <Grid
-          sessionId={tab.sessionId}
-          active={tab.isActive}
-          onExit={(code) => handleTabExit(tab.id, tab.sessionId)}
-        />
+        <div class="tab-pane" class:hidden={!tab.isActive}>
+          <!-- Tool cards for this session -->
+          {#if tab.isActive}
+            {#each ($toolCalls.get(tab.sessionId) ?? []).slice(-5) as call (call.id)}
+              <div class="tool-overlay">
+                <ToolCard
+                  id={call.id}
+                  name={call.name}
+                  summary={call.summary}
+                  icon={call.icon}
+                  status={call.status}
+                  progressPct={call.progressPct}
+                  progressMessage={call.progressMessage}
+                  durationMs={call.durationMs}
+                />
+              </div>
+            {/each}
+          {/if}
+
+          <Grid
+            sessionId={tab.sessionId}
+            active={tab.isActive}
+            onExit={() => closeTab(tab.id, tab.sessionId)}
+          />
+        </div>
       {/each}
     {/if}
   </main>
 
-  <!-- Status bar (Phase 1 component goes here) -->
-  <footer class="status-bar">
-    <span class="status-cwd">{$activeSessionId ? "~" : ""}</span>
-  </footer>
+  <StatusBar
+    cwd={$activeCwd}
+    agentName={$activeAgentName}
+  />
+
+  <CommandPalette
+    open={paletteOpen}
+    onClose={() => (paletteOpen = false)}
+    onNewTab={openNewTab}
+    onOpenSettings={() => (settingsOpen = true)}
+  />
+
+  <SettingsPanel
+    open={settingsOpen}
+    onClose={() => (settingsOpen = false)}
+  />
 </div>
 
 <style>
-  /* ── Layout ──────────────────────────────────────────────────────────── */
   .app {
     display: flex;
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background: #0d1117;
-    color: #e6edf3;
+    background: var(--bg, #0d1117);
+    color: var(--fg, #e6edf3);
     font-family: system-ui, sans-serif;
     overflow: hidden;
   }
 
-  /* ── Title bar ───────────────────────────────────────────────────────── */
-  .title-bar {
-    display: flex;
-    align-items: stretch;
-    height: 36px;
-    background: #010409;
-    border-bottom: 1px solid #21262d;
-    flex-shrink: 0;
-    /* Allow Tauri window drag on the title bar background. */
-    -webkit-app-region: drag;
-  }
-
-  .tab-strip {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    flex: 1;
-    min-width: 0;
-    -webkit-app-region: no-drag;
-  }
-
-  .tab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 12px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #7d8590;
-    cursor: pointer;
-    white-space: nowrap;
-    font-size: 12px;
-    transition: color 0.1s, border-color 0.1s;
-  }
-  .tab:hover { color: #e6edf3; }
-  .tab.active {
-    color: #e6edf3;
-    border-bottom-color: #FF6B35;
-    background: #0d1117;
-  }
-
-  .tab-title { pointer-events: none; }
-
-  .tab-close {
-    background: transparent;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    padding: 0 2px;
-    opacity: 0.5;
-    transition: opacity 0.1s;
-    user-select: none;
-  }
-  .tab-close:hover { opacity: 1; }
-
-  .tab-new {
-    background: transparent;
-    border: none;
-    color: #7d8590;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 0 10px;
-    line-height: 36px;
-    transition: color 0.1s;
-  }
-  .tab-new:hover { color: #e6edf3; }
-
-  /* ── Terminal area ───────────────────────────────────────────────────── */
   .terminal-area {
     flex: 1;
     min-height: 0;
     position: relative;
   }
 
+  .tab-pane {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tab-pane.hidden { display: none; }
+
+  .tool-overlay {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .tool-overlay > :global(*) { pointer-events: all; }
+
   .splash {
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100%;
-    color: #7d8590;
+    color: var(--fg-muted, #7d8590);
     font-size: 14px;
   }
-  .splash.error { color: #f85149; }
 
-  /* ── Status bar ──────────────────────────────────────────────────────── */
-  .status-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    height: 24px;
-    padding: 0 12px;
-    background: #010409;
-    border-top: 1px solid #21262d;
-    font-size: 11px;
-    color: #7d8590;
-    flex-shrink: 0;
-  }
+  .splash.error { color: var(--danger, #f85149); }
 </style>

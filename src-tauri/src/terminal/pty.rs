@@ -5,6 +5,8 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::{AppHandle, Emitter};
 
 use super::session::{Session, SessionId};
+use crate::agent::handlers;
+use crate::agent::tools::ActiveTools;
 
 #[derive(serde::Serialize, Clone)]
 pub struct TerminalOutputPayload {
@@ -16,6 +18,18 @@ pub struct TerminalOutputPayload {
 pub struct SessionExitPayload {
     pub session_id: SessionId,
     pub code: i32,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct TerminalTitlePayload {
+    pub session_id: SessionId,
+    pub title: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct TerminalCwdPayload {
+    pub session_id: SessionId,
+    pub cwd: String,
 }
 
 /// Spawns a PTY session with the platform-default shell and starts the PTY
@@ -35,11 +49,11 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
     let shell = default_shell();
     let mut cmd = CommandBuilder::new(&shell);
 
-    // Set a sane TERM value so shell prompts render correctly.
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    // Signal to agents that the terminal supports OSC 7777.
+    cmd.env("TERM_OSC_7777", "1");
 
-    // Forward common env vars from the parent process.
     if let Ok(path) = std::env::var("PATH") {
         cmd.env("PATH", path);
     }
@@ -59,11 +73,15 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         .take_writer()
         .context("failed to take PTY writer")?;
 
-    // Spawn a dedicated OS thread to read PTY output.
-    // We use a real thread (not tokio) because the Read impl may block
-    // indefinitely and tokio's blocking pool should not be occupied long-term.
     let app_clone = app.clone();
     let sid = session_id.clone();
+
+    // ActiveTools shared with the reader thread via Arc<Mutex<>>.
+    // The session also holds a separate Mutex<ActiveTools> for IPC queries,
+    // but the reader thread owns its own instance since it updates on every chunk.
+    let tools_arc = std::sync::Arc::new(Mutex::new(ActiveTools::default()));
+    let tools_for_thread = tools_arc.clone();
+
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
@@ -72,13 +90,57 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
+                        let chunk = &buf[..n];
+
+                        // Extract OSC events before forwarding raw bytes.
+                        let osc_events = crate::terminal::parser::extract_osc_events(chunk);
+
+                        // Forward raw bytes to xterm.js unchanged.
                         let _ = app_clone.emit(
                             "terminal:output",
                             TerminalOutputPayload {
                                 session_id: sid.clone(),
-                                data: buf[..n].to_vec(),
+                                data: chunk.to_vec(),
                             },
                         );
+
+                        // Dispatch OSC events.
+                        let mut tools = tools_for_thread.lock().unwrap();
+                        for event in osc_events {
+                            use crate::agent::protocol::OscEvent;
+                            match event {
+                                OscEvent::Title(title) => {
+                                    let _ = app_clone.emit(
+                                        "terminal:title",
+                                        TerminalTitlePayload {
+                                            session_id: sid.clone(),
+                                            title,
+                                        },
+                                    );
+                                }
+                                OscEvent::Cwd(cwd) => {
+                                    let _ = app_clone.emit(
+                                        "terminal:cwd",
+                                        TerminalCwdPayload {
+                                            session_id: sid.clone(),
+                                            cwd,
+                                        },
+                                    );
+                                }
+                                OscEvent::PromptMark(_mark) => {
+                                    // Phase 2: block model.
+                                }
+                                OscEvent::Osc7777 { verb, payload } => {
+                                    handlers::dispatch(
+                                        &verb,
+                                        &payload,
+                                        &sid,
+                                        &mut tools,
+                                        &app_clone,
+                                    );
+                                }
+                            }
+                        }
                     }
                     Err(_) => break,
                 }
@@ -99,13 +161,14 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         writer: Mutex::new(writer),
         title: shell,
         cwd: None,
+        active_tools: Mutex::new(ActiveTools::default()),
+        agent_name: Mutex::new(None),
     })
 }
 
 fn default_shell() -> String {
     #[cfg(windows)]
     {
-        // Prefer PowerShell if available, fall back to cmd.exe.
         if which_shell("pwsh.exe") {
             "pwsh.exe".to_string()
         } else if which_shell("powershell.exe") {
@@ -129,5 +192,4 @@ fn which_shell(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-// Read is used in the reader thread closure above.
 use std::io::Read;

@@ -37,7 +37,8 @@
 - [x] Add `tokio` (full features) to `Cargo.toml`
 - [x] Add `serde` + `serde_json` to `Cargo.toml`
 - [x] Add `toml` crate to `Cargo.toml`
-- [ ] Add `notify` (file watcher) to `Cargo.toml` — deferred to Phase 1 (hot-reload)
+- [x] Add `notify` (file watcher) to `Cargo.toml`
+- [x] Add `dirs`, `window-vibrancy` to `Cargo.toml`
 - [x] Add `thiserror` + `anyhow` to `Cargo.toml`
 
 ### "Hello World" Terminal
@@ -58,161 +59,156 @@
 
 ### Rust Core — Terminal Session Lifecycle
 
-- [ ] `session.create` — spawn PTY + shell, register in `AppState`, return `SessionId`
-- [ ] `session.write` — forward raw bytes from webview to PTY
-- [ ] `session.resize` — resize PTY + `wezterm_term::Terminal` (cols × rows)
-- [ ] `session.close` — kill child process, remove from `AppState`, emit `session.exit`
-- [ ] Handle `session.exit` event: detect child exit, emit code to frontend
+- [x] `session.create` — spawn PTY + shell, register in `AppState`, return `SessionId`
+- [x] `session.write` — forward raw bytes from webview to PTY
+- [x] `session.resize` — resize PTY (cols × rows)
+- [x] `session.close` — kill child process, remove from `AppState`, emit `session.exit`
+- [x] Handle `session.exit` event: detect child exit, emit code to frontend
 
 ### Rust Core — OSC Handlers
 
-- [ ] `src-tauri/src/terminal/parser.rs` — intercept OSC sequences from `wezterm-term`
-- [ ] OSC 7 (`\e]7;file://...`) — parse and emit `terminal.cwd` event
+- [x] `src-tauri/src/terminal/parser.rs` — intercept OSC sequences via termwiz
+- [x] OSC 7 (`\e]7;file://...`) — parse and emit `terminal:cwd` event
 - [ ] OSC 8 (`\e]8;...`) — detect hyperlinks, pass data to frontend
 - [ ] OSC 52 (`\e]52;...`) — read/write clipboard via Tauri clipboard API
-- [ ] OSC 133 (`\e]133;A/B/C/D`) — parse prompt marks, track command start/end
-- [ ] OSC 1337 (`\e]1337;SetUserVar` / title variants) — parse title updates, emit `terminal.title`
+- [x] OSC 133 (`\e]133;A/B/C/D`) — parse prompt marks (block UI deferred to Phase 2)
+- [x] OSC title (SetWindowTitle) — parse and emit `terminal:title`
 - [ ] DEC 2026 (`\e[?2026h/l`) — synchronized output: buffer until sync end marker
 - [ ] SGR mouse (1002/1006) — pass mouse events from xterm.js to PTY
 
 ### Rust Core — Profile System
 
-- [ ] `src-tauri/src/profile.rs` — `Profile` struct + TOML deserialization
-- [ ] Default profiles per OS: `pwsh.exe` (Windows), `zsh`/`bash` (macOS)
-- [ ] `~` expansion in `cwd` field
-- [ ] `profile.list` Tauri command — scan `~/.config/ember/profiles/`
-- [ ] `profile.upsert` Tauri command — write `.toml` atomically
+- [x] `src-tauri/src/profile.rs` — `Profile` struct + TOML deserialization
+- [x] Default profiles per OS: `pwsh.exe` (Windows), `zsh`/`bash` (macOS)
+- [x] `~` expansion in `cwd` field
+- [x] `profile.list` Tauri command — scan `~/.config/ember/profiles/`
+- [x] `profile.upsert` Tauri command — write `.toml` atomically
 - [ ] File watcher (`notify`) on profiles dir — emit profile list update event on change
 - [ ] Hot-reload: apply profile changes without restarting the app
 
 ### Rust Core — Config System
 
-- [ ] `src-tauri/src/config.rs` — `Config` struct + TOML deserialization (appearance, behavior, keymap, agent sections)
-- [ ] `config.get` Tauri command
-- [ ] `config.update` Tauri command — merge patch, write `config.toml` atomically
+- [x] `src-tauri/src/config.rs` — `Config` struct + TOML deserialization (appearance, behavior, agent sections)
+- [x] `config.get` Tauri command
+- [x] `config.update` Tauri command — merge patch, write `config.toml` atomically
 - [ ] File watcher on `config.toml` — re-apply on external edits
 
 ### Rust Core — Platform Layer
 
-- [ ] `src-tauri/src/platform/windows.rs` — detect Windows 11, enable Mica/Acrylic via `DWMWA_SYSTEMBACKDROP_TYPE`
-- [ ] `src-tauri/src/platform/windows.rs` — ConPTY: set `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`
-- [ ] `src-tauri/src/platform/macos.rs` — NSWindow vibrancy (`NSVisualEffectView`)
-- [ ] `src-tauri/src/platform/macos.rs` — hide native title bar, enable fullsize content view
+- [x] `src-tauri/src/platform/windows.rs` — Windows 11 Mica via `window-vibrancy` crate
+- [ ] `src-tauri/src/platform/windows.rs` — ConPTY explicit attribute (portable-pty handles automatically)
+- [x] `src-tauri/src/platform/macos.rs` — NSWindow vibrancy via `window-vibrancy` crate
+- [x] Hide native title bar — `decorations: false` in `tauri.conf.json`
 
 ### Rust Core — OSC 7777 Stub
 
-- [ ] `src-tauri/src/agent/protocol.rs` — define `OscVerb` enum (all verbs from spec §7–8)
-- [ ] `src-tauri/src/terminal/parser.rs` — route OSC 7777 sequences to agent module
-- [ ] `src-tauri/src/agent/handlers.rs` — `agent.hello`: parse, update `session.agent`, emit `agent.hello` IPC event
-- [ ] `src-tauri/src/agent/tools.rs` — `tool.start`: insert `ToolCallState` into `session.active_tools`, emit `agent.tool_start` IPC event
-- [ ] `src-tauri/src/agent/tools.rs` — `tool.end`: resolve `ToolCallState`, emit `agent.tool_end` IPC event
+- [x] `src-tauri/src/agent/protocol.rs` — `OscVerb` enum (agent.hello, tool.start/progress/end)
+- [x] `src-tauri/src/terminal/parser.rs` — route OSC 7777 sequences to agent module
+- [x] `src-tauri/src/agent/handlers.rs` — `agent.hello`, `tool.start/progress/end` dispatch
+- [x] `src-tauri/src/agent/tools.rs` — `ToolCallState` tracking + `ActiveTools` manager
 - [ ] `agent.respond` Tauri command — write OSC 7777 reply sequence into PTY input stream
 
 ### Frontend — Chrome: Title Bar
 
-- [ ] `frontend/src/chrome/TitleBar.svelte` — custom-drawn title bar, 28px height
-- [ ] Integrate tab strip inside title bar (no native title bar above)
-- [ ] Window controls: minimize, maximize/restore, close — right side (Windows), left side (macOS)
-- [ ] `data-tauri-drag-region` on non-tab areas for window drag
+- [x] `frontend/src/chrome/TitleBar.svelte` — custom title bar with tab strip + window controls
+- [x] Integrate tab strip inside title bar (no native title bar above)
+- [x] Window controls: minimize, maximize/restore, close — right side (Windows)
+- [x] `data-tauri-drag-region` on non-tab areas for window drag
 - [ ] Double-click on empty title bar area → maximize/restore
 
 ### Frontend — Chrome: Tab Strip
 
-- [ ] `frontend/src/chrome/TabStrip.svelte` — render tab list from store
-- [ ] Tab states: `active` (accent underline, full opacity), `inactive`, `unread` (dot), `running` (pulse animation), `agent-active` (ember-orange dot)
-- [ ] "+" button — open new-tab dropdown with profile picker
-- [ ] Close tab on middle-click
+- [x] `frontend/src/chrome/TabStrip.svelte` — render tab list from store
+- [x] Tab states: `active` (accent underline), `inactive`, `unread` (dot), `running` (pulse animation), `agent-active` (ember-orange dot)
+- [x] "+" button — open new tab
+- [x] Close tab on middle-click
 - [ ] Drag to reorder tabs
 - [ ] Double-click tab to rename (inline edit)
-- [ ] Keyboard: `Ctrl+Shift+T` new tab, `Ctrl+Shift+W` close, `Ctrl+Tab` / `Ctrl+Shift+Tab` next/prev
+- [x] Keyboard: `Ctrl+Shift+T` new tab, `Ctrl+Shift+W` close, `Ctrl+Tab` / `Ctrl+Shift+Tab` next/prev
 
 ### Frontend — Chrome: Status Bar
 
-- [ ] `frontend/src/chrome/StatusBar.svelte` — 24px height, flex row
-- [ ] Segment: current shell name (from profile)
-- [ ] Segment: cwd (updates on `terminal.cwd` event, truncated if long)
+- [x] `frontend/src/chrome/StatusBar.svelte` — 24px height, flex row
+- [x] Segment: cwd (updates on `terminal:cwd` event, home dir shortened to `~`)
 - [ ] Segment: git branch (shell-out `git rev-parse --abbrev-ref HEAD` on cwd change)
-- [ ] Segment: agent indicator — hidden by default; shows `● <agent-name> <version>` on `agent.hello` event
+- [x] Segment: agent indicator — shows `● <agent-name>` on `agent:hello` event
 
 ### Frontend — Terminal Grid
 
-- [ ] `frontend/src/terminal/Grid.svelte` — xterm.js `Terminal` instance per session
-- [ ] Add addons: `xterm-addon-fit`, `xterm-addon-webgl`, `xterm-addon-web-links`
-- [ ] Subscribe to `terminal:output` event, pipe bytes to xterm.js `term.write()`
-- [ ] Emit `session.write` on keystrokes (xterm.js `onData`)
-- [ ] Emit `session.resize` on container resize (`ResizeObserver` + `FitAddon`)
-- [ ] Apply theme colors (ANSI palette) from active theme to xterm.js options
-- [ ] Show/hide cursor, handle bell on `terminal.bell` event
-- [ ] Tab focus management: active tab's Grid is focused
+- [x] `frontend/src/terminal/Grid.svelte` — xterm.js `Terminal` instance per session
+- [x] Addons: `xterm-addon-fit`, `xterm-addon-webgl`, `xterm-addon-web-links`
+- [x] Subscribe to `terminal:output` event, pipe bytes to xterm.js `term.write()`
+- [x] Emit `session.write` on keystrokes (xterm.js `onData`)
+- [x] Emit `session.resize` on container resize (`ResizeObserver` + `FitAddon`)
+- [x] Apply theme colors (ANSI palette) from active theme to xterm.js; updates reactively on theme switch
+- [ ] Handle bell on `terminal.bell` event
+- [x] Tab focus management: active tab's Grid is focused
 
 ### Frontend — Agent: Tool Card
 
-- [ ] `frontend/src/agent/ToolCard.svelte` — inline card component
-- [ ] Collapsed state: icon + tool name + summary + status badge (1 line)
-- [ ] Expanded state: `args` JSON, output text, duration, [Retry]/[Cancel] buttons
-- [ ] State variants: `pending` (spinner), `running` (progress), `ok` (green check), `error` (red x)
-- [ ] Expand/collapse toggle (`▾`/`▸`) with smooth animation
-- [ ] Respect `prefers-reduced-motion`
-- [ ] Icon mapping: `pencil`, `file`, `terminal`, `network`, `search`, `bug` → lucide-svelte icons
-- [ ] Wire to `agent.tool_start` / `agent.tool_end` IPC events
-- [ ] Cancel button → emit `agent.respond` with cancel
+- [x] `frontend/src/agent/ToolCard.svelte` — inline card component
+- [x] Collapsed state: icon + tool name + summary + status badge (1 line)
+- [x] Expanded state: summary + progress message
+- [x] State variants: `pending`, `running` (spin animation), `ok` (green), `error` (red), `cancelled`
+- [x] Expand/collapse toggle
+- [x] Icon mapping: `pencil`, `file`, `terminal`, `network`, `search`, `bug`
+- [x] Wire to `agent:tool_start` / `agent:tool_end` / `agent:tool_progress` IPC events
+- [ ] Cancel button → emit `agent.respond` with cancel (requires agent.respond command)
 
 ### Frontend — Command Palette
 
-- [ ] `frontend/src/palette/CommandPalette.svelte` — centered overlay, ~600px wide
-- [ ] Trigger: `Ctrl+Shift+P` (Windows/Linux), `Cmd+Shift+P` (macOS)
-- [ ] Input field with fuzzy search (implement fzf-style scoring)
-- [ ] Sections: Recent, Commands, Profiles, Themes, Settings
-- [ ] Keyboard: arrow keys navigate, Enter selects, Esc closes
-- [ ] Commands: new tab, close tab, settings, profile picker, theme picker
-- [ ] Accessible: `role="dialog"`, `aria-modal`, focus trap
+- [x] `frontend/src/palette/CommandPalette.svelte` — centered overlay, 600px wide
+- [x] Trigger: `Ctrl+Shift+P`
+- [x] Input field with fuzzy search (sequential character match)
+- [x] Keyboard: arrow keys navigate, Enter selects, Esc closes
+- [x] Commands: new tab, settings, all themes as commands
+- [ ] Sections: Recent, Commands, Profiles, Themes (currently flat list)
+- [ ] Focus trap
 
 ### Frontend — Settings Panel
 
-- [ ] `frontend/src/settings/SettingsPanel.svelte` — two-pane overlay
-- [ ] Trigger: `Ctrl+,` (Windows/Linux), `Cmd+,` (macOS)
-- [ ] Left pane: category list (Appearance, Profiles, Keymap, Agent, Advanced)
-- [ ] Right pane: controls for selected category
-- [ ] Search input at top — filters controls across all categories
-- [ ] Esc or [Done] button closes panel
-- [ ] Appearance section: theme picker, font family, font size, opacity, acrylic toggle
-- [ ] Live preview: font/size/opacity changes reflect in terminal grid immediately behind the panel
-- [ ] Footer: "Open config file" link — opens `config.toml` in default editor
+- [x] `frontend/src/settings/SettingsPanel.svelte` — two-pane overlay
+- [x] Trigger: `Ctrl+,`
+- [x] Left pane: category list (Appearance, Profiles, Keymap, Agent)
+- [x] Right pane: controls for selected category
+- [x] Esc button closes panel
+- [x] Appearance section: full theme browser + VS Code JSON import
+- [x] Profiles section: list + create/edit flow
+- [x] Keymap section: read-only reference table
+- [x] Agent section: OSC 7777 status info
+- [ ] Search input filtering controls across categories
+- [ ] Live font/size preview
 
 ### Frontend — Settings: Profile Editor
 
-- [ ] `frontend/src/settings/ProfileEditor.svelte` — form inside Settings → Profiles
-- [ ] Fields: name, icon picker, shell path, args, cwd, env vars (key-value list), theme override, font override
-- [ ] [+ New Profile] button
+- [x] `frontend/src/settings/ProfileEditor.svelte` — form inside Settings → Profiles
+- [x] Fields: name, shell, args, cwd
+- [x] [+ New Profile] button
+- [x] [Save] button — calls `profile.upsert`
 - [ ] [Test] button — spawns profile in a temporary tab
-- [ ] [Save] button — calls `profile.upsert`
 - [ ] [Delete] confirmation
+- [ ] env vars, icon picker, font/theme overrides
 
 ### Frontend — Theme System
 
-- [ ] `frontend/src/theme/tokens.ts` — CSS variable definitions mapping VS Code keys to EmberTerm tokens
-- [ ] `frontend/src/theme/vscode-import.ts` — `vscodeToTheme(json)` converter function
-  - Maps `terminal.background/foreground` → CSS vars
-  - Maps all 16 ANSI colors (`terminal.ansiBlack` … `terminal.ansiBrightWhite`)
-  - Maps `editor.background`, `sideBar.background`, `sideBar.border`, `tab.*`, `statusBar.*`, `focusBorder`, `errorForeground` → chrome tokens
-- [ ] Apply theme CSS vars to `:root` on theme switch
-- [ ] Built-in theme: `ember-dark.json` — `#0d1117` bg, `#FF6B35` accent, warm charcoal
-- [ ] Built-in theme: `ember-light.json`
-- [ ] Built-in theme: `tokyo-night.json` (community, with attribution)
-- [ ] Built-in theme: `catppuccin-mocha.json` (community, with attribution)
-- [ ] Built-in theme: `dracula.json` (community)
-- [ ] Built-in theme: `github-dark.json` (community)
-- [ ] Built-in theme: `solarized-dark.json` (community)
-- [ ] `frontend/src/settings/ThemeEditor.svelte` — theme browser + import UI
-  - List built-in themes with preview swatch
-  - [Import JSON] button → paste or file picker
-  - Drop `.json` to `~/.config/ember/themes/` and hot-reload
+- [x] `frontend/src/theme/tokens.ts` — CSS variable names (`--bg`, `--accent`, `--border`, etc.)
+- [x] `frontend/src/theme/vscode-import.ts` — `vscodeToTheme()` converter + `applyThemeVars()`
+  - Maps all 16 ANSI colors, chrome tokens, xterm.js palette
+- [x] `frontend/src/theme/store.ts` — reactive theme store; applies CSS vars to `:root` on switch
+- [x] Built-in theme: `ember-dark.json` — `#0d1117` bg, `#FF6B35` accent
+- [x] Built-in theme: `ember-light.json`
+- [x] Built-in theme: `tokyo-night.json`
+- [x] Built-in theme: `catppuccin-mocha.json`
+- [x] Built-in theme: `dracula.json`
+- [x] Built-in theme: `github-dark.json`
+- [x] Built-in theme: `solarized-dark.json`
+- [x] `frontend/src/settings/ThemeEditor.svelte` — theme browser with swatches + VS Code JSON import
 
 ### Frontend — Stores
 
-- [ ] `frontend/src/stores/app.ts` — Svelte stores: `sessions`, `activeSessionId`, `tabs`, `config`, `profiles`, `agent`
-- [ ] `frontend/src/ipc/client.ts` — typed wrappers for all Tauri commands (auto-generated or hand-written until ts-rs codegen is wired)
-- [ ] `frontend/src/ipc/events.ts` — typed event subscriptions for all Tauri events
+- [x] `frontend/src/stores/app.ts` — tabs, activeTabId, toolCalls, cwd/agent derived stores
+- [x] `frontend/src/ipc/client.ts` — typed wrappers for all Tauri commands
+- [x] `frontend/src/ipc/events.ts` — typed subscriptions for all Tauri events (terminal + agent)
 
 ### Frontend — First Launch / Welcome Screen
 

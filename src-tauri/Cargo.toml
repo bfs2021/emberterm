@@ -19,6 +19,9 @@ thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "6"
+notify = "6"
+window-vibrancy = "0.6"
 
 [profile.release]
 panic = "abort"

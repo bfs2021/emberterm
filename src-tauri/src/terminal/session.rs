@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::agent::tools::ActiveTools;
+
 pub type SessionId = String;
 
 pub struct Session {
@@ -11,4 +13,8 @@ pub struct Session {
     pub writer: Mutex<Box<dyn std::io::Write + Send>>,
     pub title: String,
     pub cwd: Option<PathBuf>,
+    /// Active tool calls from any agent running in this session.
+    pub active_tools: Mutex<ActiveTools>,
+    /// Name/version of the connected agent, if any.
+    pub agent_name: Mutex<Option<String>>,
 }
