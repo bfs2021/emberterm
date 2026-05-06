@@ -15,11 +15,35 @@ pub async fn session_create(
     state: State<'_, AppState>,
 ) -> Result<SessionId, String> {
     let session_id = state.next_session_id();
-    let _ = profile_id; // Phase 1+: use profile.shell
-    let session = pty::spawn_session(session_id.clone(), app)
+
+    // Resolve which profile to use:
+    //   1. The explicitly requested profile_id, if provided.
+    //   2. The config's default_profile setting.
+    //   3. The first profile in the list.
+    //   4. An inline default (no-clone fallback).
+    let profile: Option<crate::profile::Profile> = {
+        let profiles = state.profiles.lock().unwrap();
+        let cfg = state.config.lock().unwrap();
+        if let Some(ref id) = profile_id {
+            profiles.iter().find(|p| p.id == *id).cloned()
+        } else {
+            let default_id = cfg.behavior.default_profile.clone();
+            profiles
+                .iter()
+                .find(|p| p.id == default_id)
+                .or_else(|| profiles.first())
+                .cloned()
+        }
+    };
+
+    let session = pty::spawn_session(session_id.clone(), profile.as_ref(), app)
         .map_err(|e| e.to_string())?;
     state.sessions.lock().unwrap().insert(session_id.clone(), session);
-    tracing::info!(session_id = %session_id, "session created");
+    tracing::info!(
+        session_id = %session_id,
+        profile = profile.as_ref().map(|p| p.id.as_str()).unwrap_or("default"),
+        "session created"
+    );
     Ok(session_id)
 }
 
@@ -238,6 +262,189 @@ pub async fn config_is_first_run() -> bool {
         Some(path) => !path.exists(),
         None => false,
     }
+}
+
+// ── Built-in profile detection ───────────────────────────────────────────────
+
+/// A shell candidate that EmberTerm knows about but hasn't been saved by the user yet.
+#[derive(serde::Serialize, Clone)]
+pub struct BuiltinProfileSpec {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub shell: String,
+    pub args: Vec<String>,
+    pub description: String,
+}
+
+/// Return `true` when `name` is found on PATH (uses `where` on Windows, `which` elsewhere).
+fn probe(name: &str) -> bool {
+    #[cfg(windows)]
+    let cmd = "where";
+    #[cfg(not(windows))]
+    let cmd = "which";
+
+    std::process::Command::new(cmd)
+        .arg(name)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Scan the system for well-known shells and return those that are available.
+/// The list is ordered: most-common first. Already-saved user profiles are
+/// filtered out on the frontend by comparing shell paths.
+#[tauri::command]
+pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
+    tokio::task::spawn_blocking(|| {
+        let mut specs: Vec<BuiltinProfileSpec> = Vec::new();
+
+        #[cfg(windows)]
+        {
+            // cmd.exe — always present
+            if std::path::Path::new("C:/Windows/System32/cmd.exe").exists() {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-cmd".into(),
+                    name: "Command Prompt".into(),
+                    icon: "terminal".into(),
+                    shell: "cmd.exe".into(),
+                    args: vec![],
+                    description: "Windows Command Prompt".into(),
+                });
+            }
+
+            // Windows PowerShell 5 — ships with every Windows 10/11
+            if std::path::Path::new(
+                "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+            )
+            .exists()
+                || probe("powershell.exe")
+            {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-powershell5".into(),
+                    name: "Windows PowerShell".into(),
+                    icon: "pwsh".into(),
+                    shell: "powershell.exe".into(),
+                    args: vec!["-NoLogo".into()],
+                    description: "PowerShell 5 (built into Windows)".into(),
+                });
+            }
+
+            // PowerShell 7+ (pwsh)
+            if probe("pwsh.exe") {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-pwsh".into(),
+                    name: "PowerShell".into(),
+                    icon: "pwsh".into(),
+                    shell: "pwsh.exe".into(),
+                    args: vec!["-NoLogo".into()],
+                    description: "PowerShell 7+".into(),
+                });
+            }
+
+            // Git Bash — check standard installation paths
+            let local_app = std::env::var("LOCALAPPDATA").unwrap_or_default();
+            let local_git = format!("{}/Programs/Git/bin/bash.exe", local_app.replace('\\', "/"));
+            let git_bash_candidates = [
+                "C:/Program Files/Git/bin/bash.exe",
+                "C:/Program Files (x86)/Git/bin/bash.exe",
+                local_git.as_str(),
+            ];
+            if let Some(path) = git_bash_candidates
+                .iter()
+                .find(|p| std::path::Path::new(p).exists())
+            {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-gitbash".into(),
+                    name: "Git Bash".into(),
+                    icon: "bash".into(),
+                    shell: path.to_string(),
+                    args: vec!["--login".into(), "-i".into()],
+                    description: "Git for Windows Bash shell".into(),
+                });
+            }
+
+            // WSL — wsl.exe lives in System32 on supported Windows builds
+            if std::path::Path::new("C:/Windows/System32/wsl.exe").exists()
+                || probe("wsl.exe")
+            {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-wsl".into(),
+                    name: "WSL".into(),
+                    icon: "bash".into(),
+                    shell: "wsl.exe".into(),
+                    args: vec![],
+                    description: "Windows Subsystem for Linux".into(),
+                });
+            }
+
+            // Docker
+            if probe("docker.exe") || probe("docker") {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-docker".into(),
+                    name: "Docker".into(),
+                    icon: "docker".into(),
+                    shell: "docker".into(),
+                    args: vec![
+                        "run".into(),
+                        "-it".into(),
+                        "--rm".into(),
+                        "ubuntu".into(),
+                        "/bin/bash".into(),
+                    ],
+                    description: "Docker container (ubuntu)".into(),
+                });
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            let shell_candidates: &[(&str, &str, &str, &str, &[&str], &str)] = &[
+                ("/bin/zsh",          "Zsh",  "builtin-zsh",  "bash", &[], "Z Shell"),
+                ("/bin/bash",         "Bash", "builtin-bash", "bash", &[], "Bourne Again Shell"),
+                ("/usr/bin/fish",     "Fish", "builtin-fish", "bash", &[], "Friendly Interactive Shell"),
+                ("/usr/local/bin/fish","Fish","builtin-fish", "bash", &[], "Friendly Interactive Shell"),
+                ("/bin/sh",           "sh",   "builtin-sh",   "terminal", &[], "POSIX Shell"),
+            ];
+            let mut seen_fish = false;
+            for (path, name, id, icon, args, desc) in shell_candidates {
+                if *id == "builtin-fish" {
+                    if seen_fish { continue; }
+                    seen_fish = true;
+                }
+                if std::path::Path::new(path).exists() {
+                    specs.push(BuiltinProfileSpec {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        icon: icon.to_string(),
+                        shell: path.to_string(),
+                        args: args.iter().map(|s| s.to_string()).collect(),
+                        description: desc.to_string(),
+                    });
+                }
+            }
+            if probe("docker") {
+                specs.push(BuiltinProfileSpec {
+                    id: "builtin-docker".into(),
+                    name: "Docker".into(),
+                    icon: "docker".into(),
+                    shell: "docker".into(),
+                    args: vec![
+                        "run".into(),
+                        "-it".into(),
+                        "--rm".into(),
+                        "ubuntu".into(),
+                        "/bin/bash".into(),
+                    ],
+                    description: "Docker container (ubuntu)".into(),
+                });
+            }
+        }
+
+        specs
+    })
+    .await
+    .unwrap_or_default()
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

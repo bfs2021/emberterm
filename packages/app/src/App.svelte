@@ -36,6 +36,7 @@
   let termCols = $state(0);
   let termRows = $state(0);
   let profileCache: Profile[] = [];
+  let defaultProfileId = $state("");
 
   function shellBasename(p: string) { return (p.split(/[\\/]/).pop() ?? p).replace(/\.exe$/i, ""); }
 
@@ -57,10 +58,11 @@
       try {
         showWelcome = await configIsFirstRun();
         await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
-        // Apply persisted window opacity so it takes effect before settings panel is opened
+        // Apply persisted window opacity + read default profile id
         configGet().then((cfg: unknown) => {
-          const o = (cfg as { appearance?: { opacity?: number } })?.appearance?.opacity;
-          if (typeof o === "number") applyOpacity(o);
+          const c = cfg as { appearance?: { opacity?: number }; behavior?: { default_profile?: string } };
+          if (typeof c?.appearance?.opacity === "number") applyOpacity(c.appearance.opacity);
+          defaultProfileId = c?.behavior?.default_profile ?? "";
         }).catch(() => {});
       } catch (e) { error = String(e); }
       finally { loading = false; }
@@ -80,8 +82,14 @@
         onBlockStart((p) => addBlock(p.session_id, { id: p.id, command: p.command, startedAt: p.started_at, agentId: p.agent_id })),
         onBlockEnd((p) => closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms)),
         onBlockAnnotate((p) => annotateBlock(p.session_id, p.id, { agentId: p.agent_id, tags: p.tags, fold: p.fold })),
-        onProfilesUpdated(() => {}),
-        onConfigUpdated(() => {}),
+        onProfilesUpdated(() => { profileCache = []; }),
+        onConfigUpdated(() => {
+          configGet().then((cfg: unknown) => {
+            const c = cfg as { appearance?: { opacity?: number }; behavior?: { default_profile?: string } };
+            if (typeof c?.appearance?.opacity === "number") applyOpacity(c.appearance.opacity);
+            defaultProfileId = c?.behavior?.default_profile ?? "";
+          }).catch(() => {});
+        }),
       ]);
       if (!active) { fns.forEach((f) => f()); return; }
       cleanup.push(...fns);
@@ -130,11 +138,16 @@
   async function openNewTab(profileId?: string) {
     try {
       if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
-      const profile = profileId ? profileCache.find((p) => p.id === profileId) : profileCache[0];
-      const shell = profile ? shellBasename(profile.shell) : "";
-      const sessionId = await sessionCreate(profileId);
+      // Resolve which profile to display: explicit id > config default > first in list
+      const resolvedId = profileId ?? defaultProfileId;
+      const profile = resolvedId
+        ? profileCache.find((p) => p.id === resolvedId) ?? profileCache[0]
+        : profileCache[0];
+      const label = profile?.name ?? shellBasename(profile?.shell ?? "Shell");
+      const shell  = profile ? shellBasename(profile.shell) : "";
+      const sessionId = await sessionCreate(resolvedId || undefined);
       createOutputBuffer(sessionId);
-      addTab(sessionId, shell || "Shell", shell);
+      addTab(sessionId, label || "Shell", shell);
     } catch (e) { error = `Failed to open tab: ${e}`; }
   }
 
@@ -210,7 +223,7 @@
   <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
   <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
   {#if showWelcome}
-    <WelcomeScreen onComplete={async () => { showWelcome = false; if ($tabs.length === 0) await openNewTab(); }} />
+    <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; profileCache = []; if ($tabs.length === 0) await openNewTab(profileId); }} />
   {/if}
 </div>
 

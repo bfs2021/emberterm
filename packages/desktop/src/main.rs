@@ -66,6 +66,7 @@ fn main() {
             ipc::git_branch,
             ipc::config_is_first_run,
             ipc::quake_toggle,
+            ipc::detect_builtin_profiles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running EmberTerm");

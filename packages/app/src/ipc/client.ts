@@ -57,6 +57,20 @@ export async function profileDelete(id: string): Promise<void> {
   return invoke("profile_delete", { id });
 }
 
+export interface BuiltinProfileSpec {
+  id: string;
+  name: string;
+  icon: string;
+  shell: string;
+  args: string[];
+  description: string;
+}
+
+/** Probe the system for known shells and return those that are installed. */
+export async function detectBuiltinProfiles(): Promise<BuiltinProfileSpec[]> {
+  return invoke("detect_builtin_profiles");
+}
+
 // ── Block commands ────────────────────────────────────────────────────────────
 
 export interface BlockRecord {

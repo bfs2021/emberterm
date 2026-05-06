@@ -5,7 +5,7 @@
   import AgentSettings from "./AgentSettings.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
   import { Btn, Kbd } from "@emberterm/ui";
-  import { profileList, configUpdate, type Profile } from "../ipc/client.js";
+  import { profileList, profileUpsert, configGet, configUpdate, detectBuiltinProfiles, type Profile, type BuiltinProfileSpec } from "../ipc/client.js";
 
   interface Props {
     open: boolean;
@@ -20,6 +20,8 @@
 
   let activeCategory = $state<Category>("appearance");
   let profiles = $state<Profile[]>([]);
+  let builtins = $state<BuiltinProfileSpec[]>([]);
+  let addingBuiltin = $state<string | null>(null); // id of spec being saved
   let editingProfile = $state<Profile | null>(null);
   let creatingProfile = $state(false);
   let searchQuery = $state("");
@@ -72,11 +74,41 @@
 
   $effect(() => {
     if (!open) return;
-    profileList().then((p) => {
+    // Load profiles and the persisted default_profile together so the
+    // dropdown reflects the actual config value, not a hardcoded fallback.
+    Promise.all([profileList(), configGet()]).then(([p, cfg]) => {
       profiles = p;
-      defaultProfile = p.find((x) => x.id === "default")?.id ?? (p[0]?.id ?? "");
+      const c = cfg as { behavior?: { default_profile?: string } };
+      const saved = c?.behavior?.default_profile ?? "";
+      defaultProfile = saved || (p[0]?.id ?? "");
     }).catch(() => {});
+    // Detect available built-in shells once per panel open
+    detectBuiltinProfiles().then((b) => { builtins = b; }).catch(() => {});
   });
+
+  /** Built-ins whose shell isn't already covered by a saved profile. */
+  const availableBuiltins = $derived(
+    builtins.filter((b) => !profiles.some((p) => p.shell.toLowerCase() === b.shell.toLowerCase()))
+  );
+
+  async function addBuiltin(spec: BuiltinProfileSpec) {
+    addingBuiltin = spec.id;
+    try {
+      const profile: Profile = {
+        id: spec.id.replace("builtin-", ""),
+        name: spec.name,
+        icon: spec.icon,
+        shell: spec.shell,
+        args: spec.args,
+        cwd: "~",
+        env: {},
+      };
+      await profileUpsert(profile);
+      profiles = [...profiles, profile];
+    } catch { /* ignore */ } finally {
+      addingBuiltin = null;
+    }
+  }
 
   async function onDefaultProfileChange(e: Event) {
     const id = (e.currentTarget as HTMLSelectElement).value;
@@ -197,6 +229,29 @@
                 {/each}
                 <Btn variant="primary" onclick={() => (creatingProfile = true)}>+ New Profile</Btn>
               </div>
+
+              {#if availableBuiltins.length > 0}
+                <div class="builtins-section">
+                  <h4 class="builtins-heading">Available on this system</h4>
+                  <div class="builtins-list">
+                    {#each availableBuiltins as spec}
+                      <div class="builtin-row">
+                        <div class="builtin-info">
+                          <span class="builtin-name">{spec.name}</span>
+                          <span class="builtin-desc">{spec.description}</span>
+                        </div>
+                        <span class="builtin-shell">{spec.shell}</span>
+                        <Btn
+                          variant="ghost"
+                          size="sm"
+                          onclick={() => addBuiltin(spec)}
+                          disabled={addingBuiltin === spec.id}
+                        >{addingBuiltin === spec.id ? "Adding…" : "Add"}</Btn>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -432,6 +487,42 @@
   .profile-shell { font-size: 11px; color: var(--fg-muted, #7d8590); font-family: monospace; }
 
   .profiles-list :global(.btn) { align-self: flex-start; margin-top: 4px; }
+
+  /* ── Built-in shells ────────────────────────────────────── */
+  .builtins-section { display: flex; flex-direction: column; gap: 8px; }
+
+  .builtins-heading {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-muted, #7d8590);
+  }
+
+  .builtins-list { display: flex; flex-direction: column; gap: 4px; }
+
+  .builtin-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed var(--border, #21262d);
+    border-radius: 5px;
+  }
+
+  .builtin-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .builtin-name { font-size: 13px; color: var(--fg, #e6edf3); }
+  .builtin-desc { font-size: 11px; color: var(--fg-muted, #7d8590); }
+  .builtin-shell { font-size: 11px; color: var(--fg-muted, #7d8590); font-family: monospace; flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ── Keymap ─────────────────────────────────────────────── */
   .keymap-section { display: flex; flex-direction: column; gap: 10px; }

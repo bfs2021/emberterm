@@ -15,9 +15,14 @@ use super::session::{Session, SessionId};
 use crate::agent::handlers;
 use crate::agent::tools::ActiveTools;
 
-/// Spawns a PTY session with the platform-default shell and starts the PTY
-/// reader thread that forwards output bytes to the webview as Tauri events.
-pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
+/// Spawns a PTY session using `profile` (or the platform default shell when
+/// `None`) and starts the PTY reader thread that forwards output bytes to the
+/// webview as Tauri events.
+pub fn spawn_session(
+    session_id: SessionId,
+    profile: Option<&crate::profile::Profile>,
+    app: AppHandle,
+) -> Result<Session> {
     let pty_system = native_pty_system();
 
     let pty_pair = pty_system
@@ -29,8 +34,24 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         })
         .context("failed to open PTY")?;
 
-    let shell = default_shell();
+    let shell = profile
+        .map(|p| p.shell.clone())
+        .unwrap_or_else(default_shell);
+
     let mut cmd = CommandBuilder::new(&shell);
+
+    // Profile-defined arguments (e.g. ["-NoLogo"] for pwsh, ["--login", "-i"] for git bash)
+    if let Some(p) = profile {
+        for arg in &p.args {
+            cmd.arg(arg);
+        }
+        // Set working directory
+        cmd.cwd(p.resolved_cwd());
+        // Per-profile environment overrides
+        for (k, v) in &p.env {
+            cmd.env(k, v);
+        }
+    }
 
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
@@ -278,7 +299,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
         id: session_id,
         master: pty_pair.master,
         writer,
-        title: shell,
+        title: profile.map(|p| p.name.clone()).unwrap_or(shell),
         cwd: None,
         active_tools: Mutex::new(ActiveTools::default()),
         agent_name: Mutex::new(None),
