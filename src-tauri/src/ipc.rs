@@ -110,6 +110,17 @@ pub async fn profile_upsert(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn profile_delete(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    crate::profile::delete_profile(&id).map_err(|e| e.to_string())?;
+    let mut profiles = state.profiles.lock().unwrap();
+    profiles.retain(|p| p.id != id);
+    Ok(())
+}
+
 // ── Block commands ───────────────────────────────────────────────────────────
 
 /// Returns all blocks recorded for a session, ordered by start time.

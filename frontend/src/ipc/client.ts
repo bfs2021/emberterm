@@ -53,6 +53,10 @@ export async function profileUpsert(profile: Profile): Promise<void> {
   return invoke("profile_upsert", { profile });
 }
 
+export async function profileDelete(id: string): Promise<void> {
+  return invoke("profile_delete", { id });
+}
+
 // ── Block commands ────────────────────────────────────────────────────────────
 
 export interface BlockRecord {

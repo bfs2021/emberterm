@@ -22,7 +22,7 @@
 
 - [x] Initialize Tauri 2.x project with Svelte 5 + TypeScript + Vite scaffold
 - [x] Configure Cargo workspace in `src-tauri/`
-- [ ] Set up `ts-rs` for Rust → TypeScript type codegen
+- [x] Set up `ts-rs` for Rust → TypeScript type codegen
 - [x] Configure `tracing` + `tracing-subscriber` in Rust core
 - [x] Add `.github/workflows/ci.yml` — build matrix (Windows, macOS), `cargo clippy`, `cargo fmt`, `cargo test`
 - [x] Add `.github/workflows/release.yml` — build + sign + upload binaries
@@ -31,7 +31,7 @@
 
 ### Rust Core — Dependencies
 
-- [ ] Add `wezterm-term` to `Cargo.toml` (pin version) — deferred to Phase 1; not on crates.io, requires git dep
+- [x] Add `wezterm-term` to `Cargo.toml` (pin version) — optional git dep, `branch = "main"`; pin rev when integrating the VT model
 - [x] Add `termwiz` to `Cargo.toml`
 - [x] Add `portable-pty` to `Cargo.toml`
 - [x] Add `tokio` (full features) to `Cargo.toml`
@@ -177,7 +177,7 @@
 - [x] Keymap section: read-only reference table
 - [x] Agent section: OSC 7777 status info
 - [x] Search input filtering controls across categories
-- [ ] Live font/size preview
+- [x] Live font/size preview
 
 ### Frontend — Settings: Profile Editor
 
@@ -185,9 +185,11 @@
 - [x] Fields: name, shell, args, cwd
 - [x] [+ New Profile] button
 - [x] [Save] button — calls `profile.upsert`
-- [ ] [Test] button — spawns profile in a temporary tab
-- [ ] [Delete] confirmation
-- [ ] env vars, icon picker, font/theme overrides
+- [x] [Test] button — saves profile then opens a new tab with that profile id
+- [x] [Delete] confirmation — inline confirm UI; `profile_delete` Rust command + IPC wrapper
+- [x] env vars key-value editor (dynamic add/remove rows)
+- [x] icon picker (select: terminal, pwsh, bash, agent)
+- [x] font/theme overrides (optional `font_family`, `font_size`, `theme` fields)
 
 ### Frontend — Theme System
 
@@ -236,7 +238,7 @@
 
 ### Testing — Phase 1
 
-- [ ] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
+- [x] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
 - [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start) — moved to `parser_test.rs`
 - [ ] Property-based tests (`proptest`) for OSC 7777 payload parser
 - [x] Frontend unit tests (Vitest): `vscode-import.ts` converter

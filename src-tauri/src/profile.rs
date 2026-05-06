@@ -2,8 +2,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(TS))]
+#[cfg_attr(test, ts(export, export_to = "../frontend/bindings/Profile.ts"))]
 #[serde(default)]
 pub struct Profile {
     pub id: String,
@@ -92,6 +96,15 @@ pub fn save_profile(profile: &Profile) -> Result<()> {
     let path = dir.join(format!("{}.toml", profile.id));
     let text = toml::to_string_pretty(profile)?;
     std::fs::write(path, text)?;
+    Ok(())
+}
+
+pub fn delete_profile(id: &str) -> Result<()> {
+    let dir = profiles_dir().ok_or_else(|| anyhow::anyhow!("no config dir"))?;
+    let path = dir.join(format!("{}.toml", id));
+    if path.exists() {
+        std::fs::remove_file(path)?;
+    }
     Ok(())
 }
 

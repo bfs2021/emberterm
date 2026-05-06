@@ -59,6 +59,7 @@ fn main() {
             ipc::config_update,
             ipc::profile_list,
             ipc::profile_upsert,
+            ipc::profile_delete,
             ipc::block_get,
             ipc::block_search,
             ipc::agent_respond,

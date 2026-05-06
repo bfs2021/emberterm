@@ -8,6 +8,7 @@
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onTerminalOutput, onSessionExit, onKittyKeyboard } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
+  import { fontConfig } from "../theme/fontStore.js";
   import { drainOutputBuffer } from "../stores/app.js";
   import { shouldInterceptKey, encodeKittyKey, FLAG_REPORT_EVENTS } from "../utils/kittyKeyboard.js";
 
@@ -26,12 +27,13 @@
 
   let container: HTMLDivElement;
   let term = $state<Terminal | undefined>(undefined);
+  /** Exposed so the font-change effect can call fitAddon.fit() after resize. */
+  let fa = $state<FitAddon | undefined>(undefined);
   /** Active Kitty keyboard enhancement flags (0 = disabled). */
   let kittyFlags = $state(0);
 
   $effect(() => {
     let mounted = true;
-    let fitAddon: FitAddon | undefined;
     let unlistenOutput: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
     let unlistenKitty: (() => void) | undefined;
@@ -54,18 +56,20 @@
         }
       });
 
+      const cfg = get(fontConfig);
       const t = new Terminal({
         allowProposedApi: true,
-        fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
-        fontSize: 13,
-        lineHeight: 1.2,
+        fontFamily: cfg.fontFamily,
+        fontSize: cfg.fontSize,
+        lineHeight: cfg.lineHeight,
         cursorBlink: true,
         cursorStyle: "block",
         scrollback: 10000,
         theme: get(activeTheme).xterm,
       });
 
-      fitAddon = new FitAddon();
+      const fitAddon = new FitAddon();
+      fa = fitAddon;
       t.loadAddon(fitAddon);
       t.loadAddon(new WebLinksAddon());
       // Kitty graphics protocol + Sixel rendering.
@@ -155,6 +159,7 @@
 
     return () => {
       mounted = false;
+      fa = undefined;
       unlistenOutput?.();
       unlistenExit?.();
       unlistenKitty?.();
@@ -169,6 +174,19 @@
     if (term) {
       term.options.theme = $activeTheme.xterm;
     }
+  });
+
+  // Live font preview: when fontConfig changes, update the terminal and re-fit.
+  $effect(() => {
+    const { fontFamily, fontSize, lineHeight } = $fontConfig;
+    if (!term || !fa) return;
+    term.options.fontFamily = fontFamily;
+    term.options.fontSize = fontSize;
+    term.options.lineHeight = lineHeight;
+    fa.fit();
+    // Font changes affect cell dimensions, so update the PTY size.
+    sessionResize(sessionId, term.cols, term.rows).catch(console.error);
+    onResize?.(term.cols, term.rows);
   });
 
   // Focus the terminal when this tab becomes active.

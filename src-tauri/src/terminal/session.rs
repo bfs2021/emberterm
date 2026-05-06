@@ -22,3 +22,7 @@ pub struct Session {
     /// All completed and in-progress blocks for this session (OSC 133 driven).
     pub blocks: Arc<Mutex<BlockStore>>,
 }
+
+#[cfg(test)]
+#[path = "session_test.rs"]
+mod tests;

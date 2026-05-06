@@ -8,6 +8,7 @@
   import { playBell } from "./utils/bell.js";
   import { navigateBlocks } from "./utils/blockNav.js";
   import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, quakeToggle, type Profile } from "./ipc/client.js";
+  import { loadFontConfig } from "./theme/fontStore.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
     onAgentHello, onToolStart, onToolProgress, onToolEnd, onClipboardWrite,
@@ -51,8 +52,10 @@
     const cleanup: Array<() => void> = [];
     (async () => {
       cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
-      try { showWelcome = await configIsFirstRun(); await openNewTab(); }
-      catch (e) { error = String(e); }
+      try {
+        showWelcome = await configIsFirstRun();
+        await Promise.all([openNewTab(), loadFontConfig()]);
+      } catch (e) { error = String(e); }
       finally { loading = false; }
       if (!active) return;
       const fns = await Promise.all([
@@ -188,7 +191,7 @@
   </main>
   <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} agentName={$activeAgentName} {termCols} {termRows} />
   <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
-  <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} />
+  <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
   {#if showWelcome}
     <WelcomeScreen onComplete={() => (showWelcome = false)} />
   {/if}

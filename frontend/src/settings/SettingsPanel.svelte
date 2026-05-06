@@ -7,9 +7,11 @@
   interface Props {
     open: boolean;
     onClose: () => void;
+    /** Called when the user clicks Test in the profile editor. Receives the profile id. */
+    onTestProfile?: (profileId: string) => void;
   }
 
-  let { open, onClose }: Props = $props();
+  let { open, onClose, onTestProfile }: Props = $props();
 
   type Category = "appearance" | "profiles" | "keymap" | "agent";
 
@@ -100,11 +102,23 @@
             <ProfileEditor
               profile={editingProfile ?? undefined}
               onSave={(p) => {
-                profiles = [...profiles.filter((x: any) => x.id !== p.id), p];
+                profiles = [...profiles.filter((x) => x.id !== p.id), p];
                 creatingProfile = false;
                 editingProfile = null;
               }}
               onCancel={() => { creatingProfile = false; editingProfile = null; }}
+              onTest={(p) => {
+                // Save state, close settings, open new tab with the profile.
+                creatingProfile = false;
+                editingProfile = null;
+                onClose();
+                onTestProfile?.(p.id);
+              }}
+              onDelete={(deletedId) => {
+                profiles = profiles.filter((p) => p.id !== deletedId);
+                creatingProfile = false;
+                editingProfile = null;
+              }}
             />
           {:else}
             <div class="profiles-list">

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { allThemes, activeThemeId, setTheme, importTheme } from "../theme/store.js";
+  import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
   import Btn from "../lib/Btn.svelte";
 
   interface Props {
@@ -20,6 +21,20 @@
     } else {
       importError = "Invalid VS Code theme JSON.";
     }
+  }
+
+  function onFontFamilyInput(e: Event) {
+    updateFontConfig({ fontFamily: (e.currentTarget as HTMLInputElement).value }).catch(() => {});
+  }
+
+  function onFontSizeInput(e: Event) {
+    const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+    if (n >= 8 && n <= 72) updateFontConfig({ fontSize: n }).catch(() => {});
+  }
+
+  function onLineHeightInput(e: Event) {
+    const n = parseFloat((e.currentTarget as HTMLInputElement).value);
+    if (n >= 0.8 && n <= 3.0) updateFontConfig({ lineHeight: n }).catch(() => {});
   }
 </script>
 
@@ -43,6 +58,41 @@
         {/if}
       </button>
     {/each}
+  </div>
+
+  <!-- ── Font settings (live preview) ───────────────────────── -->
+  <div class="font-section">
+    <h4>Font</h4>
+    <label class="field">
+      <span class="label">Family</span>
+      <input
+        type="text"
+        value={$fontConfig.fontFamily}
+        oninput={onFontFamilyInput}
+        placeholder="JetBrains Mono, monospace"
+        spellcheck={false}
+      />
+    </label>
+    <div class="field-row">
+      <label class="field">
+        <span class="label">Size (px)</span>
+        <input
+          type="number"
+          min="8" max="72"
+          value={$fontConfig.fontSize}
+          oninput={onFontSizeInput}
+        />
+      </label>
+      <label class="field">
+        <span class="label">Line height</span>
+        <input
+          type="number"
+          min="0.8" max="3.0" step="0.05"
+          value={$fontConfig.lineHeight}
+          oninput={onLineHeightInput}
+        />
+      </label>
+    </div>
   </div>
 
   <div class="import-section">
@@ -110,6 +160,37 @@
 
   .theme-check { color: var(--accent, #FF6B35); font-size: 12px; }
 
+  /* ── Font section ──────────────────────────────────────── */
+  .font-section { display: flex; flex-direction: column; gap: 8px; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-row { display: flex; gap: 10px; }
+
+  .label {
+    font-size: 11px;
+    color: var(--fg-muted, #7d8590);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  input[type="text"], input[type="number"] {
+    background: var(--bg, #0d1117);
+    border: 1px solid var(--border, #21262d);
+    border-radius: 4px;
+    color: var(--fg, #e6edf3);
+    font-size: 13px;
+    padding: 5px 8px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+
+  input[type="text"]:focus, input[type="number"]:focus {
+    border-color: var(--accent, #FF6B35);
+  }
+
+  /* ── Import section ─────────────────────────────────── */
   .import-section { display: flex; flex-direction: column; gap: 8px; }
 
   textarea {
