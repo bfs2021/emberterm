@@ -9,7 +9,7 @@
   import { navigateBlocks } from "./utils/blockNav.js";
   import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, quakeToggle, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
-  import { loadTerminalConfig, terminalConfig } from "./stores/terminalConfigStore.js";
+  import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
@@ -134,14 +134,11 @@
   }
 
   async function closeTab(tabId: string, sessionId: string) {
-    if ($terminalConfig.confirmCloseRunning) {
-      if (!window.confirm("Close this tab? Any running process will be terminated.")) return;
-    }
     const tab = $tabs.find((t) => t.id === tabId);
     if (tab?.splitSessionId) await sessionClose(tab.splitSessionId).catch(() => {});
     await sessionClose(sessionId).catch(() => {});
     removeTab(tabId);
-    if ($tabs.length === 0) await openNewTab();
+    if ($tabs.length === 0) showWelcome = true;
   }
 
   async function splitActiveTab(direction: "horizontal" | "vertical") {
@@ -208,7 +205,7 @@
   <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
   <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
   {#if showWelcome}
-    <WelcomeScreen onComplete={() => (showWelcome = false)} />
+    <WelcomeScreen onComplete={async () => { showWelcome = false; if ($tabs.length === 0) await openNewTab(); }} />
   {/if}
 </div>
 
