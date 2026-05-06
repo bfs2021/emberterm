@@ -211,3 +211,139 @@ fn tool_cancel_event_format() {
     assert!(raw.contains("\"kind\":\"tool.cancel\""));
     assert!(raw.contains("\"id\":\"t_42\""));
 }
+
+// ── Property-based tests ──────────────────────────────────────────────────────
+//
+// These tests verify that parse_verb satisfies invariants across a large random
+// input space, complementing the deterministic unit tests above.
+
+use proptest::prelude::*;
+
+proptest! {
+    /// parse_verb must never panic on any (verb, payload) input.
+    #[test]
+    fn parse_verb_never_panics(verb in any::<String>(), payload in any::<String>()) {
+        let _ = parse_verb(&verb, &payload);
+    }
+
+    /// agent.bye always returns AgentBye regardless of payload.
+    #[test]
+    fn agent_bye_always_returns_bye(payload in any::<String>()) {
+        assert!(matches!(parse_verb("agent.bye", &payload), OscVerb::AgentBye));
+    }
+
+    /// A well-formed tool.start payload round-trips through parse_verb.
+    #[test]
+    fn tool_start_roundtrips_required_fields(
+        id in "[a-z][a-z0-9_-]{0,20}",
+        name in "[a-z][a-z0-9_]{0,30}",
+        summary in "[a-zA-Z0-9 .,:/\\-]{1,100}",
+    ) {
+        let json = serde_json::json!({
+            "v": 1, "id": id, "name": name, "summary": summary
+        }).to_string();
+        match parse_verb("tool.start", &json) {
+            OscVerb::ToolStart(t) => {
+                prop_assert_eq!(&t.id, &id);
+                prop_assert_eq!(&t.name, &name);
+                prop_assert_eq!(&t.summary, &summary);
+                prop_assert!(t.args.is_none());
+            }
+            other => return Err(TestCaseError::fail(format!(
+                "expected ToolStart, got {other:?}"
+            ))),
+        }
+    }
+
+    /// A well-formed agent.hello payload round-trips through parse_verb.
+    #[test]
+    fn agent_hello_roundtrips_required_fields(
+        name in "[a-zA-Z][a-zA-Z0-9_-]{0,30}",
+        version in "[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}",
+    ) {
+        let json = serde_json::json!({
+            "v": 1, "name": name, "version": version
+        }).to_string();
+        match parse_verb("agent.hello", &json) {
+            OscVerb::AgentHello(h) => {
+                prop_assert_eq!(&h.name, &name);
+                prop_assert_eq!(&h.version, &version);
+                prop_assert!(h.pid.is_none());
+            }
+            other => return Err(TestCaseError::fail(format!(
+                "expected AgentHello, got {other:?}"
+            ))),
+        }
+    }
+
+    /// A well-formed tool.end payload round-trips through parse_verb.
+    #[test]
+    fn tool_end_roundtrips_required_fields(
+        id in "[a-z][a-z0-9_-]{0,20}",
+        status in "(ok|error|cancelled)",
+        duration_ms in 0u64..=3_600_000u64,
+    ) {
+        let json = serde_json::json!({
+            "v": 1, "id": id, "status": status, "duration_ms": duration_ms
+        }).to_string();
+        match parse_verb("tool.end", &json) {
+            OscVerb::ToolEnd(t) => {
+                prop_assert_eq!(&t.id, &id);
+                prop_assert_eq!(&t.status, &status);
+                prop_assert_eq!(t.duration_ms, Some(duration_ms));
+            }
+            other => return Err(TestCaseError::fail(format!(
+                "expected ToolEnd, got {other:?}"
+            ))),
+        }
+    }
+
+    /// Known verbs given malformed (non-JSON) payloads always fall back to Unknown.
+    #[test]
+    fn malformed_payload_produces_unknown_for_known_verbs(
+        // A string that cannot be valid JSON: starts with a letter, no braces/quotes
+        garbage in "[a-z]{3,20}",
+    ) {
+        let known = ["agent.hello", "tool.start", "tool.progress", "tool.end",
+                     "diff", "approval", "block.annotate", "agent.query"];
+        for verb in known {
+            match parse_verb(verb, &garbage) {
+                OscVerb::Unknown { .. } => {}
+                other => return Err(TestCaseError::fail(format!(
+                    "expected Unknown for verb={verb} + garbage, got {other:?}"
+                ))),
+            }
+        }
+    }
+
+    /// Completely unknown verbs always produce OscVerb::Unknown.
+    #[test]
+    fn unknown_verb_strings_always_produce_unknown(
+        // Use a "zz." prefix so it can never collide with a known verb.
+        verb in "zz\\.[a-z]{3,10}",
+        payload in any::<String>(),
+    ) {
+        assert!(matches!(parse_verb(&verb, &payload), OscVerb::Unknown { .. }));
+    }
+
+    /// OSC wire frame: the format used for replies is parseable by extract_osc_events.
+    #[test]
+    fn reply_sequence_is_a_valid_osc_frame(
+        id in "[a-z0-9]{1,20}",
+        result in "(accept|reject|allow_once|deny|ok|error)",
+    ) {
+        use crate::agent::protocol::OscEvent;
+        use crate::terminal::parser::extract_osc_events;
+
+        let payload = serde_json::json!({ "v": 1, "id": id, "result": result });
+        let seq = format!("\x1b]7777;reply;{}\x1b\\", payload);
+        let events = extract_osc_events(seq.as_bytes());
+        prop_assert_eq!(events.len(), 1);
+        match &events[0] {
+            OscEvent::Osc7777 { verb, .. } => prop_assert_eq!(verb.as_str(), "reply"),
+            other => return Err(TestCaseError::fail(format!(
+                "expected Osc7777, got {other:?}"
+            ))),
+        }
+    }
+}

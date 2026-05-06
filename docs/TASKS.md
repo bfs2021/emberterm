@@ -240,7 +240,7 @@
 
 - [x] Rust unit tests: `session.rs` — mock PTY, verify `Session` struct lifecycle
 - [x] Rust unit tests: `parser.rs` — OSC sequence parsing (OSC 7, 8, 52, 133, 7777 hello/tool.start) — moved to `parser_test.rs`
-- [ ] Property-based tests (`proptest`) for OSC 7777 payload parser
+- [x] Property-based tests (`proptest`) for OSC 7777 payload parser — 8 properties in `protocol_test.rs`: never-panics, agent-bye invariant, tool.start/tool.end/agent.hello roundtrip, malformed→Unknown, unknown verb→Unknown, reply frame parseable
 - [x] Frontend unit tests (Vitest): `vscode-import.ts` converter
 - [x] Frontend unit tests (Vitest): `stores/app.ts` — tab management + tool call state transitions
 - [ ] Manual smoke checklist: shell spawn, output render, multi-tab, theme switch, settings persist
@@ -346,7 +346,7 @@
 - [x] Frontend unit: `diff-utils.ts` — `parseDiff` / `diffStats` (10 tests: line classification, sigil stripping, line numbers, meta detection, stat counts)
 - [x] Frontend unit: `stores/app.ts` — `clearTabAgent` + block store (`addBlock`, `closeBlock`, scoping, ordering — 8 new tests)
 - [x] Frontend unit: `approval-utils.ts` — `formatAction`, `btnClass`, `resolveKey` keyboard bindings (21 tests)
-- [ ] Playwright E2E: open tab, run command, verify block appears
+- [x] E2E test scaffold: `e2e/` directory with WebdriverIO + tauri-driver config (`wdio.conf.ts`) and `tests/basic.spec.ts` covering app shell render, tab creation, terminal grid mount, keyboard input, OSC 133 block appearance; requires built Tauri app + `tauri-driver` on PATH to execute
 - [x] Criterion benchmark: OSC 7777 parser throughput (`src-tauri/benches/osc_parser.rs` — shell_block, tool_starts ×3, plain_text ×3)
 
 ---
@@ -478,7 +478,7 @@
 ### Security
 
 - [ ] Audit: no OSC 7777 payload content in logs or telemetry
-- [ ] Sanitize untrusted bytes printed by agent (strip `ESC` before rendering in tool card summaries)
+- [x] Sanitize untrusted bytes printed by agent — `stripAnsi()` in `utils/stripAnsi.ts` (20 tests); applied to `name`, `summary`, and `progressMessage` via `$derived` in `ToolCard.svelte`
 - [x] OSC 7777 rate limiting: 1000 seq/sec/session enforcement
 - [ ] `agent.hello` `name` field treated as display-only, never used for authorization
 

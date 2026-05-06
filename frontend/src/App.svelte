@@ -17,7 +17,7 @@
     type AgentDiffPayload, type AgentApprovalPayload,
   } from "./ipc/events.js";
   import {
-    tabs, activeCwd, activeAgentName, activeShell,
+    tabs, activeCwd, activeAgentName, activeShell, activeSessionId,
     addTab, removeTab, activateTab, setTabCwd, setTabTitle,
     setTabAgent, clearTabAgent, addToolCall, updateToolCall, toolCalls,
     addBlock, annotateBlock, closeBlock, blocks,
@@ -154,6 +154,16 @@
     if (!tab?.splitSessionId) return;
     await sessionClose(tab.splitSessionId).catch(() => {});
     clearTabSplit(tabId);
+  }
+
+  // ── Testing affordance ───────────────────────────────────────────────────
+  // Expose the active session ID on window so E2E tests can call session_write
+  // directly (e.g. to inject OSC sequences).  Only runs in dev/debug builds.
+  if (import.meta.env.DEV) {
+    $effect(() => {
+      (window as unknown as Record<string, unknown>)["__EMBER_ACTIVE_SESSION__"] =
+        $activeSessionId;
+    });
   }
 </script>
 

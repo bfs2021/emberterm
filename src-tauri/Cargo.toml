@@ -37,6 +37,7 @@ wezterm = ["dep:wezterm-term"]
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 ts-rs = { version = "10", features = ["serde-compat"] }
+proptest = "1"
 
 [[bench]]
 name = "osc_parser"

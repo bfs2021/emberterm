@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { stripAnsi } from "../utils/stripAnsi.js";
+
   export type ToolStatus = "pending" | "running" | "ok" | "error" | "cancelled";
 
   interface Props {
@@ -25,6 +27,11 @@
     args,
     onCancel,
   }: Props = $props();
+
+  // Strip escape sequences from agent-supplied strings before DOM rendering.
+  const safeName = $derived(stripAnsi(name));
+  const safeSummary = $derived(stripAnsi(summary));
+  const safeProgressMsg = $derived(progressMessage != null ? stripAnsi(progressMessage) : undefined);
 
   let expanded = $state(false);
 
@@ -65,8 +72,8 @@
       <path d={iconPath(icon)} />
     </svg>
 
-    <span class="tool-name">{name}</span>
-    <span class="tool-summary">{summary}</span>
+    <span class="tool-name">{safeName}</span>
+    <span class="tool-summary">{safeSummary}</span>
 
     <span class="tool-spacer"></span>
 
@@ -105,10 +112,10 @@
   <!-- Expanded body -->
   {#if expanded}
     <div class="tool-body">
-      <p class="tool-detail">{summary}</p>
+      <p class="tool-detail">{safeSummary}</p>
 
-      {#if progressMessage}
-        <p class="tool-progress-msg">{progressMessage}</p>
+      {#if safeProgressMsg}
+        <p class="tool-progress-msg">{safeProgressMsg}</p>
       {/if}
 
       {#if hasArgs}
