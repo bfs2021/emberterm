@@ -1,25 +1,21 @@
 <script lang="ts">
   import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
   import { configUpdate, configGet } from "../ipc/client.js";
-  import { applyOpacity } from "../stores/terminalConfigStore.js";
   import { onMount } from "svelte";
 
   // Window appearance config — separate from fontStore
   let windowPadding = $state(8);
   let acrylic = $state(true);
-  let opacity = $state(95); // 0-100 integer for slider
 
   onMount(async () => {
     try {
       const cfg = await configGet() as {
-        appearance?: { window_padding?: number; acrylic?: boolean; opacity?: number };
+        appearance?: { window_padding?: number; acrylic?: boolean };
       };
       const a = cfg?.appearance;
       if (a) {
         windowPadding = a.window_padding ?? 8;
         acrylic = a.acrylic ?? true;
-        opacity = Math.max(75, Math.round((a.opacity ?? 0.95) * 100));
-        applyOpacity(opacity / 100);
       }
     } catch { /* keep defaults */ }
   });
@@ -29,7 +25,6 @@
       appearance: {
         window_padding: windowPadding,
         acrylic,
-        opacity: opacity / 100,
       },
     });
   }
@@ -51,12 +46,6 @@
   function onPaddingInput(e: Event) {
     const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
     if (n >= 0 && n <= 64) { windowPadding = n; saveWindow().catch(() => {}); }
-  }
-
-  function onOpacityInput(e: Event) {
-    opacity = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-    applyOpacity(opacity / 100);
-    saveWindow().catch(() => {});
   }
 
   function toggleAcrylic() {
@@ -130,16 +119,6 @@
       </span>
     </div>
 
-    <label class="field">
-      <span class="label">Opacity — {opacity}%</span>
-      <input
-        type="range"
-        min="75" max="100"
-        value={opacity}
-        oninput={onOpacityInput}
-        class="range-input"
-      />
-    </label>
   </section>
 </div>
 
@@ -239,25 +218,4 @@
 
   .toggle-input:checked + .toggle-track { background: var(--accent, #FF6B35); }
   .toggle-input:checked + .toggle-track::after { transform: translateX(16px); }
-
-  /* Range slider */
-  .range-input {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--border, #21262d);
-    outline: none;
-    cursor: pointer;
-    margin-top: 4px;
-  }
-
-  .range-input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--accent, #FF6B35);
-    cursor: pointer;
-  }
 </style>

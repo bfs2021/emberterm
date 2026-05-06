@@ -142,13 +142,3 @@ export async function queryAgentVersion(executable: string): Promise<string | nu
 export async function configIsFirstRun(): Promise<boolean> {
   return invoke<boolean>("config_is_first_run");
 }
-
-/**
- * Set the OS-level window opacity (0.0–1.0). On Windows this uses
- * SetLayeredWindowAttributes so the entire compositor surface — including
- * WebGL canvases — becomes transparent. On other platforms this is a no-op;
- * CSS rgba transparency handles it instead.
- */
-export async function setWindowOpacity(value: number): Promise<void> {
-  return invoke("set_window_opacity", { value });
-}

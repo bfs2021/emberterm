@@ -1,36 +1,5 @@
 import { writable, get } from "svelte/store";
-import { configGet, configUpdate, setWindowOpacity } from "../ipc/client.js";
-
-// ── Window opacity ───────────────────────────────────────────────────────────
-
-/** 0–1 float; drives xterm.js rgba background + CSS variable for chrome. */
-export const windowOpacity = writable(1);
-
-
-/**
- * Apply a new opacity value:
- *   - updates the reactive store (Grid.svelte reacts to it live)
- *   - sets --window-opacity on :root for any CSS consumers
- *   - calls setWindowOpacity() IPC to apply OS-level transparency via
- *     SetLayeredWindowAttributes (Windows) so the entire compositor surface —
- *     including WebGL canvases — becomes transparent at once
- */
-export function applyOpacity(v: number): void {
-  windowOpacity.set(v);
-  document.documentElement.style.setProperty("--window-opacity", String(v));
-  // OS-level window transparency — title bar, status bar, and xterm.js WebGL
-  // canvas all become transparent together without any double-fade artefacts.
-  setWindowOpacity(v).catch(() => {});
-}
-
-/**
- * Temporarily override the OS window opacity without changing the stored
- * user preference. Used to restore full opacity while modal overlays are open
- * so they remain readable regardless of the configured transparency level.
- */
-export function setTransientOpacity(v: number): void {
-  setWindowOpacity(v).catch(() => {});
-}
+import { configGet, configUpdate } from "../ipc/client.js";
 
 export interface TerminalConfig {
   /** "block" | "bar" | "underline" */

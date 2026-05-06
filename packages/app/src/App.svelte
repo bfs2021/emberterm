@@ -9,7 +9,7 @@
   import { navigateBlocks } from "./utils/blockNav.js";
   import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, quakeToggle, queryAgentVersion, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
-  import { loadTerminalConfig, applyOpacity, setTransientOpacity, windowOpacity } from "./stores/terminalConfigStore.js";
+  import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
@@ -54,16 +54,6 @@
   let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
   let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
 
-  // While any modal overlay is open restore full OS opacity so the panel
-  // remains fully readable regardless of the configured transparency level.
-  // When the last modal closes, put the user's opacity setting back.
-  $effect(() => {
-    if (settingsOpen || paletteOpen) {
-      setTransientOpacity(1);
-    } else {
-      setTransientOpacity(get(windowOpacity));
-    }
-  });
 
   $effect(() => {
     const cwd = $activeCwd;
@@ -95,10 +85,9 @@
       try {
         showWelcome = await configIsFirstRun();
         await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
-        // Apply persisted window opacity + read default profile id
+        // Read default profile id from persisted config
         configGet().then((cfg: unknown) => {
-          const c = cfg as { appearance?: { opacity?: number }; behavior?: { default_profile?: string } };
-          if (typeof c?.appearance?.opacity === "number") applyOpacity(c.appearance.opacity);
+          const c = cfg as { behavior?: { default_profile?: string } };
           defaultProfileId = c?.behavior?.default_profile ?? "";
         }).catch(() => {});
       } catch (e) { error = String(e); }
@@ -146,8 +135,7 @@
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
         onConfigUpdated(() => {
           configGet().then((cfg: unknown) => {
-            const c = cfg as { appearance?: { opacity?: number }; behavior?: { default_profile?: string } };
-            if (typeof c?.appearance?.opacity === "number") applyOpacity(c.appearance.opacity);
+            const c = cfg as { behavior?: { default_profile?: string } };
             defaultProfileId = c?.behavior?.default_profile ?? "";
           }).catch(() => {});
         }),
@@ -250,6 +238,12 @@
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
+<!--
+  .app is the window chrome (title bar + terminals + status bar).
+  CSS opacity is applied here so the entire shell fades together.
+  Modals are rendered OUTSIDE this div so they are NOT affected by opacity
+  and always appear fully opaque, regardless of the user's transparency setting.
+-->
 <div class="app">
   <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} onOpenSettings={() => (settingsOpen = true)} />
   <main class="terminal-area">
@@ -281,12 +275,14 @@
     {/if}
   </main>
   <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
-  <CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
-  <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
-  {#if showWelcome}
-    <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
-  {/if}
 </div>
+
+<!-- Modals outside .app — unaffected by window opacity -->
+<CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
+<SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
+{#if showWelcome}
+  <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
+{/if}
 
 <style>
   .app {

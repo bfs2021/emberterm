@@ -1,9 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import TabStrip from "./TabStrip.svelte";
-  import { get } from "svelte/store";
-  import { windowOpacity } from "../stores/terminalConfigStore.js";
-  import { setWindowOpacity } from "../ipc/client.js";
 
   interface Props {
     onNewTab: () => void;
@@ -16,32 +13,34 @@
   const win = getCurrentWindow();
 
   async function minimize() { await win.minimize(); }
+  async function toggleMaximize() { await win.toggleMaximize(); }
+  async function close() { await win.close(); }
 
-  async function toggleMaximize() {
-    await win.toggleMaximize();
-    // Windows resets WS_EX_LAYERED when maximizing/restoring — re-apply.
-    setWindowOpacity(get(windowOpacity)).catch(() => {});
+  /**
+   * Initiate window drag on left-button press over non-interactive areas.
+   * Using startDragging() instead of data-tauri-drag-region because
+   * data-tauri-drag-region on an absolute overlay (z-index 0) is blocked by
+   * the flex items sitting above it at z-index 1.
+   */
+  function handleMouseDown(e: MouseEvent) {
+    if (e.button !== 0) return;
+    if ((e.target as Element).closest("button")) return;
+    win.startDragging().catch(() => {});
   }
 
-  async function close() { await win.close(); }
+  /** Maximize/restore on double-click outside buttons. */
+  function handleDblClick(e: MouseEvent) {
+    if ((e.target as Element).closest("button")) return;
+    toggleMaximize();
+  }
 </script>
 
-<header class="title-bar">
-  <!--
-    Drag region is a dedicated absolute overlay that sits BEHIND all interactive
-    content (z-index 0). Buttons, tabs, and controls are z-index 1 and receive
-    clicks normally. The overlay only activates for clicks on empty title-bar space.
-    This is the correct Tauri 2 pattern — putting data-tauri-drag-region on the
-    outer container causes it to swallow clicks on non-native-interactive children
-    (div/span) before their own handlers fire.
-  -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="drag-region"
-    data-tauri-drag-region
-    ondblclick={toggleMaximize}
-  ></div>
-
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header
+  class="title-bar"
+  onmousedown={handleMouseDown}
+  ondblclick={handleDblClick}
+>
   <!-- Branding -->
   <div class="title-brand">
     <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -57,7 +56,7 @@
   </div>
 
   <!-- Spacer -->
-  <div class="titlebar-spacer" data-tauri-drag-region></div>
+  <div class="titlebar-spacer"></div>
 
   <!-- Settings button -->
   <button class="titlebar-btn" aria-label="Settings" onclick={onOpenSettings}>
@@ -90,7 +89,6 @@
 
 <style>
   .title-bar {
-    position: relative;
     z-index: 100;
     display: flex;
     align-items: stretch;
@@ -99,23 +97,6 @@
     border-bottom: 1px solid var(--border, #21262d);
     flex-shrink: 0;
     user-select: none;
-  }
-
-  /* Drag overlay: absolute, fills header, z-index 0 so everything else is above it */
-  .drag-region {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-  }
-
-  /* All interactive sections sit above the drag overlay */
-  .title-brand,
-  .tab-area,
-  .titlebar-spacer,
-  .titlebar-btn,
-  .win-controls {
-    position: relative;
-    z-index: 1;
   }
 
   /* ── Branding ─────────────────────────────── */

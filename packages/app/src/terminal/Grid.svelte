@@ -3,14 +3,13 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
-  import { WebglAddon } from "@xterm/addon-webgl";
   import { ImageAddon } from "@xterm/addon-image";
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onTerminalOutput, onSessionExit, onKittyKeyboard } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { drainOutputBuffer } from "../stores/app.js";
-  import { terminalConfig, windowOpacity } from "../stores/terminalConfigStore.js";
+  import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { shouldInterceptKey, encodeKittyKey, FLAG_REPORT_EVENTS } from "../utils/kittyKeyboard.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
@@ -23,17 +22,6 @@
   }
 
   let { sessionId, active, onExit, onResize }: Props = $props();
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-
-  /** Convert a hex colour to rgba(), preserving the alpha for transparency. */
-  function hexToRgba(hex: string, alpha: number): string {
-    if (!hex || !hex.startsWith("#") || alpha >= 1) return hex || "transparent";
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
 
   // ── Terminal instance ────────────────────────────────────────────────────
 
@@ -71,7 +59,6 @@
       const cfg = get(fontConfig);
       const tc = get(terminalConfig);
       const baseTheme = get(activeTheme).xterm;
-      const op = get(windowOpacity);
       const t = new Terminal({
         allowProposedApi: true,
         allowTransparency: true,
@@ -81,10 +68,7 @@
         cursorBlink: tc.cursorBlink,
         cursorStyle: tc.cursorStyle as "block" | "bar" | "underline",
         scrollback: tc.scrollbackLines,
-        theme: {
-          ...baseTheme,
-          background: hexToRgba(baseTheme.background ?? "#0d1117", op),
-        },
+        theme: { ...baseTheme },
       });
 
       const fitAddon = new FitAddon();
@@ -95,15 +79,6 @@
       t.loadAddon(new ImageAddon());
 
       t.open(container);
-
-      try {
-        const webgl = new WebglAddon();
-        webgl.onContextLoss(() => webgl.dispose());
-        t.loadAddon(webgl);
-      } catch {
-        // canvas fallback
-      }
-
       fitAddon.fit();
 
       t.onData((data) => {
@@ -188,15 +163,11 @@
     };
   });
 
-  // Update xterm theme when the active theme or window opacity changes.
+  // Update xterm theme when the active theme changes.
   $effect(() => {
     const base = $activeTheme.xterm;
-    const op = $windowOpacity;
     if (term) {
-      term.options.theme = {
-        ...base,
-        background: hexToRgba(base.background ?? "#0d1117", op),
-      };
+      term.options.theme = { ...base };
     }
   });
 

@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::config::Config;
 use crate::profile::Profile;
@@ -229,46 +229,6 @@ pub async fn quake_toggle(app: AppHandle) {
     crate::quake::toggle(&app);
 }
 
-/// Set the OS-level window opacity (0.0 = transparent, 1.0 = opaque).
-///
-/// On Windows this calls `SetLayeredWindowAttributes` which makes the entire
-/// compositor surface — including WebGL canvases — transparent. CSS-only rgba
-/// backgrounds cannot achieve this for WebGL surfaces in WebView2.
-/// On other platforms this is a no-op; CSS transparency works there.
-#[tauri::command]
-pub fn set_window_opacity(value: f64, app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        use windows_sys::Win32::UI::WindowsAndMessaging::{
-            GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW,
-            GWL_EXSTYLE, LWA_ALPHA, WS_EX_LAYERED,
-        };
-
-        let window = app
-            .get_webview_window("main")
-            .ok_or_else(|| "main window not found".to_string())?;
-        let handle = window.window_handle().map_err(|e: raw_window_handle::HandleError| e.to_string())?;
-        if let RawWindowHandle::Win32(win32) = handle.as_raw() {
-            // windows-sys 0.59 defines HWND = *mut core::ffi::c_void
-            let hwnd = win32.hwnd.get() as *mut core::ffi::c_void;
-            let alpha = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-            unsafe {
-                let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-                // Ensure WS_EX_LAYERED is set so SetLayeredWindowAttributes works.
-                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED as isize);
-                SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-            }
-        }
-    }
-
-    // macOS / Linux: CSS rgba + Tauri transparent:true is sufficient there;
-    // NSWindow alpha requires Obj-C runtime which we don't link for this command.
-    #[cfg(not(target_os = "windows"))]
-    let _ = (value, app);
-
-    Ok(())
-}
 
 /// Richer git status for the status bar: branch, dirty flag, and line diff counts.
 #[derive(serde::Serialize, Clone)]
