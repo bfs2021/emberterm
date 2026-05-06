@@ -22,14 +22,14 @@ FILE_NORM="${FILE//\\//}"
 
 if [[ "$FILE_NORM" == *.rs ]]; then
   echo "┌─ cargo check ─────────────────────────────"
-  cargo check --manifest-path src-tauri/Cargo.toml 2>&1 \
+  cargo check --manifest-path packages/desktop/Cargo.toml 2>&1 \
     | grep -E "^error|^warning\[|^  -->" \
     | head -30
   echo "└──────────────────────────────────────────"
 
 elif [[ "$FILE_NORM" == *.svelte ]] || [[ "$FILE_NORM" == *.ts ]]; then
   echo "┌─ svelte-check ────────────────────────────"
-  (cd frontend && npm run check 2>&1) \
+  pnpm turbo check 2>&1 \
     | grep -E "Error|Warning|error|warning" \
     | grep -v "^>" \
     | head -30

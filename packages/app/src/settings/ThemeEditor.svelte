@@ -1,7 +1,7 @@
 <script lang="ts">
   import { allThemes, activeThemeId, setTheme, importTheme } from "../theme/store.js";
   import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
-  import Btn from "../lib/Btn.svelte";
+  import { Btn } from "@emberterm/ui";
 
   interface Props {
     onClose?: () => void;

@@ -21,7 +21,7 @@
 ### Repo & Tooling
 
 - [x] Initialize Tauri 2.x project with Svelte 5 + TypeScript + Vite scaffold
-- [x] Configure Cargo workspace in `src-tauri/`
+- [x] Configure Cargo workspace in `packages/desktop/`
 - [x] Set up `ts-rs` for Rust → TypeScript type codegen
 - [x] Configure `tracing` + `tracing-subscriber` in Rust core
 - [x] Add `.github/workflows/ci.yml` — build matrix (Windows, macOS), `cargo clippy`, `cargo fmt`, `cargo test`
@@ -31,27 +31,27 @@
 
 ### Rust Core — Dependencies
 
-- [x] Add `wezterm-term` to `Cargo.toml` (pin version) — optional git dep, `branch = "main"`; pin rev when integrating the VT model
-- [x] Add `termwiz` to `Cargo.toml`
-- [x] Add `portable-pty` to `Cargo.toml`
-- [x] Add `tokio` (full features) to `Cargo.toml`
-- [x] Add `serde` + `serde_json` to `Cargo.toml`
-- [x] Add `toml` crate to `Cargo.toml`
-- [x] Add `notify` (file watcher) to `Cargo.toml`
-- [x] Add `dirs`, `window-vibrancy` to `Cargo.toml`
-- [x] Add `thiserror` + `anyhow` to `Cargo.toml`
+- [x] Add `wezterm-term` to `packages/desktop/Cargo.toml` (pin version) — optional git dep, `branch = "main"`; pin rev when integrating the VT model
+- [x] Add `termwiz` to `packages/desktop/Cargo.toml`
+- [x] Add `portable-pty` to `packages/desktop/Cargo.toml`
+- [x] Add `tokio` (full features) to `packages/desktop/Cargo.toml`
+- [x] Add `serde` + `serde_json` to `packages/desktop/Cargo.toml`
+- [x] Add `toml` crate to `packages/desktop/Cargo.toml`
+- [x] Add `notify` (file watcher) to `packages/desktop/Cargo.toml`
+- [x] Add `dirs`, `window-vibrancy` to `packages/desktop/Cargo.toml`
+- [x] Add `thiserror` + `anyhow` to `packages/desktop/Cargo.toml`
 
 ### "Hello World" Terminal
 
-- [x] `src-tauri/src/main.rs` — Tauri app entry, window setup
-- [x] `src-tauri/src/terminal/pty.rs` — wrap `portable-pty`, spawn shell process
-- [x] `src-tauri/src/terminal/session.rs` — `Session` struct (wezterm-term integration deferred to Phase 1)
-- [x] `src-tauri/src/ipc.rs` — `session.create`, `session.write`, `session.resize`, `session.close` Tauri commands
-- [x] `src-tauri/src/state.rs` — `AppState` with `Mutex<HashMap<SessionId, Session>>`
+- [x] `packages/desktop/src/main.rs` — Tauri app entry, window setup
+- [x] `packages/desktop/src/terminal/pty.rs` — wrap `portable-pty`, spawn shell process
+- [x] `packages/desktop/src/terminal/session.rs` — `Session` struct (wezterm-term integration deferred to Phase 1)
+- [x] `packages/desktop/src/ipc.rs` — `session.create`, `session.write`, `session.resize`, `session.close` Tauri commands
+- [x] `packages/desktop/src/state.rs` — `AppState` with `Mutex<HashMap<SessionId, Session>>`
 - [x] PTY reader task: reads bytes from PTY master, emits `terminal:output` Tauri event to webview
-- [x] `frontend/src/terminal/Grid.svelte` — minimal xterm.js wrapper, subscribes to `terminal:output`
-- [x] `frontend/src/App.svelte` — mounts Grid, calls `session.create` on load
-- [x] Verify shell spawns and output renders in xterm.js (`cargo check` ✅, `npm run build` ✅)
+- [x] `packages/app/src/terminal/Grid.svelte` — minimal xterm.js wrapper, subscribes to `terminal:output`
+- [x] `packages/app/src/App.svelte` — mounts Grid, calls `session.create` on load
+- [x] Verify shell spawns and output renders in xterm.js (`cargo check --manifest-path packages/desktop/Cargo.toml` ✅, `pnpm turbo build` ✅)
 
 ---
 
@@ -67,7 +67,7 @@
 
 ### Rust Core — OSC Handlers
 
-- [x] `src-tauri/src/terminal/parser.rs` — intercept OSC sequences via termwiz
+- [x] `packages/desktop/src/terminal/parser.rs` — intercept OSC sequences via termwiz
 - [x] OSC 7 (`\e]7;file://...`) — parse and emit `terminal:cwd` event
 - [x] OSC 8 (`\e]8;...`) — detect hyperlinks, pass data to frontend via `terminal:hyperlink`
 - [x] OSC 52 (`\e]52;...`) — clipboard write via `terminal:clipboard-write` event (read not supported v0.1)
@@ -78,7 +78,7 @@
 
 ### Rust Core — Profile System
 
-- [x] `src-tauri/src/profile.rs` — `Profile` struct + TOML deserialization
+- [x] `packages/desktop/src/profile.rs` — `Profile` struct + TOML deserialization
 - [x] Default profiles per OS: `pwsh.exe` (Windows), `zsh`/`bash` (macOS)
 - [x] `~` expansion in `cwd` field
 - [x] `profile.list` Tauri command — scan `~/.config/ember/profiles/`
@@ -88,29 +88,29 @@
 
 ### Rust Core — Config System
 
-- [x] `src-tauri/src/config.rs` — `Config` struct + TOML deserialization (appearance, behavior, agent sections)
+- [x] `packages/desktop/src/config.rs` — `Config` struct + TOML deserialization (appearance, behavior, agent sections)
 - [x] `config.get` Tauri command
 - [x] `config.update` Tauri command — merge patch, write `config.toml` atomically
 - [x] File watcher on `config.toml` — re-apply on external edits
 
 ### Rust Core — Platform Layer
 
-- [x] `src-tauri/src/platform/windows.rs` — Windows 11 Mica via `window-vibrancy` crate
-- [x] `src-tauri/src/platform/windows.rs` — ConPTY explicit attribute (portable-pty handles automatically — N/A)
-- [x] `src-tauri/src/platform/macos.rs` — NSWindow vibrancy via `window-vibrancy` crate
+- [x] `packages/desktop/src/platform/windows.rs` — Windows 11 Mica via `window-vibrancy` crate
+- [x] `packages/desktop/src/platform/windows.rs` — ConPTY explicit attribute (portable-pty handles automatically — N/A)
+- [x] `packages/desktop/src/platform/macos.rs` — NSWindow vibrancy via `window-vibrancy` crate
 - [x] Hide native title bar — `decorations: false` in `tauri.conf.json`
 
 ### Rust Core — OSC 7777 Stub
 
-- [x] `src-tauri/src/agent/protocol.rs` — `OscVerb` enum (agent.hello, tool.start/progress/end)
-- [x] `src-tauri/src/terminal/parser.rs` — route OSC 7777 sequences to agent module
-- [x] `src-tauri/src/agent/handlers.rs` — `agent.hello`, `tool.start/progress/end` dispatch
-- [x] `src-tauri/src/agent/tools.rs` — `ToolCallState` tracking + `ActiveTools` manager
+- [x] `packages/desktop/src/agent/protocol.rs` — `OscVerb` enum (agent.hello, tool.start/progress/end)
+- [x] `packages/desktop/src/terminal/parser.rs` — route OSC 7777 sequences to agent module
+- [x] `packages/desktop/src/agent/handlers.rs` — `agent.hello`, `tool.start/progress/end` dispatch
+- [x] `packages/desktop/src/agent/tools.rs` — `ToolCallState` tracking + `ActiveTools` manager
 - [x] `agent.respond` Tauri command — write OSC 7777 reply sequence into PTY input stream
 
 ### Frontend — Chrome: Title Bar
 
-- [x] `frontend/src/chrome/TitleBar.svelte` — custom title bar with tab strip + window controls
+- [x] `packages/app/src/chrome/TitleBar.svelte` — custom title bar with tab strip + window controls
 - [x] Integrate tab strip inside title bar (no native title bar above)
 - [x] Window controls: minimize, maximize/restore, close — right side (Windows)
 - [x] `data-tauri-drag-region` on non-tab areas for window drag
@@ -118,7 +118,7 @@
 
 ### Frontend — Chrome: Tab Strip
 
-- [x] `frontend/src/chrome/TabStrip.svelte` — render tab list from store
+- [x] `packages/app/src/chrome/TabStrip.svelte` — render tab list from store
 - [x] Tab states: `active` (accent underline), `inactive`, `unread` (dot), `running` (pulse animation), `agent-active` (ember-orange dot)
 - [x] "+" button — open new tab
 - [x] Close tab on middle-click
@@ -128,14 +128,14 @@
 
 ### Frontend — Chrome: Status Bar
 
-- [x] `frontend/src/chrome/StatusBar.svelte` — 24px height, flex row
+- [x] `packages/app/src/chrome/StatusBar.svelte` — 24px height, flex row
 - [x] Segment: cwd (updates on `terminal:cwd` event, home dir shortened to `~`)
 - [x] Segment: git branch (shell-out `git rev-parse --abbrev-ref HEAD` on cwd change)
 - [x] Segment: agent indicator — shows `● <agent-name>` on `agent:hello` event
 
 ### Frontend — Terminal Grid
 
-- [x] `frontend/src/terminal/Grid.svelte` — xterm.js `Terminal` instance per session
+- [x] `packages/app/src/terminal/Grid.svelte` — xterm.js `Terminal` instance per session
 - [x] Addons: `xterm-addon-fit`, `xterm-addon-webgl`, `xterm-addon-web-links`
 - [x] Subscribe to `terminal:output` event, pipe bytes to xterm.js `term.write()`
 - [x] Emit `session.write` on keystrokes (xterm.js `onData`)
@@ -146,7 +146,7 @@
 
 ### Frontend — Agent: Tool Card
 
-- [x] `frontend/src/agent/ToolCard.svelte` — inline card component
+- [x] `packages/app/src/agent/ToolCard.svelte` — inline card component
 - [x] Collapsed state: icon + tool name + summary + status badge (1 line)
 - [x] Expanded state: summary + progress message
 - [x] State variants: `pending`, `running` (spin animation), `ok` (green), `error` (red), `cancelled`
@@ -157,7 +157,7 @@
 
 ### Frontend — Command Palette
 
-- [x] `frontend/src/palette/CommandPalette.svelte` — centered overlay, 600px wide
+- [x] `packages/app/src/palette/CommandPalette.svelte` — centered overlay, 600px wide
 - [x] Trigger: `Ctrl+Shift+P`
 - [x] Input field with fuzzy search (sequential character match)
 - [x] Keyboard: arrow keys navigate, Enter selects, Esc closes
@@ -167,7 +167,7 @@
 
 ### Frontend — Settings Panel
 
-- [x] `frontend/src/settings/SettingsPanel.svelte` — two-pane overlay
+- [x] `packages/app/src/settings/SettingsPanel.svelte` — two-pane overlay
 - [x] Trigger: `Ctrl+,`
 - [x] Left pane: category list (Appearance, Profiles, Keymap, Agent)
 - [x] Right pane: controls for selected category
@@ -181,7 +181,7 @@
 
 ### Frontend — Settings: Profile Editor
 
-- [x] `frontend/src/settings/ProfileEditor.svelte` — form inside Settings → Profiles
+- [x] `packages/app/src/settings/ProfileEditor.svelte` — form inside Settings → Profiles
 - [x] Fields: name, shell, args, cwd
 - [x] [+ New Profile] button
 - [x] [Save] button — calls `profile.upsert`
@@ -193,10 +193,10 @@
 
 ### Frontend — Theme System
 
-- [x] `frontend/src/theme/tokens.ts` — CSS variable names (`--bg`, `--accent`, `--border`, etc.)
-- [x] `frontend/src/theme/vscode-import.ts` — `vscodeToTheme()` converter + `applyThemeVars()`
+- [x] `packages/app/src/theme/tokens.ts` — CSS variable names (`--bg`, `--accent`, `--border`, etc.)
+- [x] `packages/app/src/theme/vscode-import.ts` — `vscodeToTheme()` converter + `applyThemeVars()`
   - Maps all 16 ANSI colors, chrome tokens, xterm.js palette
-- [x] `frontend/src/theme/store.ts` — reactive theme store; applies CSS vars to `:root` on switch
+- [x] `packages/app/src/theme/store.ts` — reactive theme store; applies CSS vars to `:root` on switch
 - [x] Built-in theme: `ember-dark.json` — `#0d1117` bg, `#FF6B35` accent
 - [x] Built-in theme: `ember-light.json`
 - [x] Built-in theme: `tokyo-night.json`
@@ -204,13 +204,13 @@
 - [x] Built-in theme: `dracula.json`
 - [x] Built-in theme: `github-dark.json`
 - [x] Built-in theme: `solarized-dark.json`
-- [x] `frontend/src/settings/ThemeEditor.svelte` — theme browser with swatches + VS Code JSON import
+- [x] `packages/app/src/settings/ThemeEditor.svelte` — theme browser with swatches + VS Code JSON import
 
 ### Frontend — Stores
 
-- [x] `frontend/src/stores/app.ts` — tabs, activeTabId, toolCalls, cwd/agent derived stores
-- [x] `frontend/src/ipc/client.ts` — typed wrappers for all Tauri commands
-- [x] `frontend/src/ipc/events.ts` — typed subscriptions for all Tauri events (terminal + agent)
+- [x] `packages/app/src/stores/app.ts` — tabs, activeTabId, toolCalls, cwd/agent derived stores
+- [x] `packages/app/src/ipc/client.ts` — typed wrappers for all Tauri commands
+- [x] `packages/app/src/ipc/events.ts` — typed subscriptions for all Tauri events (terminal + agent)
 
 ### Frontend — First Launch / Welcome Screen
 
@@ -251,7 +251,7 @@
 
 ### Rust Core — Block Model
 
-- [x] `src-tauri/src/terminal/blocks.rs` — `BlockManager` state machine (Idle → Prompting → Executing)
+- [x] `packages/desktop/src/terminal/blocks.rs` — `BlockManager` state machine (Idle → Prompting → Executing)
 - [x] OSC 133 `A` mark → `on_prompt_start()`, emits `block:start` via PTY reader
 - [x] OSC 133 `B` mark → command text captured (B mark currently unhandled in pty.rs)
 - [x] OSC 133 `C` mark → `on_output_start()`, emits `block:start` IPC event
@@ -275,7 +275,7 @@
 
 ### Frontend — Block UI
 
-- [x] `frontend/src/agent/Block.svelte` — collapsible block chrome with expand/collapse toggle
+- [x] `packages/app/src/agent/Block.svelte` — collapsible block chrome with expand/collapse toggle
 - [x] Block header: command text, duration label, exit code badge (green/red), agent badge
 - [x] Fold/unfold animation — `svelte/transition:slide`, duration=0 when `prefers-reduced-motion`
 - [x] Agent-annotated blocks: accent left-border + agent badge chip
@@ -284,7 +284,7 @@
 
 ### Frontend — Diff Viewer
 
-- [x] `frontend/src/agent/DiffView.svelte` — inline unified diff renderer
+- [x] `packages/app/src/agent/DiffView.svelte` — inline unified diff renderer
 - [x] Header: file path, `+N/-N` stats
 - [x] Body: line-by-line diff with `+`/`-` gutter (no Shiki — plain ANSI colors)
 - [x] Toggle: unified / side-by-side view
@@ -295,7 +295,7 @@
 
 ### Frontend — Approval Sheet
 
-- [x] `frontend/src/agent/ApprovalSheet.svelte` — bottom-slide overlay
+- [x] `packages/app/src/agent/ApprovalSheet.svelte` — bottom-slide overlay
 - [x] Slide-up animation from bottom of active pane
 - [x] Header: title + risk badge (safe = blue, caution = yellow, destructive = red)
 - [x] Body: detail text (monospace font if it looks like a command)
@@ -321,7 +321,7 @@
 
 ### Platform — Linux X11
 
-- [x] `src-tauri/src/platform/linux.rs` — basic window setup for X11 (no-op, window-vibrancy doesn't support Linux; solid bg via CSS)
+- [x] `packages/desktop/src/platform/linux.rs` — basic window setup for X11 (no-op, window-vibrancy doesn't support Linux; solid bg via CSS)
 - [ ] WebKitGTK webview integration tested
 - [ ] PTY via Unix `pty(7)`, no ConPTY
 - [ ] Package: `.deb` and `.rpm` via Tauri bundler
@@ -347,7 +347,7 @@
 - [x] Frontend unit: `stores/app.ts` — `clearTabAgent` + block store (`addBlock`, `closeBlock`, scoping, ordering — 8 new tests)
 - [x] Frontend unit: `approval-utils.ts` — `formatAction`, `btnClass`, `resolveKey` keyboard bindings (21 tests)
 - [x] E2E test scaffold: `e2e/` directory with WebdriverIO + tauri-driver config (`wdio.conf.ts`) and `tests/basic.spec.ts` covering app shell render, tab creation, terminal grid mount, keyboard input, OSC 133 block appearance; requires built Tauri app + `tauri-driver` on PATH to execute
-- [x] Criterion benchmark: OSC 7777 parser throughput (`src-tauri/benches/osc_parser.rs` — shell_block, tool_starts ×3, plain_text ×3)
+- [x] Criterion benchmark: OSC 7777 parser throughput (`packages/desktop/benches/osc_parser.rs` — shell_block, tool_starts ×3, plain_text ×3)
 
 ---
 
@@ -355,7 +355,7 @@
 
 ### Native Rendering (replace xterm.js)
 
-- [ ] Add `wgpu`, `cosmic-text`, `swash` to `Cargo.toml`
+- [ ] Add `wgpu`, `cosmic-text`, `swash` to `packages/desktop/Cargo.toml`
 - [ ] Implement glyph rasterizer using `cosmic-text` for font shaping (ligatures, CJK, COLR emoji)
 - [ ] Implement terminal grid renderer using `wgpu`
 - [ ] Integrate native render surface with Tauri window (texture overlay or sibling window)
@@ -395,7 +395,7 @@
 
 ### Terminal-as-MCP-Server
 
-- [ ] `src-tauri/src/mcp/` — implement MCP server over stdio or HTTP
+- [ ] `packages/desktop/src/mcp/` — implement MCP server over stdio or HTTP
 - [ ] Expose resources: `cwd`, `recent_blocks`, `git_state`, `session_list`
 - [ ] Expose tool: `write_to_terminal` (controlled input injection)
 - [ ] Document MCP server API in `docs/mcp-server.md`
@@ -478,7 +478,7 @@
 ### Security
 
 - [ ] Audit: no OSC 7777 payload content in logs or telemetry
-- [x] Sanitize untrusted bytes printed by agent — `stripAnsi()` in `utils/stripAnsi.ts` (20 tests); applied to `name`, `summary`, and `progressMessage` via `$derived` in `ToolCard.svelte`
+- [x] Sanitize untrusted bytes printed by agent — `stripAnsi()` in `packages/app/src/utils/stripAnsi.ts` (20 tests); applied to `name`, `summary`, and `progressMessage` via `$derived` in `ToolCard.svelte`
 - [x] OSC 7777 rate limiting: 1000 seq/sec/session enforcement
 - [ ] `agent.hello` `name` field treated as display-only, never used for authorization
 

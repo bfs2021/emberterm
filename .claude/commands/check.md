@@ -3,8 +3,8 @@
 Run a fast type-check on the EmberTerm codebase. Does not do a full build or run tests.
 
 Steps:
-1. Run `cargo check --manifest-path src-tauri/Cargo.toml` — Rust type + borrow check
-2. Run `cd frontend && npm run check` — TypeScript + Svelte type check via svelte-check
+1. Run `cargo check --manifest-path packages/desktop/Cargo.toml` — Rust type + borrow check
+2. Run `pnpm turbo check` — TypeScript + Svelte type check via svelte-check across all packages
 
 After both complete, summarise:
 - List any errors grouped by file (path:line — message)

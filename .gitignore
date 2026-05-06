@@ -2,16 +2,28 @@
 .claude/settings.local.json
 .claude/*.lock
 
-# Rust build artifacts
-src-tauri/target/
+# Rust build artifacts (Cargo workspace root)
+target/
+packages/desktop/target/
 
-# Frontend build output and dependencies
-frontend/node_modules/
-frontend/dist/
-design-extract/
+# pnpm / Node — workspace root and all packages
+node_modules/
+packages/*/node_modules/
+e2e/node_modules/
 
-# Generated icon script output
-scripts/
+# JS package build outputs
+packages/*/dist/
+
+# Turborepo cache
+.turbo/
+packages/*/.turbo/
+
+# Tauri-generated files inside packages/desktop
+packages/desktop/gen/
+packages/desktop/frontend/
+
+# ts-rs generated TypeScript bindings (written to packages/app at build time)
+packages/app/bindings/
 
 # OS files
 .DS_Store
@@ -20,3 +32,9 @@ Thumbs.db
 # Editor
 .vscode/settings.json
 .idea/
+
+# Design scratch files (not committed)
+design-extract/
+
+# Generated icons / script output
+scripts/icon-resized/

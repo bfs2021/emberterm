@@ -3,8 +3,8 @@
 Build EmberTerm end-to-end. Useful before committing or packaging.
 
 Steps:
-1. Run `cd frontend && npm run build 2>&1` — Vite production build of frontend assets
-2. If step 1 passes, run `cargo build --manifest-path src-tauri/Cargo.toml 2>&1` — Rust debug build
+1. Run `pnpm turbo build 2>&1` — builds all JS packages in dependency order (ui → sdk → app)
+2. If step 1 passes, run `cargo build --manifest-path packages/desktop/Cargo.toml 2>&1` — Rust debug build
 
 For a release build, add `--release` to step 2 (takes longer, applies LTO + strip).
 

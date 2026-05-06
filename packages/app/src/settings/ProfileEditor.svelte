@@ -1,6 +1,6 @@
 <script lang="ts">
   import { profileUpsert, profileDelete, type Profile } from "../ipc/client.js";
-  import Btn from "../lib/Btn.svelte";
+  import { Btn } from "@emberterm/ui";
 
   interface Props {
     profile?: Profile;

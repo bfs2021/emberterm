@@ -24,12 +24,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache: pnpm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -37,15 +41,14 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: packages/desktop
 
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Generate icons
-        working-directory: src-tauri
-        run: cargo tauri icon ../scripts/icon.png
+        working-directory: packages/desktop
+        run: cargo tauri icon ../../scripts/icon.png
         continue-on-error: true
 
       - name: Build Tauri app
@@ -60,3 +63,4 @@ jobs:
           releaseBody: "See CHANGELOG.md for details."
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+          projectPath: packages/desktop

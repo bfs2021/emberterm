@@ -1,0 +1,16 @@
+{
+  "name": "emberterm",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "cd packages/desktop && cargo tauri dev",
+    "dev:ui": "pnpm --filter @emberterm/app dev",
+    "build": "turbo build",
+    "check": "turbo check",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  }
+}

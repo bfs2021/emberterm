@@ -2,7 +2,7 @@
 
 **Reviewer role:** Senior UI/UX designer
 **Reference:** `references/design.html` (canonical mockup)
-**Implementation:** `frontend/src/`
+**Implementation:** `packages/app/src/`
 **Date:** 2026-05-05
 **Status:** Gap analysis — Phase 1 complete, Phase 2 in planning
 

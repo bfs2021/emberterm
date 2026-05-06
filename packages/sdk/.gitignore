@@ -1,0 +1,8 @@
+# Node / pnpm
+node_modules/
+
+# TypeScript build output
+dist/
+
+# Turborepo cache
+.turbo/

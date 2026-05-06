@@ -1,0 +1,11 @@
+# Node / pnpm
+node_modules/
+
+# Vite production build
+dist/
+
+# ts-rs generated TypeScript bindings (written here by `cargo build`)
+bindings/
+
+# Turborepo cache
+.turbo/

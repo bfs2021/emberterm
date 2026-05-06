@@ -1,7 +1,7 @@
 <script lang="ts">
   import ThemeEditor from "./ThemeEditor.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
-  import Btn from "../lib/Btn.svelte";
+  import { Btn } from "@emberterm/ui";
   import { profileList, type Profile } from "../ipc/client.js";
 
   interface Props {

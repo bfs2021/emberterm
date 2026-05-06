@@ -200,7 +200,7 @@ ConPTY requires Windows 10 1809+. We do not support older Windows.
 └─────────────────────────────────────────────────────────────┘
                            ⇅ IPC (Tauri events + commands)
 ┌─────────────────────────────────────────────────────────────┐
-│                    Rust Core (src-tauri)                    │
+│                  Rust Core (packages/desktop)                │
 │                                                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐     │
 │  │  Terminal   │  │     PTY     │  │  OSC Parser /    │     │
@@ -226,75 +226,95 @@ ConPTY requires Windows 10 1809+. We do not support older Windows.
 ### 3.2 Project Structure
 
 ```
-ember/
+emberterm/
+├── Cargo.toml                    ← Cargo workspace root
+├── package.json                  ← pnpm workspace root + turbo scripts
+├── pnpm-workspace.yaml           ← declares packages/* + e2e
+├── turbo.json                    ← build/test task graph
 ├── PLAN.md                       ← this document
 ├── README.md
-├── LICENSE                       ← MIT or Apache-2.0
+├── LICENSE                       ← MIT
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
 │       └── release.yml
-├── src-tauri/                    ← Rust core
-│   ├── src/
-│   │   ├── main.rs               ← Tauri app entry
-│   │   ├── terminal/
-│   │   │   ├── mod.rs
-│   │   │   ├── session.rs        ← wraps wezterm_term::Terminal
-│   │   │   ├── pty.rs            ← portable-pty wrapper
-│   │   │   ├── parser.rs         ← OSC 7777 hooks into termwiz
-│   │   │   └── blocks.rs         ← OSC 133 → Block model
-│   │   ├── agent/
-│   │   │   ├── mod.rs
-│   │   │   ├── protocol.rs       ← OSC 7777 verb definitions
-│   │   │   ├── tools.rs          ← active tool-call tracking
-│   │   │   └── handlers.rs       ← verb → IPC event dispatch
-│   │   ├── profile.rs            ← TOML profiles + hot reload
-│   │   ├── config.rs             ← Global config (theme, font, etc.)
-│   │   ├── ipc.rs                ← Tauri command handlers
-│   │   ├── state.rs              ← AppState
-│   │   └── platform/
-│   │       ├── windows.rs        ← Acrylic/Mica, ConPTY specifics
-│   │       ├── macos.rs          ← Vibrancy, NSWindow tweaks
-│   │       └── linux.rs          ← (v0.2+)
-│   ├── tauri.conf.json
-│   ├── Cargo.toml
-│   └── build.rs
-├── frontend/                     ← Webview UI (Svelte 5 + TS)
-│   ├── src/
-│   │   ├── main.ts
-│   │   ├── App.svelte
-│   │   ├── ipc/
-│   │   │   ├── client.ts         ← Tauri command bindings (codegen)
-│   │   │   └── events.ts         ← event subscriptions
-│   │   ├── terminal/
-│   │   │   └── Grid.svelte       ← xterm.js wrapper
-│   │   ├── chrome/
-│   │   │   ├── TitleBar.svelte
-│   │   │   ├── TabStrip.svelte
-│   │   │   └── StatusBar.svelte
-│   │   ├── agent/
-│   │   │   ├── ToolCard.svelte
-│   │   │   ├── DiffView.svelte      ← v0.2
-│   │   │   └── ApprovalSheet.svelte ← v0.2
-│   │   ├── palette/
-│   │   │   └── CommandPalette.svelte
-│   │   ├── settings/
-│   │   │   ├── SettingsPanel.svelte
-│   │   │   ├── ThemeEditor.svelte
-│   │   │   └── ProfileEditor.svelte
-│   │   ├── theme/
-│   │   │   ├── tokens.ts            ← design tokens
-│   │   │   ├── vscode-import.ts     ← VS Code theme converter
-│   │   │   └── themes/
-│   │   │       ├── ember-dark.json     ← VS Code-format JSON
-│   │   │       ├── tokyo-night.json
-│   │   │       └── catppuccin.json
-│   │   └── stores/
-│   │       └── app.ts               ← Svelte stores for UI state
-│   ├── index.html
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── vite.config.ts
+├── packages/
+│   ├── desktop/                  ← Rust core (Tauri 2 backend)
+│   │   ├── src/
+│   │   │   ├── main.rs               ← Tauri app entry
+│   │   │   ├── terminal/
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── session.rs        ← wraps wezterm_term::Terminal
+│   │   │   │   ├── pty.rs            ← portable-pty wrapper
+│   │   │   │   ├── parser.rs         ← OSC 7777 hooks into termwiz
+│   │   │   │   └── blocks.rs         ← OSC 133 → Block model
+│   │   │   ├── agent/
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── protocol.rs       ← OSC 7777 verb definitions
+│   │   │   │   ├── tools.rs          ← active tool-call tracking
+│   │   │   │   └── handlers.rs       ← verb → IPC event dispatch
+│   │   │   ├── profile.rs            ← TOML profiles + hot reload
+│   │   │   ├── config.rs             ← Global config (theme, font, etc.)
+│   │   │   ├── ipc.rs                ← Tauri command handlers
+│   │   │   ├── state.rs              ← AppState
+│   │   │   └── platform/
+│   │   │       ├── windows.rs        ← Acrylic/Mica, ConPTY specifics
+│   │   │       ├── macos.rs          ← Vibrancy, NSWindow tweaks
+│   │   │       └── linux.rs          ← (v0.2+)
+│   │   ├── tauri.conf.json
+│   │   ├── Cargo.toml
+│   │   └── build.rs
+│   ├── app/                      ← Webview UI (Svelte 5 + TS)
+│   │   ├── src/
+│   │   │   ├── main.ts
+│   │   │   ├── App.svelte
+│   │   │   ├── ipc/
+│   │   │   │   ├── client.ts         ← Tauri command bindings
+│   │   │   │   └── events.ts         ← event subscriptions
+│   │   │   ├── terminal/
+│   │   │   │   └── Grid.svelte       ← xterm.js wrapper
+│   │   │   ├── chrome/
+│   │   │   │   ├── TitleBar.svelte
+│   │   │   │   ├── TabStrip.svelte
+│   │   │   │   └── StatusBar.svelte
+│   │   │   ├── agent/
+│   │   │   │   ├── ToolCard.svelte
+│   │   │   │   ├── DiffView.svelte      ← v0.2
+│   │   │   │   └── ApprovalSheet.svelte ← v0.2
+│   │   │   ├── palette/
+│   │   │   │   └── CommandPalette.svelte
+│   │   │   ├── settings/
+│   │   │   │   ├── SettingsPanel.svelte
+│   │   │   │   ├── ThemeEditor.svelte
+│   │   │   │   └── ProfileEditor.svelte
+│   │   │   ├── theme/
+│   │   │   │   ├── tokens.ts            ← design tokens
+│   │   │   │   ├── vscode-import.ts     ← VS Code theme converter
+│   │   │   │   └── themes/
+│   │   │   │       ├── ember-dark.json     ← VS Code-format JSON
+│   │   │   │       ├── tokyo-night.json
+│   │   │   │       └── catppuccin.json
+│   │   │   └── stores/
+│   │   │       └── app.ts               ← Svelte stores for UI state
+│   │   ├── index.html
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── vite.config.ts
+│   ├── ui/                       ← Shared Svelte component library
+│   │   ├── src/
+│   │   │   ├── lib/
+│   │   │   │   └── Btn.svelte
+│   │   │   └── index.ts              ← barrel export
+│   │   ├── package.json
+│   │   └── vite.config.ts
+│   └── sdk/                      ← OSC 7777 TypeScript SDK (zero deps)
+│       ├── src/
+│       │   ├── types.ts              ← mirrors agent/protocol.rs structs
+│       │   ├── emit.ts               ← emitHello/emitToolStart/etc.
+│       │   └── index.ts              ← barrel export
+│       ├── package.json
+│       └── tsconfig.json
+├── e2e/                          ← End-to-end tests (WebdriverIO + tauri-driver)
 ├── docs/
 │   ├── osc-7777-spec.md          ← public protocol spec
 │   ├── architecture.md
@@ -820,7 +840,7 @@ Three paths:
 
 #### Built-in Themes (v0.1)
 
-All shipped as VS Code-format JSON files in `frontend/src/theme/themes/`:
+All shipped as VS Code-format JSON files in `packages/app/src/theme/themes/`:
 
 1. **Ember Dark** (default, custom)
 2. **Ember Light** (custom)

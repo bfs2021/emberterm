@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "identifier": "dev.emberterm.app",
   "build": {
-    "frontendDist": "../frontend/dist",
+    "frontendDist": "../app/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "cd frontend && npm run dev",
-    "beforeBuildCommand": "cd frontend && npm run build"
+    "beforeDevCommand": "pnpm --filter @emberterm/app dev",
+    "beforeBuildCommand": "pnpm --filter @emberterm/app build"
   },
   "app": {
     "windows": [

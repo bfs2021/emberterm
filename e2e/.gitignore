@@ -1,0 +1,6 @@
+# Node / pnpm
+node_modules/
+
+# WebdriverIO output
+.wdio-logs/
+allure-results/

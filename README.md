@@ -32,48 +32,70 @@ What's working:
 ### Prerequisites
 
 - [Rust](https://rustup.rs/) 1.85+
-- [Node.js](https://nodejs.org/) 20+, npm
+- [Node.js](https://nodejs.org/) 22+
+- [pnpm](https://pnpm.io/) 9+ (`npm install -g pnpm`)
 - **Windows:** WebView2 (pre-installed on Windows 11)
 - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
 
 ### Development
 
 ```sh
-# Install frontend dependencies
-cd frontend && npm install && cd ..
+# Clone and install all dependencies (JS workspace + Rust)
+git clone https://github.com/emberterm/emberterm
+cd emberterm
+pnpm install
 
-# Start dev server (hot-reload UI + Rust rebuild on change)
-cargo tauri dev
+# Start dev server (Vite hot-reload UI + Rust rebuild on change)
+pnpm dev
 ```
 
 ### Build
 
 ```sh
-cargo tauri build
+# Build all JS packages then the Tauri app
+pnpm turbo build
+cargo build --manifest-path packages/desktop/Cargo.toml
 ```
 
-Installers are written to `src-tauri/target/release/bundle/`.
+Installers are written to `packages/desktop/target/release/bundle/`.
 
 ### Run tests
 
 ```sh
-# Rust unit tests (OSC parser, etc.)
-cargo test --manifest-path src-tauri/Cargo.toml
+# Rust unit tests (OSC parser, protocol, blocks, etc.)
+cargo test --manifest-path packages/desktop/Cargo.toml
 
-# Frontend unit tests (Vitest)
-cd frontend && npm test
+# All JS/TS tests across every package (app + sdk)
+pnpm turbo test
 ```
 
 ## Project Structure
 
 ```
-src-tauri/    Rust core (PTY, OSC parsing, IPC, config, profiles)
-frontend/     Svelte 5 UI (xterm.js, theme system, agent cards)
-docs/         Specifications and planning documents
+packages/
+  desktop/   Rust/Tauri core — PTY, OSC parser, IPC, config, profiles
+  app/       Svelte 5 UI — xterm.js, theme system, agent cards (@emberterm/app)
+  ui/        Shared Svelte component library (@emberterm/ui)
+  sdk/       Public OSC 7777 TypeScript SDK for agent developers (@emberterm/sdk)
+e2e/         End-to-end tests (WebdriverIO + tauri-driver)
+docs/        Specifications and planning documents
 ```
 
 See [`docs/PLAN.md`](docs/PLAN.md) for the full architecture and roadmap.  
 See [`docs/osc-7777-spec.md`](docs/osc-7777-spec.md) for the OSC 7777 agent protocol specification.
+
+## OSC 7777 SDK
+
+Agent developers can use `@emberterm/sdk` to emit structured OSC 7777 sequences from any Node.js process — no EmberTerm-specific dependencies required:
+
+```ts
+import { emitHello, emitToolStart, emitToolEnd } from "@emberterm/sdk";
+
+emitHello({ v: 1, name: "my-agent", version: "1.0.0" });
+emitToolStart({ v: 1, id: "t1", name: "read_file", summary: "Reading src/main.rs" });
+// ... do work ...
+emitToolEnd({ v: 1, id: "t1", status: "ok", summary: "Done", duration_ms: 120 });
+```
 
 ## Contributing
 

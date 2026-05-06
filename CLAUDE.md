@@ -33,10 +33,21 @@ See `docs/review-ui-ux.md` for the current gap analysis and prioritised task che
 
 ## Architecture
 
+### Packages
+
+The project is a **pnpm + Cargo workspace** with four packages:
+
+| Package | Path | Purpose |
+|---|---|---|
+| `emberterm` (Rust) | `packages/desktop/` | Tauri 2 Rust backend (PTY, OSC parser, IPC) |
+| `@emberterm/app` | `packages/app/` | Svelte 5 webview frontend |
+| `@emberterm/ui` | `packages/ui/` | Shared Svelte component library (Btn, etc.) |
+| `@emberterm/sdk` | `packages/sdk/` | Public OSC 7777 TypeScript SDK for agent developers |
+
 ### File Map
 
 ```
-src-tauri/src/
+packages/desktop/src/
   main.rs                ← Tauri entry, window setup, AppState registration
   state.rs               ← AppState: Mutex<HashMap<SessionId, Session>>
   ipc.rs                 ← all #[tauri::command] handlers
@@ -57,7 +68,7 @@ src-tauri/src/
     windows.rs           ← Mica/Acrylic via window-vibrancy
     macos.rs             ← NSWindow vibrancy via window-vibrancy
 
-frontend/src/
+packages/app/src/
   main.ts                ← Svelte mount
   App.svelte             ← root: IPC listeners, tab lifecycle, keyboard shortcuts
   ipc/
@@ -88,6 +99,16 @@ frontend/src/
     vscode-import.ts     ← VS Code JSON → CSS vars converter + applyThemeVars()
     store.ts             ← reactive theme store; applies CSS vars to :root
     themes/              ← 7 built-in VS Code-format JSON themes
+
+packages/ui/src/
+  lib/
+    Btn.svelte           ← shared button component
+  index.ts               ← barrel export for @emberterm/ui
+
+packages/sdk/src/
+  types.ts               ← TypeScript mirrors of agent/protocol.rs structs
+  emit.ts                ← emitHello/emitToolStart/etc. helpers (writes OSC to stdout)
+  index.ts               ← barrel export for @emberterm/sdk
 ```
 
 ### Data Flow
@@ -149,7 +170,7 @@ portable-pty (PTY master)
   - Reference it from the source file with `#[cfg(test)] #[path = "blocks_test.rs"] mod tests;`
   - The test file starts with `use super::*;` to access the parent module's items
   - This keeps each source file under the 300-line limit and makes tests easy to locate
-- Integration tests in `src-tauri/tests/`
+- Integration tests in `packages/desktop/tests/`
 - No `#[ignore]` without a comment explaining why and a tracking issue
 
 ### TypeScript / Svelte
@@ -275,21 +296,30 @@ portable-pty (PTY master)
 Quick bash reference:
 
 ```bash
+# Install all JS deps (pnpm workspace — run from repo root)
+pnpm install
+
 # Type-check (fast, no build)
-cargo check --manifest-path src-tauri/Cargo.toml
-cd frontend && npm run check
+cargo check --manifest-path packages/desktop/Cargo.toml
+pnpm turbo check
 
 # Tests
-cargo test --manifest-path src-tauri/Cargo.toml
-cd frontend && npm test
+cargo test --manifest-path packages/desktop/Cargo.toml
+pnpm turbo test
+pnpm --filter @emberterm/sdk test       # SDK tests only
+pnpm --filter @emberterm/app test       # app tests only
 
 # Lint
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path packages/desktop/Cargo.toml -- -D warnings
+cargo fmt --manifest-path packages/desktop/Cargo.toml -- --check
+pnpm turbo check
 
-# Full build
-cd frontend && npm run build
-cargo build --manifest-path src-tauri/Cargo.toml
+# Full build (JS packages first, then Rust)
+pnpm turbo build
+cargo build --manifest-path packages/desktop/Cargo.toml
+
+# Dev mode
+pnpm dev   # starts @emberterm/app dev server (Vite)
 ```
 
 Custom slash commands (defined in `.claude/commands/`):

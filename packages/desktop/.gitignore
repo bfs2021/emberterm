@@ -1,0 +1,8 @@
+# Rust build output
+target/
+
+# Tauri-generated files (created by `cargo tauri build` / `tauri-cli`)
+gen/
+frontend/
+
+# Cargo.lock is committed for binaries — do NOT add it here
