@@ -17,5 +17,8 @@ pub fn setup_window(app: &mut App) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     macos::apply_effect(app)?;
 
+    #[cfg(target_os = "linux")]
+    linux::apply_effect(app)?;
+
     Ok(())
 }

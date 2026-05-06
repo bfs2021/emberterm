@@ -4,10 +4,12 @@
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
   import { WebglAddon } from "@xterm/addon-webgl";
+  import { ImageAddon } from "@xterm/addon-image";
   import { sessionWrite, sessionResize } from "../ipc/client.js";
-  import { onTerminalOutput, onSessionExit } from "../ipc/events.js";
+  import { onTerminalOutput, onSessionExit, onKittyKeyboard } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
   import { drainOutputBuffer } from "../stores/app.js";
+  import { shouldInterceptKey, encodeKittyKey, FLAG_REPORT_EVENTS } from "../utils/kittyKeyboard.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -24,12 +26,15 @@
 
   let container: HTMLDivElement;
   let term = $state<Terminal | undefined>(undefined);
+  /** Active Kitty keyboard enhancement flags (0 = disabled). */
+  let kittyFlags = $state(0);
 
   $effect(() => {
     let mounted = true;
     let fitAddon: FitAddon | undefined;
     let unlistenOutput: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
+    let unlistenKitty: (() => void) | undefined;
     let resizeObserver: ResizeObserver | undefined;
 
     (async () => {
@@ -63,6 +68,8 @@
       fitAddon = new FitAddon();
       t.loadAddon(fitAddon);
       t.loadAddon(new WebLinksAddon());
+      // Kitty graphics protocol + Sixel rendering.
+      t.loadAddon(new ImageAddon());
 
       t.open(container);
 
@@ -86,6 +93,20 @@
         sessionWrite(sessionId, bytes).catch(console.error);
       });
 
+      // Kitty keyboard protocol: intercept key events when an application has
+      // pushed Kitty mode, encode them in Kitty format, and suppress xterm.js
+      // default encoding for those events.
+      t.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        if (!shouldInterceptKey(e, kittyFlags)) return true;
+        const eventType = e.type === "keyup" ? 3 : e.repeat ? 2 : 1;
+        const encoded = encodeKittyKey(e, kittyFlags, eventType as 1 | 2 | 3);
+        if (encoded) {
+          sessionWrite(sessionId, encoded).catch(console.error);
+          return false; // Prevent xterm.js from also sending the key
+        }
+        return true;
+      });
+
       // Drain App.svelte's pre-mount buffer (bytes emitted before Grid mounted).
       for (const bytes of drainOutputBuffer(sessionId)) {
         t.write(bytes);
@@ -103,6 +124,12 @@
         if (payload.session_id !== sessionId) return;
         t.writeln("\r\n\x1b[2m[process exited with code " + payload.code + "]\x1b[0m");
         onExit?.(payload.code);
+      });
+
+      // Track Kitty keyboard mode changes for this session.
+      unlistenKitty = await onKittyKeyboard((payload) => {
+        if (payload.session_id !== sessionId) return;
+        kittyFlags = payload.flags;
       });
 
       resizeObserver = new ResizeObserver(() => {
@@ -130,6 +157,7 @@
       mounted = false;
       unlistenOutput?.();
       unlistenExit?.();
+      unlistenKitty?.();
       resizeObserver?.disconnect();
       term?.dispose();
       term = undefined;

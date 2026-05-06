@@ -194,3 +194,36 @@ fn pipeline_interleaved_osc_other_events_ignored() {
     assert_eq!(start.command, "echo hello");
     assert_eq!(end.unwrap().exit_code, 0);
 }
+
+// ── Unit tests: BlockStore ────────────────────────────────────────────────────
+
+#[test]
+fn block_store_push_and_all_preserve_order() {
+    let mut store = BlockStore::default();
+    for i in 0..3u32 {
+        store.push(Block { id: format!("blk-{i}"), command: format!("cmd{i}"), ..Default::default() });
+    }
+    let ids: Vec<&str> = store.all().iter().map(|b| b.id.as_str()).collect();
+    assert_eq!(ids, ["blk-0", "blk-1", "blk-2"]);
+}
+
+#[test]
+fn block_store_get_mut_o1_update() {
+    let mut store = BlockStore::default();
+    store.push(Block { id: "blk-1".into(), command: "ls".into(), ..Default::default() });
+    store.push(Block { id: "blk-2".into(), command: "cat".into(), ..Default::default() });
+
+    // Update blk-1 without touching blk-2.
+    if let Some(b) = store.get_mut("blk-1") {
+        b.exit_code = Some(0);
+        b.duration_ms = Some(42);
+    }
+    assert_eq!(store.all()[0].exit_code, Some(0));
+    assert_eq!(store.all()[1].exit_code, None, "blk-2 should be untouched");
+}
+
+#[test]
+fn block_store_get_mut_missing_returns_none() {
+    let mut store = BlockStore::default();
+    assert!(store.get_mut("nonexistent").is_none());
+}

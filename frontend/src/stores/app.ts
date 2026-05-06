@@ -11,6 +11,9 @@ export interface Tab {
   isRunning: boolean;
   agentActive: boolean;
   agentName?: string;
+  // Split-pane state — present only when the tab is split.
+  splitSessionId?: string;
+  splitDirection?: "horizontal" | "vertical";
 }
 
 export interface AgentInfo {
@@ -146,6 +149,45 @@ export function clearTabAgent(sessionId: string) {
     ts.map((t) =>
       t.sessionId === sessionId
         ? { ...t, agentActive: false, agentName: undefined }
+        : t,
+    ),
+  );
+}
+
+// ── Split pane helpers ────────────────────────────────────────────────────────
+
+/** Record the secondary session on a split tab. */
+export function setTabSplit(
+  tabId: string,
+  splitSessionId: string,
+  direction: "horizontal" | "vertical",
+) {
+  tabs.update((ts) =>
+    ts.map((t) => (t.id === tabId ? { ...t, splitSessionId, splitDirection: direction } : t)),
+  );
+}
+
+/** Move a tab to a new position in the tab strip by reordering around a target tab. */
+export function reorderTab(tabId: string, targetTabId: string) {
+  tabs.update((ts) => {
+    const fromIdx = ts.findIndex((t) => t.id === tabId);
+    const toIdx = ts.findIndex((t) => t.id === targetTabId);
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return ts;
+    const result = [...ts];
+    const [moved] = result.splice(fromIdx, 1);
+    // After removing the element, indices after fromIdx shift left by 1.
+    const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+    result.splice(insertAt, 0, moved);
+    return result;
+  });
+}
+
+/** Remove the split — the secondary session has already been closed by the caller. */
+export function clearTabSplit(tabId: string) {
+  tabs.update((ts) =>
+    ts.map((t) =>
+      t.id === tabId
+        ? { ...t, splitSessionId: undefined, splitDirection: undefined }
         : t,
     ),
   );

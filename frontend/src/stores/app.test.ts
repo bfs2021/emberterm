@@ -16,6 +16,9 @@ import {
   updateToolCall,
   addBlock,
   closeBlock,
+  setTabSplit,
+  clearTabSplit,
+  reorderTab,
   activeTab,
   activeCwd,
   activeAgentName,
@@ -260,5 +263,71 @@ describe("block store", () => {
     const list = get(blocks).get("s1")!;
     expect(list[0].exitCode).toBe(0);
     expect(list[1].exitCode).toBeUndefined();
+  });
+});
+
+// ── Split pane ────────────────────────────────────────────────────────────────
+
+describe("split pane", () => {
+  it("setTabSplit records split session and direction", () => {
+    const tabId = addTab("s1", "Shell");
+    setTabSplit(tabId, "s2", "horizontal");
+    const t = get(tabs).find((t) => t.id === tabId)!;
+    expect(t.splitSessionId).toBe("s2");
+    expect(t.splitDirection).toBe("horizontal");
+  });
+
+  it("clearTabSplit removes split state", () => {
+    const tabId = addTab("s1", "Shell");
+    setTabSplit(tabId, "s2", "vertical");
+    clearTabSplit(tabId);
+    const t = get(tabs).find((t) => t.id === tabId)!;
+    expect(t.splitSessionId).toBeUndefined();
+    expect(t.splitDirection).toBeUndefined();
+  });
+
+  it("other tabs are unaffected by setTabSplit", () => {
+    const t1 = addTab("s1", "Tab 1");
+    const t2 = addTab("s2", "Tab 2");
+    setTabSplit(t1, "s3", "horizontal");
+    const tab2 = get(tabs).find((t) => t.id === t2)!;
+    expect(tab2.splitSessionId).toBeUndefined();
+  });
+});
+
+// ── Drag to reorder ───────────────────────────────────────────────────────────
+
+describe("reorderTab", () => {
+  it("moves tab forward in the list", () => {
+    const t1 = addTab("s1", "A");
+    const t2 = addTab("s2", "B");
+    const t3 = addTab("s3", "C");
+    reorderTab(t1, t3);
+    const ids = get(tabs).map((t) => t.id);
+    expect(ids).toEqual([t2, t1, t3]);
+  });
+
+  it("moves tab backward in the list", () => {
+    const t1 = addTab("s1", "A");
+    const t2 = addTab("s2", "B");
+    const t3 = addTab("s3", "C");
+    reorderTab(t3, t1);
+    const ids = get(tabs).map((t) => t.id);
+    expect(ids).toEqual([t3, t1, t2]);
+  });
+
+  it("noop when source equals target", () => {
+    const t1 = addTab("s1", "A");
+    const t2 = addTab("s2", "B");
+    reorderTab(t1, t1);
+    const ids = get(tabs).map((t) => t.id);
+    expect(ids).toEqual([t1, t2]);
+  });
+
+  it("noop when tabId not found", () => {
+    const t1 = addTab("s1", "A");
+    reorderTab("nonexistent", t1);
+    const ids = get(tabs).map((t) => t.id);
+    expect(ids).toEqual([t1]);
   });
 });

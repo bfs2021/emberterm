@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tabs, activateTab, renameTab, type Tab } from "../stores/app.js";
+  import { tabs, activateTab, renameTab, reorderTab, type Tab } from "../stores/app.js";
 
   interface Props {
     onNewTab: () => void;
@@ -68,6 +68,26 @@
     }
   }
 
+  // ── Drag-to-reorder ────────────────────────────────────────────────────────
+  let dragTabId = $state<string | null>(null);
+  let dragOverId = $state<string | null>(null);
+
+  function onDragStart(e: DragEvent, tabId: string) {
+    dragTabId = tabId;
+    e.dataTransfer!.effectAllowed = "move";
+  }
+  function onDragOver(e: DragEvent, tabId: string) {
+    e.preventDefault();
+    if (dragTabId && dragTabId !== tabId) dragOverId = tabId;
+  }
+  function onDragEnd() { dragTabId = null; dragOverId = null; }
+  function onDrop(e: DragEvent, targetId: string) {
+    e.preventDefault();
+    if (dragTabId && dragTabId !== targetId) reorderTab(dragTabId, targetId);
+    dragTabId = null;
+    dragOverId = null;
+  }
+
   // Dot visibility: agent > unread (inactive) > running (inactive)
   function showAgentDot(tab: Tab) { return tab.agentActive; }
   function showUnreadDot(tab: Tab) { return tab.hasUnread && !tab.isActive && !tab.agentActive; }
@@ -80,13 +100,19 @@
     <div
       class="tab"
       class:active={tab.isActive}
+      class:drag-over={dragOverId === tab.id}
       role="tab"
       tabindex="0"
       aria-selected={tab.isActive}
+      draggable="true"
       onclick={() => activateTab(tab.id)}
       onkeydown={(e) => handleTabKeydown(e, tab)}
       onmousedown={(e) => e.button === 1 && onCloseTab(tab.id, tab.sessionId)}
       ondblclick={(e) => startRename(tab, e)}
+      ondragstart={(e) => onDragStart(e, tab.id)}
+      ondragover={(e) => onDragOver(e, tab.id)}
+      ondrop={(e) => onDrop(e, tab.id)}
+      ondragend={onDragEnd}
     >
       <!-- Top accent bar for active tab (rendered via ::after in CSS) -->
 
@@ -193,6 +219,10 @@
     background: var(--tab-active-bg, #0d1117);
     border-color: var(--border, #21262d);
     color: var(--tab-active-fg, #e6edf3);
+  }
+
+  .tab.drag-over {
+    border-left: 2px solid var(--accent, #FF6B35);
   }
 
   /* Top accent line for active tab */

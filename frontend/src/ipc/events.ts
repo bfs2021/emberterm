@@ -207,3 +207,16 @@ export function onBlockEnd(cb: (p: BlockEndPayload) => void): Promise<UnlistenFn
 export function onBlockAnnotate(cb: (p: BlockAnnotatePayload) => void): Promise<UnlistenFn> {
   return listen<BlockAnnotatePayload>("block:annotate", (e) => cb(e.payload));
 }
+
+// ── Kitty keyboard protocol ────────────────────────────────────────────────
+
+/** Fired when the app in the PTY pushes or pops Kitty keyboard mode. */
+export interface KittyKeyboardPayload {
+  session_id: string;
+  /** Kitty enhancement flags bitmask; 0 means mode was popped (disabled). */
+  flags: number;
+}
+
+export function onKittyKeyboard(cb: (p: KittyKeyboardPayload) => void): Promise<UnlistenFn> {
+  return listen<KittyKeyboardPayload>("terminal:kitty-keyboard", (e) => cb(e.payload));
+}

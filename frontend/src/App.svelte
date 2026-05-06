@@ -1,61 +1,28 @@
 <script lang="ts">
-  import Grid from "./terminal/Grid.svelte";
+  import TabPane from "./terminal/TabPane.svelte";
   import TitleBar from "./chrome/TitleBar.svelte";
   import StatusBar from "./chrome/StatusBar.svelte";
-  import HelloBanner from "./chrome/HelloBanner.svelte";
-  import ToolCard from "./agent/ToolCard.svelte";
-  import DiffView from "./agent/DiffView.svelte";
-  import ApprovalSheet from "./agent/ApprovalSheet.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
-  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, type Profile } from "./ipc/client.js";
+  import { playBell } from "./utils/bell.js";
+  import { navigateBlocks } from "./utils/blockNav.js";
+  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, quakeToggle, type Profile } from "./ipc/client.js";
   import {
-    onTerminalOutput,
-    onTerminalTitle,
-    onTerminalCwd,
-    onTerminalBell,
-    onAgentHello,
-    onToolStart,
-    onToolProgress,
-    onToolEnd,
-    onClipboardWrite,
-    onProfilesUpdated,
-    onConfigUpdated,
-    onAgentDiff,
-    onAgentApproval,
-    onAgentBye,
-    onBlockStart,
-    onBlockEnd,
-    onBlockAnnotate,
-    type AgentDiffPayload,
-    type AgentApprovalPayload,
+    onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
+    onAgentHello, onToolStart, onToolProgress, onToolEnd, onClipboardWrite,
+    onProfilesUpdated, onConfigUpdated, onAgentDiff, onAgentApproval, onAgentBye,
+    onBlockStart, onBlockEnd, onBlockAnnotate,
+    type AgentDiffPayload, type AgentApprovalPayload,
   } from "./ipc/events.js";
   import {
-    tabs,
-    activeCwd,
-    activeAgentName,
-    activeShell,
-    addTab,
-    removeTab,
-    activateTab,
-    setTabCwd,
-    setTabTitle,
-    setTabAgent,
-    clearTabAgent,
-    addToolCall,
-    updateToolCall,
-    toolCalls,
-    addBlock,
-    annotateBlock,
-    closeBlock,
-    createOutputBuffer,
-    appendOutputBuffer,
+    tabs, activeCwd, activeAgentName, activeShell,
+    addTab, removeTab, activateTab, setTabCwd, setTabTitle,
+    setTabAgent, clearTabAgent, addToolCall, updateToolCall, toolCalls,
+    addBlock, annotateBlock, closeBlock, blocks,
+    setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer,
   } from "./stores/app.js";
-  // Initialize the theme system on import — applies ember-dark CSS vars.
   import "./theme/store.js";
-
-  // ── State ────────────────────────────────────────────────────────────────
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -65,185 +32,63 @@
   let showWelcome = $state(false);
   let termCols = $state(0);
   let termRows = $state(0);
-
-  // Profile cache — populated lazily on first tab open
   let profileCache: Profile[] = [];
 
-  function shellBasename(path: string): string {
-    return (path.split(/[\\/]/).pop() ?? path).replace(/\.exe$/i, "");
-  }
+  function shellBasename(p: string) { return (p.split(/[\\/]/).pop() ?? p).replace(/\.exe$/i, ""); }
 
-  // Per-session pending agent UI (Map keyed by sessionId)
   let pendingHellos = $state(new Map<string, { name: string; version: string }>());
   let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
   let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
 
-  // ── Git branch — refresh when cwd changes ────────────────────────────────
-
   $effect(() => {
     const cwd = $activeCwd;
-    if (cwd) {
-      gitBranchIpc(cwd).then((b) => { currentGitBranch = b ?? ""; }).catch(() => {
-        currentGitBranch = "";
-      });
-    } else {
-      currentGitBranch = "";
-    }
+    if (cwd) { gitBranchIpc(cwd).then((b) => { currentGitBranch = b ?? ""; }).catch(() => { currentGitBranch = ""; }); }
+    else { currentGitBranch = ""; }
   });
-
-  // ── Bell ─────────────────────────────────────────────────────────────────
-
-  function playBell() {
-    try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.15);
-    } catch {
-      // AudioContext unavailable — silently ignore
-    }
-  }
-
-  // ── IPC listeners ────────────────────────────────────────────────────────
 
   $effect(() => {
     let active = true;
     const cleanup: Array<() => void> = [];
-
     (async () => {
-      // Pre-register buffer listener BEFORE creating any sessions so initial
-      // PTY output isn't lost while Grid.svelte is still mounting.
-      // appendOutputBuffer is a no-op when no buffer exists for that session.
-      const unlistenPreBuffer = await onTerminalOutput((p) => {
-        appendOutputBuffer(p.session_id, new Uint8Array(p.data));
-      });
-      cleanup.push(unlistenPreBuffer);
-
-      try {
-        showWelcome = await configIsFirstRun();
-        await openNewTab();
-      } catch (e) {
-        error = String(e);
-      } finally {
-        loading = false;
-      }
-
+      cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
+      try { showWelcome = await configIsFirstRun(); await openNewTab(); }
+      catch (e) { error = String(e); }
+      finally { loading = false; }
       if (!active) return;
-
       const fns = await Promise.all([
-        onTerminalTitle((p) => {
-          const t = p.title;
-          const title = /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : t;
-          setTabTitle(p.session_id, title || t);
-        }),
+        onTerminalTitle((p) => { const t = p.title; setTabTitle(p.session_id, /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : (t || p.title)); }),
         onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
-        onAgentHello((p) => {
-          setTabAgent(p.session_id, p.name);
-          pendingHellos = new Map(pendingHellos).set(p.session_id, {
-            name: p.name,
-            version: p.version,
-          });
-        }),
-        onToolStart((p) => {
-          addToolCall(p.session_id, {
-            id: p.id,
-            name: p.name,
-            summary: p.summary,
-            icon: p.icon,
-            status: "running",
-            args: p.args,
-          });
-        }),
-        onToolProgress((p) => {
-          updateToolCall(p.session_id, p.id, {
-            progressPct: p.pct,
-            progressMessage: p.message,
-          });
-        }),
-        onToolEnd((p) => {
-          updateToolCall(p.session_id, p.id, {
-            status: p.status as "ok" | "error" | "cancelled",
-            progressPct: undefined,
-            durationMs: p.duration_ms,
-            ...(p.summary ? { summary: p.summary } : {}),
-          });
-        }),
-        onClipboardWrite((p) => {
-          navigator.clipboard.writeText(p.data).catch(() => {});
-        }),
+        onAgentHello((p) => { setTabAgent(p.session_id, p.name); pendingHellos = new Map(pendingHellos).set(p.session_id, { name: p.name, version: p.version }); }),
+        onToolStart((p) => addToolCall(p.session_id, { id: p.id, name: p.name, summary: p.summary, icon: p.icon, status: "running", args: p.args })),
+        onToolProgress((p) => updateToolCall(p.session_id, p.id, { progressPct: p.pct, progressMessage: p.message })),
+        onToolEnd((p) => updateToolCall(p.session_id, p.id, { status: p.status as "ok" | "error" | "cancelled", progressPct: undefined, durationMs: p.duration_ms, ...(p.summary ? { summary: p.summary } : {}) })),
+        onClipboardWrite((p) => navigator.clipboard.writeText(p.data).catch(() => {})),
         onTerminalBell(() => playBell()),
-        onAgentDiff((p) => {
-          pendingDiffs = new Map(pendingDiffs).set(p.session_id, p);
-        }),
-        onAgentApproval((p) => {
-          pendingApprovals = new Map(pendingApprovals).set(p.session_id, p);
-        }),
-        onAgentBye((p) => {
-          clearTabAgent(p.session_id);
-          pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== p.session_id));
-        }),
-        onBlockStart((p) => {
-          addBlock(p.session_id, {
-            id: p.id,
-            command: p.command,
-            startedAt: p.started_at,
-            agentId: p.agent_id,
-          });
-        }),
-        onBlockEnd((p) => {
-          closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms);
-        }),
-        onBlockAnnotate((p) => {
-          annotateBlock(p.session_id, p.id, {
-            agentId: p.agent_id,
-            tags: p.tags,
-            fold: p.fold,
-          });
-        }),
+        onAgentDiff((p) => { pendingDiffs = new Map(pendingDiffs).set(p.session_id, p); }),
+        onAgentApproval((p) => { pendingApprovals = new Map(pendingApprovals).set(p.session_id, p); }),
+        onAgentBye((p) => { clearTabAgent(p.session_id); pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== p.session_id)); }),
+        onBlockStart((p) => addBlock(p.session_id, { id: p.id, command: p.command, startedAt: p.started_at, agentId: p.agent_id })),
+        onBlockEnd((p) => closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms)),
+        onBlockAnnotate((p) => annotateBlock(p.session_id, p.id, { agentId: p.agent_id, tags: p.tags, fold: p.fold })),
         onProfilesUpdated(() => {}),
         onConfigUpdated(() => {}),
       ]);
-
-      if (!active) {
-        fns.forEach((f) => f());
-        return;
-      }
+      if (!active) { fns.forEach((f) => f()); return; }
       cleanup.push(...fns);
     })();
-
-    return () => {
-      active = false;
-      cleanup.forEach((f) => f());
-    };
+    return () => { active = false; cleanup.forEach((f) => f()); };
   });
-
-  // ── Agent action helpers ─────────────────────────────────────────────────
 
   function handleDiffAction(sessionId: string, id: string, result: string) {
     agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    // Keep the resolved DiffView visible for 2s so the user sees "✓ Applied" / "✕ Rejected"
-    // before it disappears. DiffView hides its body/footer when resolved = true internally.
-    setTimeout(() => {
-      pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId));
-    }, 2000);
+    setTimeout(() => { pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId)); }, 2000);
   }
-
   function handleApprovalAction(sessionId: string, id: string, result: string) {
     agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
     pendingApprovals = new Map([...pendingApprovals].filter(([k]) => k !== sessionId));
   }
-
-  function dismissHello(sessionId: string) {
-    pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== sessionId));
-  }
-
-  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+  function dismissHello(sid: string) { pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== sid)); }
+  function cancelTool(sid: string, id: string) { agentRespond(sid, "event", JSON.stringify({ v: 1, kind: "tool.cancel", id })).catch(() => {}); }
 
   function handleWindowKeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
@@ -253,52 +98,59 @@
     if (mod && e.key === ",") { e.preventDefault(); settingsOpen = true; return; }
     if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(1); return; }
     if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
+    if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
+    if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
+    if (mod && e.key === "`") { e.preventDefault(); quakeToggle().catch(() => {}); return; }
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      navigateBlocks(document.querySelector(".tab-pane:not(.hidden)"), e.key === "ArrowDown" ? 1 : -1);
+    }
   }
 
   function cycleTab(dir: 1 | -1) {
     const ts = $tabs;
     if (ts.length < 2) return;
-    const idx = ts.findIndex((t) => t.isActive);
-    const next = (idx + dir + ts.length) % ts.length;
-    activateTab(ts[next].id);
+    activateTab(ts[(ts.findIndex((t) => t.isActive) + dir + ts.length) % ts.length].id);
   }
-
   async function closeActiveTab() {
     const tab = $tabs.find((t) => t.isActive);
     if (tab) await closeTab(tab.id, tab.sessionId);
   }
 
-  // ── Tab management ───────────────────────────────────────────────────────
-
   async function openNewTab(profileId?: string) {
     try {
-      if (!profileCache.length) {
-        try { profileCache = await profileList(); } catch { /* ignore */ }
-      }
-      const profile = profileId
-        ? profileCache.find((p) => p.id === profileId)
-        : profileCache[0];
+      if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
+      const profile = profileId ? profileCache.find((p) => p.id === profileId) : profileCache[0];
       const shell = profile ? shellBasename(profile.shell) : "";
-
       const sessionId = await sessionCreate(profileId);
       createOutputBuffer(sessionId);
       addTab(sessionId, shell || "Shell", shell);
-    } catch (e) {
-      error = `Failed to open tab: ${e}`;
-    }
+    } catch (e) { error = `Failed to open tab: ${e}`; }
   }
 
   async function closeTab(tabId: string, sessionId: string) {
+    const tab = $tabs.find((t) => t.id === tabId);
+    if (tab?.splitSessionId) await sessionClose(tab.splitSessionId).catch(() => {});
     await sessionClose(sessionId).catch(() => {});
     removeTab(tabId);
     if ($tabs.length === 0) await openNewTab();
   }
 
-  // ── Tool cancel ──────────────────────────────────────────────────────────
+  async function splitActiveTab(direction: "horizontal" | "vertical") {
+    const tab = $tabs.find((t) => t.isActive);
+    if (!tab || tab.splitSessionId) return;
+    try {
+      const sessionId = await sessionCreate();
+      createOutputBuffer(sessionId);
+      setTabSplit(tab.id, sessionId, direction);
+    } catch (e) { error = `Failed to split pane: ${e}`; }
+  }
 
-  function cancelTool(sessionId: string, toolId: string) {
-    const payload = JSON.stringify({ v: 1, kind: "tool.cancel", id: toolId });
-    agentRespond(sessionId, "event", payload).catch(() => {});
+  async function closeSplitPane(tabId: string) {
+    const tab = $tabs.find((t) => t.id === tabId);
+    if (!tab?.splitSessionId) return;
+    await sessionClose(tab.splitSessionId).catch(() => {});
+    clearTabSplit(tabId);
   }
 </script>
 
@@ -306,7 +158,6 @@
 
 <div class="app">
   <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} />
-
   <main class="terminal-area">
     {#if loading}
       <div class="splash">Starting shell…</div>
@@ -314,98 +165,30 @@
       <div class="splash error">{error}</div>
     {:else}
       {#each $tabs as tab (tab.id)}
-        <div class="tab-pane" class:hidden={!tab.isActive}>
-          <Grid
-            sessionId={tab.sessionId}
-            active={tab.isActive}
-            onExit={() => closeTab(tab.id, tab.sessionId)}
-            onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
-          />
-
-          {#if tab.isActive}
-            <!-- Tool cards -->
-            {#each ($toolCalls.get(tab.sessionId) ?? []).slice(-5) as call (call.id)}
-              <div class="agent-overlay agent-overlay--cards">
-                <ToolCard
-                  id={call.id}
-                  name={call.name}
-                  summary={call.summary}
-                  icon={call.icon}
-                  status={call.status}
-                  progressPct={call.progressPct}
-                  progressMessage={call.progressMessage}
-                  durationMs={call.durationMs}
-                  args={call.args}
-                  onCancel={call.status === "running"
-                    ? () => cancelTool(tab.sessionId, call.id)
-                    : undefined}
-                />
-              </div>
-            {/each}
-
-            <!-- Diff viewer -->
-            {@const diff = pendingDiffs.get(tab.sessionId)}
-            {#if diff}
-              <div class="agent-overlay agent-overlay--diff">
-                <DiffView
-                  id={diff.id}
-                  path={diff.path}
-                  patch={diff.patch}
-                  actions={diff.actions}
-                  onAction={(id, result) => handleDiffAction(tab.sessionId, id, result)}
-                />
-              </div>
-            {/if}
-
-            <!-- Approval sheet -->
-            {@const approval = pendingApprovals.get(tab.sessionId)}
-            {#if approval}
-              <ApprovalSheet
-                id={approval.id}
-                title={approval.title}
-                detail={approval.detail}
-                risk={approval.risk}
-                actions={approval.actions}
-                onAction={(id, result) => handleApprovalAction(tab.sessionId, id, result)}
-              />
-            {/if}
-
-            <!-- Agent hello banner -->
-            {@const hello = pendingHellos.get(tab.sessionId)}
-            {#if hello}
-              <HelloBanner
-                name={hello.name}
-                version={hello.version}
-                onDismiss={() => dismissHello(tab.sessionId)}
-              />
-            {/if}
-          {/if}
-        </div>
+        <TabPane
+          {tab}
+          isActive={tab.isActive}
+          blocks={$blocks.get(tab.sessionId) ?? []}
+          splitBlocks={tab.splitSessionId ? ($blocks.get(tab.splitSessionId) ?? []) : []}
+          toolCalls={$toolCalls.get(tab.sessionId) ?? []}
+          pendingDiff={pendingDiffs.get(tab.sessionId)}
+          pendingApproval={pendingApprovals.get(tab.sessionId)}
+          pendingHello={pendingHellos.get(tab.sessionId)}
+          onExit={() => closeTab(tab.id, tab.sessionId)}
+          onSplitExit={() => closeSplitPane(tab.id)}
+          onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
+          onCancelTool={(id) => cancelTool(tab.sessionId, id)}
+          onDiffAction={(id, result) => handleDiffAction(tab.sessionId, id, result)}
+          onApprovalAction={(id, result) => handleApprovalAction(tab.sessionId, id, result)}
+          onDismissHello={() => dismissHello(tab.sessionId)}
+          onCloseSplit={() => closeSplitPane(tab.id)}
+        />
       {/each}
     {/if}
   </main>
-
-  <StatusBar
-    shell={$activeShell}
-    cwd={$activeCwd}
-    gitBranch={currentGitBranch}
-    agentName={$activeAgentName}
-    {termCols}
-    {termRows}
-  />
-
-  <CommandPalette
-    open={paletteOpen}
-    onClose={() => (paletteOpen = false)}
-    onNewTab={openNewTab}
-    onOpenSettings={() => (settingsOpen = true)}
-  />
-
-  <SettingsPanel
-    open={settingsOpen}
-    onClose={() => (settingsOpen = false)}
-  />
-
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} agentName={$activeAgentName} {termCols} {termRows} />
+  <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
+  <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} />
   {#if showWelcome}
     <WelcomeScreen onComplete={() => (showWelcome = false)} />
   {/if}
@@ -422,52 +205,7 @@
     font-family: system-ui, sans-serif;
     overflow: hidden;
   }
-
-  .terminal-area {
-    flex: 1;
-    min-height: 0;
-    position: relative;
-  }
-
-  .tab-pane {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tab-pane.hidden { display: none; }
-
-  /* Shared overlay base — all agent UI floats above the terminal */
-  .agent-overlay {
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    z-index: 10;
-    pointer-events: none;
-  }
-
-  .agent-overlay > :global(*) { pointer-events: all; }
-
-  /* Tool cards: bottom-right stack */
-  .agent-overlay--cards {
-    bottom: 8px;
-  }
-
-  /* Diff viewer: above the tool card area */
-  .agent-overlay--diff {
-    bottom: 80px;
-    max-width: 680px;
-  }
-
-  .splash {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--fg-muted, #7d8590);
-    font-size: 14px;
-  }
-
+  .terminal-area { flex: 1; min-height: 0; position: relative; }
+  .splash { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--fg-muted, #7d8590); font-size: 14px; }
   .splash.error { color: var(--red, #f85149); }
 </style>

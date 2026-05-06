@@ -73,8 +73,8 @@
 - [x] OSC 52 (`\e]52;...`) — clipboard write via `terminal:clipboard-write` event (read not supported v0.1)
 - [x] OSC 133 (`\e]133;A/B/C/D`) — parse prompt marks (block UI deferred to Phase 2)
 - [x] OSC title (SetWindowTitle) — parse and emit `terminal:title`
-- [ ] DEC 2026 (`\e[?2026h/l`) — synchronized output: buffer until sync end marker
-- [ ] SGR mouse (1002/1006) — pass mouse events from xterm.js to PTY
+- [x] DEC 2026 (`\e[?2026h/l`) — synchronized output: `detect_sync()` in pty.rs buffers chunks between begin/end markers and emits one coalesced IPC event (4 tests)
+- [x] SGR mouse (1002/1006) — handled automatically: raw bytes (`\e[?1002h` etc.) forwarded to xterm.js which enables mouse tracking and routes mouse events back via `onData → sessionWrite`
 
 ### Rust Core — Profile System
 
@@ -122,7 +122,7 @@
 - [x] Tab states: `active` (accent underline), `inactive`, `unread` (dot), `running` (pulse animation), `agent-active` (ember-orange dot)
 - [x] "+" button — open new tab
 - [x] Close tab on middle-click
-- [ ] Drag to reorder tabs
+- [x] Drag to reorder tabs (HTML5 drag-and-drop in TabStrip.svelte; `reorderTab()` in stores/app.ts with correct index adjustment; 4 tests)
 - [x] Double-click tab to rename (inline edit)
 - [x] Keyboard: `Ctrl+Shift+T` new tab, `Ctrl+Shift+W` close, `Ctrl+Tab` / `Ctrl+Shift+Tab` next/prev
 
@@ -257,7 +257,7 @@
 - [x] `block.get` Tauri command — returns all blocks for a session (ordered by start)
 - [x] Store blocks on `Session` via `Arc<Mutex<Vec<Block>>>`, shared with PTY reader thread
 - [x] `block.search` Tauri command — case-insensitive command substring filter
-- [ ] Store blocks on `Session` indexed by `BlockId` (HashMap lookup, deferred)
+- [x] Store blocks on `Session` indexed by `BlockId` (`BlockStore` with `HashMap<BlockId, usize>` + `Vec<Block>` — O(1) get_mut, insertion-order iteration)
 
 ### Rust Core — OSC 7777 Full
 
@@ -277,8 +277,8 @@
 - [x] Block header: command text, duration label, exit code badge (green/red), agent badge
 - [x] Fold/unfold animation — `svelte/transition:slide`, duration=0 when `prefers-reduced-motion`
 - [x] Agent-annotated blocks: accent left-border + agent badge chip
-- [ ] Keyboard navigation between blocks (e.g., `Alt+Up/Down`)
-- [ ] Per-block context menu (right-click): Copy command, Copy output, Share block
+- [x] Keyboard navigation between blocks (e.g., `Alt+Up/Down`) — `navigateBlocks()` in App.svelte queries `.block-head-nav` elements in the active tab pane
+- [x] Per-block context menu (right-click): Copy command, Copy output, Share block — fixed-position menu in Block.svelte, closes on outside click
 
 ### Frontend — Diff Viewer
 
@@ -304,22 +304,22 @@
 
 ### Frontend — Split Panes
 
-- [ ] Split pane container component — horizontal and vertical splits
-- [ ] Drag divider to resize panes
-- [ ] Keyboard shortcuts: `Ctrl+Shift+\` horizontal, `Ctrl+Shift+-` vertical
-- [ ] Each pane hosts one terminal session
-- [ ] Close pane on session exit
+- [x] Split pane container component — horizontal and vertical splits (`SplitContainer.svelte` with drag + keyboard resize)
+- [x] Drag divider to resize panes — mousemove drag handler + arrow key step resize
+- [x] Keyboard shortcuts: `Ctrl+Shift+\` horizontal, `Ctrl+Shift+-` vertical
+- [x] Each pane hosts one terminal session — `Tab.splitSessionId` + `TabPane.svelte`
+- [x] Close pane on session exit — `onCloseSplit` closes secondary session + `clearTabSplit`
 
 ### Frontend — Quake Mode
 
-- [ ] Global hotkey registration via Tauri plugin (`` Ctrl+` `` default, configurable)
-- [ ] Toggle window visibility (show/hide with slide-down animation)
-- [ ] Window appears at top of screen, full width, configurable height
-- [ ] Tray icon: show/hide EmberTerm on click
+- [x] Global hotkey registration via Tauri plugin (`` Ctrl+` `` default, configurable)
+- [x] Toggle window visibility (show/hide with slide-down animation)
+- [x] Window appears at top of screen, full width, configurable height
+- [x] Tray icon: show/hide EmberTerm on click
 
 ### Platform — Linux X11
 
-- [ ] `src-tauri/src/platform/linux.rs` — basic window setup for X11
+- [x] `src-tauri/src/platform/linux.rs` — basic window setup for X11 (no-op, window-vibrancy doesn't support Linux; solid bg via CSS)
 - [ ] WebKitGTK webview integration tested
 - [ ] PTY via Unix `pty(7)`, no ConPTY
 - [ ] Package: `.deb` and `.rpm` via Tauri bundler
@@ -327,15 +327,15 @@
 
 ### Terminal — Kitty Graphics Protocol
 
-- [ ] Parse APC/OSC sequences for Kitty graphics
-- [ ] Forward to xterm.js or render in webview canvas overlay
-- [ ] Capability: report `graphics: ["kitty"]` in `agent.query` reply
+- [x] Parse APC/OSC sequences for Kitty graphics (`has_kitty_graphics()` in pty.rs detects `ESC _ G` APC sequences; 2 tests)
+- [x] Forward to xterm.js or render in webview canvas overlay (`@xterm/addon-image` loaded in Grid.svelte; raw bytes already forwarded via `terminal:output`)
+- [x] Capability: report `graphics: ["kitty"]` in `agent.query` reply
 
 ### Terminal — Kitty Keyboard Protocol
 
-- [ ] Negotiate with shell on session start
-- [ ] Encode key events to Kitty protocol format
-- [ ] Forward to PTY
+- [x] Negotiate with shell on session start (respond to push/pop via `scan_kitty_keyboard`, emit `terminal:kitty-keyboard` IPC event with flags)
+- [x] Encode key events to Kitty protocol format (`kittyKeyboard.ts` — functional keys, modifier encoding, FLAG_DISAMBIGUATE/REPORT_EVENTS/REPORT_ALL)
+- [x] Forward to PTY (Grid.svelte: `attachCustomKeyEventHandler` intercepts + `sessionWrite`; 7 Rust + 19 TS tests)
 
 ### Testing — Phase 2
 

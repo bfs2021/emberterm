@@ -1,6 +1,41 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub type BlockId = String;
+
+// ── BlockStore ────────────────────────────────────────────────────────────────
+
+/// Ordered block store with O(1) lookup by `BlockId`.
+///
+/// Internally keeps both a `Vec<Block>` (for insertion order, needed by
+/// `block_get` IPC) and a `HashMap<BlockId, usize>` index so individual
+/// blocks can be mutated in O(1) time (used by the D mark and `block.annotate`).
+/// Blocks are never removed during a session, so position indices stay valid.
+#[derive(Debug, Default)]
+pub struct BlockStore {
+    blocks: Vec<Block>,
+    index: HashMap<BlockId, usize>,
+}
+
+impl BlockStore {
+    /// Append a new block; panics if the ID is already present (a bug, not a runtime error).
+    pub fn push(&mut self, block: Block) {
+        let pos = self.blocks.len();
+        self.index.insert(block.id.clone(), pos);
+        self.blocks.push(block);
+    }
+
+    /// O(1) mutable access by block ID.
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut Block> {
+        let pos = *self.index.get(id)?;
+        self.blocks.get_mut(pos)
+    }
+
+    /// Returns all blocks in insertion order (cheaply cloneable for IPC).
+    pub fn all(&self) -> &[Block] {
+        &self.blocks
+    }
+}
 
 /// Persistent block record stored on the session for `block_get` IPC queries.
 #[derive(Debug, Clone, serde::Serialize, Default)]

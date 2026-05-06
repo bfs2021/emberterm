@@ -129,7 +129,7 @@ pub async fn block_get(
             .blocks
             .clone()
     };
-    let blocks = blocks_arc.lock().unwrap().clone();
+    let blocks = blocks_arc.lock().unwrap().all().to_vec();
     Ok(blocks)
 }
 
@@ -149,12 +149,12 @@ pub async fn block_search(
             .blocks
             .clone()
     };
-    let blocks = blocks_arc.lock().unwrap();
+    let store = blocks_arc.lock().unwrap();
     let q = query.to_lowercase();
     let results = if q.is_empty() {
-        blocks.clone()
+        store.all().to_vec()
     } else {
-        blocks.iter().filter(|b| b.command.to_lowercase().contains(&q)).cloned().collect()
+        store.all().iter().filter(|b| b.command.to_lowercase().contains(&q)).cloned().collect()
     };
     Ok(results)
 }
@@ -184,6 +184,14 @@ pub async fn agent_respond(
     writer.write_all(sequence.as_bytes()).map_err(|e| e.to_string())?;
     writer.flush().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Toggle quake mode — hide if visible, show/reposition if hidden.
+/// Called by the in-window keyboard shortcut (Ctrl+Backquote) from the frontend.
+/// The OS-level global shortcut is registered separately via `tauri-plugin-global-shortcut`.
+#[tauri::command]
+pub async fn quake_toggle(app: AppHandle) {
+    crate::quake::toggle(&app);
 }
 
 /// Shell out to git to get the current branch name for the given directory.

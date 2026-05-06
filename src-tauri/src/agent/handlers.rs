@@ -192,7 +192,9 @@ pub fn dispatch(
                         "tool.start", "tool.progress", "tool.end",
                         "diff", "approval", "session.mark", "agent.bye"
                     ],
-                    "blocks": true
+                    "blocks": true,
+                    "kitty_keyboard": true,
+                    "graphics": ["kitty"]
                 }
             });
             let sequence = format!("\x1b]7777;reply;{}\x1b\\", reply_json);

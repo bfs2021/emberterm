@@ -6,6 +6,14 @@
     "core:default",
     "core:event:default",
     "core:window:default",
-    "core:webview:default"
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-focus",
+    "core:webview:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered"
   ]
 }

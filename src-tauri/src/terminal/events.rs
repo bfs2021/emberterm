@@ -3,6 +3,16 @@ use super::session::SessionId;
 /// IPC event payload structs emitted as Tauri events from the PTY reader thread.
 /// All fields use snake_case — Tauri/serde serializes them to camelCase for the frontend.
 
+/// Emitted when an application running in the PTY pushes or pops Kitty keyboard mode.
+/// `flags` is the Kitty enhancement flags bitmask (0 = pop/disabled).
+/// See <https://sw.kovidgoyal.net/kitty/keyboard-protocol/>
+#[derive(serde::Serialize, Clone)]
+pub struct KittyKeyboardPayload {
+    pub session_id: SessionId,
+    /// Active Kitty keyboard flags, or 0 if mode was popped.
+    pub flags: u32,
+}
+
 #[derive(serde::Serialize, Clone)]
 pub struct TerminalOutputPayload {
     pub session_id: SessionId,

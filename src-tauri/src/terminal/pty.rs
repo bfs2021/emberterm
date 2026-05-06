@@ -5,11 +5,11 @@ use anyhow::{Context, Result};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::{AppHandle, Emitter};
 
-use super::blocks::{Block, BlockManager};
+use super::blocks::{Block, BlockManager, BlockStore};
 use super::events::{
-    BlockAnnotateIpcPayload, BlockEndIpcPayload, BlockStartIpcPayload, SessionExitPayload,
-    TerminalClipboardWritePayload, TerminalCwdPayload, TerminalHyperlinkPayload,
-    TerminalOutputPayload, TerminalTitlePayload,
+    BlockAnnotateIpcPayload, BlockEndIpcPayload, BlockStartIpcPayload, KittyKeyboardPayload,
+    SessionExitPayload, TerminalClipboardWritePayload, TerminalCwdPayload,
+    TerminalHyperlinkPayload, TerminalOutputPayload, TerminalTitlePayload,
 };
 use super::session::{Session, SessionId};
 use crate::agent::handlers;
@@ -68,7 +68,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
     let tools_for_thread = tools_arc.clone();
 
     // Blocks are shared via Arc so the session can serve `block_get` IPC queries.
-    let blocks_arc: Arc<Mutex<Vec<Block>>> = Arc::new(Mutex::new(Vec::new()));
+    let blocks_arc: Arc<Mutex<BlockStore>> = Arc::new(Mutex::new(BlockStore::default()));
     let blocks_for_thread = blocks_arc.clone();
 
     std::thread::Builder::new()
@@ -80,6 +80,9 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
             // Rate-limit OSC 7777 processing: max 1000 sequences per second.
             let mut osc7777_count: u32 = 0;
             let mut osc7777_window = std::time::Instant::now();
+            // DEC 2026 synchronized output: buffer chunks between begin/end markers.
+            let mut sync_buf: Vec<u8> = Vec::new();
+            let mut in_sync = false;
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
@@ -89,12 +92,43 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                         // Extract OSC events before forwarding raw bytes.
                         let osc_events = crate::terminal::parser::extract_osc_events(chunk);
 
-                        // Forward raw bytes to xterm.js unchanged.
+                        // Detect Kitty keyboard push/pop sequences.
+                        if let Some(flags) = scan_kitty_keyboard(chunk) {
+                            let _ = app_clone.emit("terminal:kitty-keyboard", KittyKeyboardPayload {
+                                session_id: sid.clone(),
+                                flags,
+                            });
+                        }
+
+                        // Kitty graphics: raw bytes are forwarded to xterm.js unchanged;
+                        // the @xterm/addon-image addon handles rendering. Log at debug level
+                        // so developers can confirm graphics sequences are flowing through.
+                        if has_kitty_graphics(chunk) {
+                            tracing::debug!(session_id = %sid, "Kitty graphics APC detected in PTY output");
+                        }
+
+                        // DEC 2026: detect begin/end synchronized output markers.
+                        // \x1b[?2026h = begin, \x1b[?2026l = end.
+                        // Buffer chunks during sync to coalesce into a single IPC event.
+                        let had_sync_end = detect_sync(chunk, &mut in_sync, &mut sync_buf);
+
+                        // Forward bytes to xterm.js: either the buffered+flushed sync data,
+                        // or the raw chunk (when not in sync mode).
+                        let to_emit: Vec<u8> = if had_sync_end {
+                            // sync_buf was flushed by detect_sync; take it.
+                            std::mem::take(&mut sync_buf)
+                        } else if in_sync {
+                            // Still accumulating — don't emit yet.
+                            continue;
+                        } else {
+                            chunk.to_vec()
+                        };
+
                         let _ = app_clone.emit(
                             "terminal:output",
                             TerminalOutputPayload {
                                 session_id: sid.clone(),
-                                data: chunk.to_vec(),
+                                data: to_emit,
                             },
                         );
 
@@ -147,7 +181,7 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         'B' => block_mgr.on_command_start(command),
                                         'C' => {
                                             if let Some(data) = block_mgr.on_output_start(command) {
-                                                // Store the new block for IPC queries.
+                                                // Store the new block; O(1) via BlockStore.push().
                                                 blocks_for_thread.lock().unwrap().push(Block {
                                                     id: data.id.clone(),
                                                     command: data.command.clone(),
@@ -165,13 +199,11 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                         }
                                         'D' => {
                                             if let Some(data) = block_mgr.on_command_end(exit_code.unwrap_or(0)) {
-                                                // Update the stored block with exit code and duration.
-                                                let mut blks = blocks_for_thread.lock().unwrap();
-                                                if let Some(b) = blks.iter_mut().find(|b| b.id == data.id) {
+                                                // O(1) lookup via BlockStore.get_mut().
+                                                if let Some(b) = blocks_for_thread.lock().unwrap().get_mut(&data.id) {
                                                     b.exit_code = Some(data.exit_code);
                                                     b.duration_ms = Some(data.duration_ms);
                                                 }
-                                                drop(blks);
                                                 let _ = app_clone.emit("block:end", BlockEndIpcPayload {
                                                     session_id: sid.clone(),
                                                     id: data.id,
@@ -207,14 +239,12 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
                                             Some(handlers::DispatchEffect::AnnotateBlock(p)) => {
                                                 if let Some(block_id) = block_mgr.current_block_id() {
                                                     let block_id = block_id.clone();
-                                                    // Update the stored block.
-                                                    let mut blks = blocks_for_thread.lock().unwrap();
-                                                    if let Some(b) = blks.iter_mut().find(|b| b.id == block_id) {
+                                                    // O(1) lookup via BlockStore.get_mut().
+                                                    if let Some(b) = blocks_for_thread.lock().unwrap().get_mut(&block_id) {
                                                         if p.agent_id.is_some() { b.agent_id = p.agent_id.clone(); }
                                                         if !p.tags.is_empty() { b.tags = p.tags.clone(); }
                                                         if p.fold.is_some() { b.fold = p.fold.clone(); }
                                                     }
-                                                    drop(blks);
                                                     let _ = app_clone.emit("block:annotate", BlockAnnotateIpcPayload {
                                                         session_id: sid.clone(),
                                                         id: block_id,
@@ -256,6 +286,78 @@ pub fn spawn_session(session_id: SessionId, app: AppHandle) -> Result<Session> {
     })
 }
 
+/// DEC 2026 synchronized output — update sync state based on `chunk`.
+///
+/// - Detects `ESC [ ? 2026 h` (begin sync) and `ESC [ ? 2026 l` (end sync).
+/// - While in sync mode, appends incoming bytes to `sync_buf` instead of emitting.
+/// - Returns `true` when an end-sync marker is found; at that point `sync_buf`
+///   holds the complete coalesced frame and the caller should emit it.
+pub(super) fn detect_sync(chunk: &[u8], in_sync: &mut bool, sync_buf: &mut Vec<u8>) -> bool {
+    const BEGIN: &[u8] = b"\x1b[?2026h";
+    const END: &[u8] = b"\x1b[?2026l";
+
+    let has_begin = chunk.windows(BEGIN.len()).any(|w| w == BEGIN);
+    let has_end = chunk.windows(END.len()).any(|w| w == END);
+
+    if has_begin && !*in_sync {
+        *in_sync = true;
+    }
+
+    if *in_sync {
+        sync_buf.extend_from_slice(chunk);
+    }
+
+    if has_end && *in_sync {
+        *in_sync = false;
+        return true; // caller should emit sync_buf
+    }
+
+    false
+}
+
+/// Scans a PTY output chunk for Kitty keyboard protocol push/pop sequences.
+///
+/// Returns `Some(flags)` when:
+/// - A push sequence `ESC [ > N u` is found (flags = N, may be 0)
+/// - A pop  sequence `ESC [ < u`   is found (flags = 0 signals "popped")
+///
+/// Returns `None` if no Kitty sequence is present in this chunk.
+///
+/// Limitation: sequences split across chunk boundaries are not detected.
+/// This is acceptable because applications write these as atomic strings
+/// well under the 8 KiB read buffer.
+pub(super) fn scan_kitty_keyboard(bytes: &[u8]) -> Option<u32> {
+    let s = std::str::from_utf8(bytes).ok()?;
+    let mut iter = s.char_indices().peekable();
+    while let Some((i, c)) = iter.next() {
+        if c != '\x1b' {
+            continue;
+        }
+        let rest = &s[i + 1..];
+        // Pop: ESC [ < u
+        if rest.starts_with("[<u") {
+            return Some(0);
+        }
+        // Push: ESC [ > <digits> u
+        if let Some(suffix) = rest.strip_prefix("[>") {
+            let end = suffix.find(|c: char| !c.is_ascii_digit()).unwrap_or(suffix.len());
+            if suffix[end..].starts_with('u') {
+                let flags: u32 = suffix[..end].parse().unwrap_or(0);
+                return Some(flags);
+            }
+        }
+    }
+    None
+}
+
+/// Returns true if the chunk contains the start of a Kitty graphics APC sequence
+/// (`ESC _ G ...`). Used only for capability detection and debug logging; the
+/// raw bytes are forwarded to xterm.js unchanged for rendering via the image addon.
+pub(super) fn has_kitty_graphics(bytes: &[u8]) -> bool {
+    // Kitty graphics: ESC _ G  (APC with 'G' introducer)
+    bytes.windows(3).any(|w| w == b"\x1b_G")
+}
+
 fn default_shell() -> String {
     #[cfg(windows)]
     {
@@ -280,5 +382,117 @@ fn which_shell(name: &str) -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scan_kitty_keyboard;
+
+    #[test]
+    fn kitty_push_flags_1() {
+        // ESC [ > 1 u  →  flags = 1
+        assert_eq!(scan_kitty_keyboard(b"\x1b[>1u"), Some(1));
+    }
+
+    #[test]
+    fn kitty_push_flags_31() {
+        // ESC [ > 31 u  →  flags = 31
+        assert_eq!(scan_kitty_keyboard(b"\x1b[>31u"), Some(31));
+    }
+
+    #[test]
+    fn kitty_push_flags_0() {
+        // ESC [ > 0 u  →  flags = 0 (push with no flags — still a push)
+        assert_eq!(scan_kitty_keyboard(b"\x1b[>0u"), Some(0));
+    }
+
+    #[test]
+    fn kitty_pop() {
+        // ESC [ < u  →  flags = 0 (pop)
+        assert_eq!(scan_kitty_keyboard(b"\x1b[<u"), Some(0));
+    }
+
+    #[test]
+    fn kitty_embedded_in_longer_chunk() {
+        // Sequence embedded inside printable bytes
+        let bytes = b"hello\x1b[>3uworld";
+        assert_eq!(scan_kitty_keyboard(bytes), Some(3));
+    }
+
+    #[test]
+    fn kitty_no_sequence() {
+        // Normal PTY output with no Kitty sequences
+        assert_eq!(scan_kitty_keyboard(b"ls -la\r\n"), None);
+    }
+
+    #[test]
+    fn kitty_csi_arrow_not_matched() {
+        // ESC [ A (cursor up) must not be detected as a Kitty sequence
+        assert_eq!(scan_kitty_keyboard(b"\x1b[A"), None);
+    }
+
+    // ── Kitty graphics ────────────────────────────────────────────────────────
+
+    use super::has_kitty_graphics;
+
+    #[test]
+    fn kitty_graphics_apc_detected() {
+        let data = b"\x1b_Ga=T,f=32,s=1,v=1,m=0,x=0,y=0;AAAA\x1b\\";
+        assert!(has_kitty_graphics(data));
+    }
+
+    #[test]
+    fn kitty_graphics_not_present() {
+        assert!(!has_kitty_graphics(b"ls -la\r\n"));
+        assert!(!has_kitty_graphics(b"\x1b[>1u"));
+    }
+
+    // ── DEC 2026 synchronized output ──────────────────────────────────────────
+
+    use super::detect_sync;
+
+    #[test]
+    fn dec2026_begin_and_end_in_same_chunk_returns_true() {
+        let mut in_sync = false;
+        let mut buf = Vec::new();
+        // One chunk contains both begin and end
+        let chunk = b"\x1b[?2026hsome output\x1b[?2026l";
+        assert!(detect_sync(chunk, &mut in_sync, &mut buf));
+        assert!(!in_sync);
+        assert_eq!(buf, chunk);
+    }
+
+    #[test]
+    fn dec2026_begin_chunk_does_not_emit() {
+        let mut in_sync = false;
+        let mut buf = Vec::new();
+        // First chunk: begin only
+        let chunk1 = b"\x1b[?2026hpart1";
+        assert!(!detect_sync(chunk1, &mut in_sync, &mut buf));
+        assert!(in_sync);
+        assert_eq!(&buf[..chunk1.len()], chunk1.as_ref());
+    }
+
+    #[test]
+    fn dec2026_end_chunk_coalesces_and_returns_true() {
+        let mut in_sync = false;
+        let mut buf = Vec::new();
+        let chunk1 = b"\x1b[?2026hpart1";
+        let chunk2 = b"part2\x1b[?2026l";
+        detect_sync(chunk1, &mut in_sync, &mut buf);
+        assert!(detect_sync(chunk2, &mut in_sync, &mut buf));
+        assert!(!in_sync);
+        let expected: Vec<u8> = [chunk1.as_ref(), chunk2.as_ref()].concat();
+        assert_eq!(buf, expected);
+    }
+
+    #[test]
+    fn dec2026_no_markers_plain_passthrough() {
+        let mut in_sync = false;
+        let mut buf = Vec::new();
+        assert!(!detect_sync(b"plain output", &mut in_sync, &mut buf));
+        assert!(!in_sync);
+        assert!(buf.is_empty());
+    }
 }
 
