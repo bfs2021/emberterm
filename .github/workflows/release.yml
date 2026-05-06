@@ -48,7 +48,7 @@ jobs:
 
       - name: Generate icons
         working-directory: packages/desktop
-        run: cargo tauri icon ../../scripts/icon.png
+        run: cargo tauri icon icons/icon.png
         continue-on-error: true
 
       - name: Build Tauri app
