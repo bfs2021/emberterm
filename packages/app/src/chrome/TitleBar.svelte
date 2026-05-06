@@ -1,6 +1,9 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import TabStrip from "./TabStrip.svelte";
+  import { get } from "svelte/store";
+  import { windowOpacity } from "../stores/terminalConfigStore.js";
+  import { setWindowOpacity } from "../ipc/client.js";
 
   interface Props {
     onNewTab: () => void;
@@ -13,7 +16,13 @@
   const win = getCurrentWindow();
 
   async function minimize() { await win.minimize(); }
-  async function toggleMaximize() { await win.toggleMaximize(); }
+
+  async function toggleMaximize() {
+    await win.toggleMaximize();
+    // Windows resets WS_EX_LAYERED when maximizing/restoring — re-apply.
+    setWindowOpacity(get(windowOpacity)).catch(() => {});
+  }
+
   async function close() { await win.close(); }
 </script>
 

@@ -9,7 +9,7 @@
   import { navigateBlocks } from "./utils/blockNav.js";
   import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, quakeToggle, queryAgentVersion, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
-  import { loadTerminalConfig, applyOpacity } from "./stores/terminalConfigStore.js";
+  import { loadTerminalConfig, applyOpacity, setTransientOpacity, windowOpacity } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
@@ -26,7 +26,6 @@
     addBlock, annotateBlock, closeBlock, blocks,
     setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer,
   } from "./stores/app.js";
-  import "./theme/store.js";
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -39,7 +38,7 @@
   let showWelcome = $state(false);
   let termCols = $state(0);
   let termRows = $state(0);
-  let profileCache: Profile[] = [];
+  let profileCache = $state<Profile[]>([]);
   let defaultProfileId = $state("");
 
   function shellBasename(p: string) { return (p.split(/[\\/]/).pop() ?? p).replace(/\.exe$/i, ""); }
@@ -54,6 +53,17 @@
   let pendingHellos = $state(new Map<string, { name: string; version: string }>());
   let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
   let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
+
+  // While any modal overlay is open restore full OS opacity so the panel
+  // remains fully readable regardless of the configured transparency level.
+  // When the last modal closes, put the user's opacity setting back.
+  $effect(() => {
+    if (settingsOpen || paletteOpen) {
+      setTransientOpacity(1);
+    } else {
+      setTransientOpacity(get(windowOpacity));
+    }
+  });
 
   $effect(() => {
     const cwd = $activeCwd;
@@ -133,7 +143,7 @@
         onBlockStart((p) => addBlock(p.session_id, { id: p.id, command: p.command, startedAt: p.started_at, agentId: p.agent_id })),
         onBlockEnd((p) => closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms)),
         onBlockAnnotate((p) => annotateBlock(p.session_id, p.id, { agentId: p.agent_id, tags: p.tags, fold: p.fold })),
-        onProfilesUpdated(() => { profileCache = []; }),
+        onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
         onConfigUpdated(() => {
           configGet().then((cfg: unknown) => {
             const c = cfg as { appearance?: { opacity?: number }; behavior?: { default_profile?: string } };
@@ -270,11 +280,11 @@
       {/each}
     {/if}
   </main>
-  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} />
-  <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
+  <CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
   <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
   {#if showWelcome}
-    <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; profileCache = []; if ($tabs.length === 0) await openNewTab(profileId); }} />
+    <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
   {/if}
 </div>
 

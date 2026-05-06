@@ -10,9 +10,10 @@
     agentVersion?: string;
     termCols?: number;
     termRows?: number;
+    onOpenPalette?: () => void;
   }
 
-  let { shell = "", cwd = "", gitBranch = "", gitDirty = false, gitInsertions = 0, gitDeletions = 0, agentName = "", agentVersion = "", termCols = 0, termRows = 0 }: Props = $props();
+  let { shell = "", cwd = "", gitBranch = "", gitDirty = false, gitInsertions = 0, gitDeletions = 0, agentName = "", agentVersion = "", termCols = 0, termRows = 0, onOpenPalette }: Props = $props();
 
   function shortenCwd(path: string): string {
     if (!path) return "~";
@@ -109,13 +110,13 @@
     <span class="c-dim">UTF-8 · LF</span>
   </span>
 
-  <span class="status-item status-hint clickable">
+  <button class="status-item status-hint clickable" onclick={onOpenPalette} aria-label="Open command palette (Ctrl+Shift+P)">
     <svg class="status-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
       <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>
     <span>Ctrl+Shift+P</span>
-  </span>
+  </button>
 
   {#if clock}
     <span class="status-item status-clock" aria-label="Current time">{clock}</span>
@@ -164,7 +165,14 @@
     border-left: none;
   }
 
-  /* Clickable items */
+  /* Clickable items — reset button element defaults */
+  button.status-item {
+    background: transparent;
+    border: none;
+    font: inherit;
+    color: inherit;
+  }
+
   .clickable {
     cursor: pointer;
     transition: background 0.1s, color 0.1s;

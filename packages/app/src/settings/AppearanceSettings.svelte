@@ -18,7 +18,7 @@
       if (a) {
         windowPadding = a.window_padding ?? 8;
         acrylic = a.acrylic ?? true;
-        opacity = Math.round((a.opacity ?? 0.95) * 100);
+        opacity = Math.max(75, Math.round((a.opacity ?? 0.95) * 100));
         applyOpacity(opacity / 100);
       }
     } catch { /* keep defaults */ }
@@ -134,7 +134,7 @@
       <span class="label">Opacity — {opacity}%</span>
       <input
         type="range"
-        min="50" max="100"
+        min="75" max="100"
         value={opacity}
         oninput={onOpacityInput}
         class="range-input"

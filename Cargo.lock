@@ -1038,6 +1038,7 @@ dependencies = [
  "notify",
  "portable-pty",
  "proptest",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "tauri",
@@ -1052,6 +1053,7 @@ dependencies = [
  "ts-rs",
  "wezterm-term",
  "window-vibrancy",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
