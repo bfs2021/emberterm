@@ -7,7 +7,7 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { navigateBlocks } from "./utils/blockNav.js";
-  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, configGet, profileList, quakeToggle, type Profile } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, quakeToggle, queryAgentVersion, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig, applyOpacity } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
@@ -18,8 +18,9 @@
     onBlockStart, onBlockEnd, onBlockAnnotate,
     type AgentDiffPayload, type AgentApprovalPayload,
   } from "./ipc/events.js";
+  import { get } from "svelte/store";
   import {
-    tabs, activeCwd, activeAgentName, activeShell, activeSessionId,
+    tabs, activeCwd, activeAgentName, activeAgentVersion, activeShell, activeSessionId,
     addTab, removeTab, activateTab, setTabCwd, setTabTitle,
     setTabAgent, clearTabAgent, addToolCall, updateToolCall, toolCalls,
     addBlock, annotateBlock, closeBlock, blocks,
@@ -32,6 +33,9 @@
   let paletteOpen = $state(false);
   let settingsOpen = $state(false);
   let currentGitBranch = $state("");
+  let gitDirty = $state(false);
+  let gitInsertions = $state(0);
+  let gitDeletions = $state(0);
   let showWelcome = $state(false);
   let termCols = $state(0);
   let termRows = $state(0);
@@ -40,14 +44,37 @@
 
   function shellBasename(p: string) { return (p.split(/[\\/]/).pop() ?? p).replace(/\.exe$/i, ""); }
 
+  // Known agents detectable by title change (for agents that don't emit OSC 7777).
+  const AGENT_TITLE_PATTERNS: { pattern: RegExp; name: string; executable: string }[] = [
+    { pattern: /claude[\s-]?code/i, name: "claude-code", executable: "claude" },
+    { pattern: /\baider\b/i, name: "aider", executable: "aider" },
+    { pattern: /\bcodex\b/i, name: "codex", executable: "codex" },
+  ];
+
   let pendingHellos = $state(new Map<string, { name: string; version: string }>());
   let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
   let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
 
   $effect(() => {
     const cwd = $activeCwd;
-    if (cwd) { gitBranchIpc(cwd).then((b) => { currentGitBranch = b ?? ""; }).catch(() => { currentGitBranch = ""; }); }
-    else { currentGitBranch = ""; }
+    if (cwd) {
+      gitStatusIpc(cwd).then((s) => {
+        currentGitBranch = s.branch ?? "";
+        gitDirty = s.dirty;
+        gitInsertions = s.insertions;
+        gitDeletions = s.deletions;
+      }).catch(() => {
+        currentGitBranch = "";
+        gitDirty = false;
+        gitInsertions = 0;
+        gitDeletions = 0;
+      });
+    } else {
+      currentGitBranch = "";
+      gitDirty = false;
+      gitInsertions = 0;
+      gitDeletions = 0;
+    }
   });
 
   $effect(() => {
@@ -68,9 +95,33 @@
       finally { loading = false; }
       if (!active) return;
       const fns = await Promise.all([
-        onTerminalTitle((p) => { const t = p.title; setTabTitle(p.session_id, /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : (t || p.title)); }),
+        onTerminalTitle((p) => {
+          const t = p.title;
+          setTabTitle(p.session_id, /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : (t || p.title));
+          // Title-based agent detection for agents that don't emit OSC 7777.
+          const tab = get(tabs).find((tb) => tb.sessionId === p.session_id);
+          if (!tab?.agentActive) {
+            const clean = t.replace(/^\*\s*/, "").trim();
+            const match = AGENT_TITLE_PATTERNS.find(({ pattern }) => pattern.test(clean));
+            if (match) {
+              const { name, executable } = match;
+              queryAgentVersion(executable)
+                .then((ver) => setTabAgent(p.session_id, name, ver ?? undefined))
+                .catch(() => setTabAgent(p.session_id, name));
+            }
+          } else {
+            // If the tab has a title-detected agent and the title no longer matches, clear it.
+            // Keep agent info when it was set via OSC 7777 (pendingHellos tracks those).
+            if (!pendingHellos.has(p.session_id)) {
+              const clean = t.replace(/^\*\s*/, "").trim();
+              if (!AGENT_TITLE_PATTERNS.some(({ pattern }) => pattern.test(clean))) {
+                clearTabAgent(p.session_id);
+              }
+            }
+          }
+        }),
         onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
-        onAgentHello((p) => { setTabAgent(p.session_id, p.name); pendingHellos = new Map(pendingHellos).set(p.session_id, { name: p.name, version: p.version }); }),
+        onAgentHello((p) => { setTabAgent(p.session_id, p.name, p.version); pendingHellos = new Map(pendingHellos).set(p.session_id, { name: p.name, version: p.version }); }),
         onToolStart((p) => addToolCall(p.session_id, { id: p.id, name: p.name, summary: p.summary, icon: p.icon, status: "running", args: p.args })),
         onToolProgress((p) => updateToolCall(p.session_id, p.id, { progressPct: p.pct, progressMessage: p.message })),
         onToolEnd((p) => updateToolCall(p.session_id, p.id, { status: p.status as "ok" | "error" | "cancelled", progressPct: undefined, durationMs: p.duration_ms, ...(p.summary ? { summary: p.summary } : {}) })),
@@ -219,7 +270,7 @@
       {/each}
     {/if}
   </main>
-  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} agentName={$activeAgentName} {termCols} {termRows} />
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} />
   <CommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
   <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
   {#if showWelcome}

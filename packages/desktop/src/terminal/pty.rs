@@ -62,6 +62,18 @@ pub fn spawn_session(
         cmd.env("PATH", path);
     }
 
+    // Shell integration: emit OSC 7 (cwd) before every prompt for bash/zsh/sh.
+    // This enables the git status display and cwd tracking in the status bar.
+    // The env var is only set when no PROMPT_COMMAND is already present so we
+    // don't clobber a user's existing config.  If the user's .bashrc sets their
+    // own PROMPT_COMMAND they can append the sequence themselves.
+    if is_bash_like(&shell) && std::env::var("PROMPT_COMMAND").is_err() {
+        cmd.env(
+            "PROMPT_COMMAND",
+            r#"printf '\033]7;file://%s\033\\' "$PWD""#,
+        );
+    }
+
     let _child = pty_pair
         .slave
         .spawn_command(cmd)
@@ -172,7 +184,7 @@ pub fn spawn_session(
                                         "terminal:cwd",
                                         TerminalCwdPayload {
                                             session_id: sid.clone(),
-                                            cwd,
+                                            cwd: strip_file_url(&cwd),
                                         },
                                     );
                                 }
@@ -377,6 +389,39 @@ pub(super) fn scan_kitty_keyboard(bytes: &[u8]) -> Option<u32> {
 pub(super) fn has_kitty_graphics(bytes: &[u8]) -> bool {
     // Kitty graphics: ESC _ G  (APC with 'G' introducer)
     bytes.windows(3).any(|w| w == b"\x1b_G")
+}
+
+/// Strip the `file://[hostname]` prefix from an OSC 7 cwd URL, returning the
+/// bare path.  Examples:
+///   `file:///home/user/foo`   →  `/home/user/foo`
+///   `file://localhost/c/foo`  →  `/c/foo`
+///   `file:///d/code`          →  `/d/code`   (MINGW: /d/ == D:/)
+///   `/already/a/path`         →  `/already/a/path`
+fn strip_file_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("file://") {
+        if rest.starts_with('/') {
+            // No hostname component: file:///path
+            rest.to_string()
+        } else {
+            // Has hostname: file://hostname/path → strip up to first '/'
+            rest.find('/').map_or_else(|| rest.to_string(), |i| rest[i..].to_string())
+        }
+    } else {
+        url.to_string()
+    }
+}
+
+/// Returns true for bash, zsh, sh, or any variant ending in those names
+/// (e.g. "git bash", "bash.exe").  Used to decide whether to inject OSC 7
+/// emission via PROMPT_COMMAND.
+fn is_bash_like(shell: &str) -> bool {
+    let name = shell
+        .split(['/', '\\'])
+        .next_back()
+        .unwrap_or(shell)
+        .to_lowercase();
+    let stem = name.trim_end_matches(".exe");
+    matches!(stem, "bash" | "zsh" | "sh" | "ash" | "dash")
 }
 
 fn default_shell() -> String {

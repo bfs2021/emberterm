@@ -12,6 +12,7 @@ export interface Tab {
   isRunning: boolean;
   agentActive: boolean;
   agentName?: string;
+  agentVersion?: string;
   // Split-pane state — present only when the tab is split.
   splitSessionId?: string;
   splitDirection?: "horizontal" | "vertical";
@@ -72,6 +73,11 @@ export const activeCwd = derived(
 export const activeAgentName = derived(
   activeTab,
   ($tab) => $tab?.agentName ?? "",
+);
+
+export const activeAgentVersion = derived(
+  activeTab,
+  ($tab) => $tab?.agentVersion ?? "",
 );
 
 export const activeShell = derived(
@@ -135,11 +141,11 @@ export function renameTab(tabId: string, newTitle: string) {
   tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)));
 }
 
-export function setTabAgent(sessionId: string, agentName: string) {
+export function setTabAgent(sessionId: string, agentName: string, agentVersion?: string) {
   tabs.update((ts) =>
     ts.map((t) =>
       t.sessionId === sessionId
-        ? { ...t, agentActive: true, agentName }
+        ? { ...t, agentActive: true, agentName, agentVersion }
         : t,
     ),
   );
@@ -149,7 +155,7 @@ export function clearTabAgent(sessionId: string) {
   tabs.update((ts) =>
     ts.map((t) =>
       t.sessionId === sessionId
-        ? { ...t, agentActive: false, agentName: undefined }
+        ? { ...t, agentActive: false, agentName: undefined, agentVersion: undefined }
         : t,
     ),
   );

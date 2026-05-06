@@ -121,9 +121,21 @@ export async function quakeToggle(): Promise<void> {
 
 // ── Utility commands ──────────────────────────────────────────────────────────
 
-/** Returns the current git branch for the given directory, or null. */
-export async function gitBranch(cwd: string): Promise<string | null> {
-  return invoke<string | null>("git_branch", { cwd });
+export interface GitStatus {
+  branch: string | null;
+  dirty: boolean;
+  insertions: number;
+  deletions: number;
+}
+
+/** Returns git status (branch, dirty flag, line diff counts) for the given directory. */
+export async function gitStatus(cwd: string): Promise<GitStatus> {
+  return invoke<GitStatus>("git_status", { cwd });
+}
+
+/** Runs `executable --version` and returns a semver string like "v2.1.128", or null. */
+export async function queryAgentVersion(executable: string): Promise<string | null> {
+  return invoke<string | null>("query_agent_version", { executable });
 }
 
 /** Returns true when no config.toml exists yet (first run). */

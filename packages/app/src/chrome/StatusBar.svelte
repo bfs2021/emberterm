@@ -3,17 +3,28 @@
     shell?: string;
     cwd?: string;
     gitBranch?: string;
+    gitDirty?: boolean;
+    gitInsertions?: number;
+    gitDeletions?: number;
     agentName?: string;
+    agentVersion?: string;
     termCols?: number;
     termRows?: number;
   }
 
-  let { shell = "", cwd = "", gitBranch = "", agentName = "", termCols = 0, termRows = 0 }: Props = $props();
+  let { shell = "", cwd = "", gitBranch = "", gitDirty = false, gitInsertions = 0, gitDeletions = 0, agentName = "", agentVersion = "", termCols = 0, termRows = 0 }: Props = $props();
 
   function shortenCwd(path: string): string {
     if (!path) return "~";
-    const home = path.match(/^[A-Za-z]:\\Users\\[^\\]+/) ?? path.match(/^\/Users\/[^/]+/) ?? path.match(/^\/home\/[^/]+/);
-    if (home) return "~" + path.slice(home[0].length);
+    // Windows: C:\Users\name  or  C:/Users/name
+    const winHome = path.match(/^[A-Za-z][:/\\][Uu]sers[/\\][^/\\]+/);
+    if (winHome) return "~" + path.slice(winHome[0].length).replace(/\\/g, "/");
+    // macOS / Linux: /Users/name  or  /home/name
+    const unixHome = path.match(/^\/(?:Users|home)\/[^/]+/);
+    if (unixHome) return "~" + path.slice(unixHome[0].length);
+    // MINGW: /c/Users/name
+    const mingwHome = path.match(/^\/[a-z]\/[Uu]sers\/[^/]+/);
+    if (mingwHome) return "~" + path.slice(mingwHome[0].length);
     return path;
   }
 
@@ -70,14 +81,20 @@
         <circle cx="18" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
         <path d="M6 9v6M18 9c-3 0-6-1-6-3M18 15c-3 0-6 1-6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
-      {gitBranch}
+      <span class="git-branch">{gitBranch}{gitDirty ? " *" : ""}</span>
+      {#if gitInsertions > 0 || gitDeletions > 0}
+        <span class="git-diff">
+          {#if gitInsertions > 0}<span class="git-ins">+{gitInsertions}</span>{/if}
+          {#if gitDeletions > 0}<span class="git-del">−{gitDeletions}</span>{/if}
+        </span>
+      {/if}
     </span>
   {/if}
 
   {#if hasAgent}
     <span class="status-item status-agent" class:first-item={!hasShell && !hasCwd && !hasGit}>
       <span class="agent-dot" aria-hidden="true"></span>
-      {agentName}
+      {agentName}{#if agentVersion}&nbsp;<span class="agent-version">{agentVersion}</span>{/if}
     </span>
   {/if}
 
@@ -166,6 +183,11 @@
     color: var(--accent, #FF6B35);
   }
 
+  .agent-version {
+    opacity: 0.55;
+    font-size: 10.5px;
+  }
+
   .agent-dot {
     width: 6px;
     height: 6px;
@@ -184,4 +206,10 @@
   .status-clock {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Git branch / diff */
+  .git-branch { font-variant-numeric: tabular-nums; }
+  .git-diff { display: flex; align-items: center; gap: 5px; font-size: 10.5px; }
+  .git-ins { color: var(--green, #3fb950); }
+  .git-del { color: var(--red,   #f85149); }
 </style>

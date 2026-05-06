@@ -229,30 +229,121 @@ pub async fn quake_toggle(app: AppHandle) {
     crate::quake::toggle(&app);
 }
 
-/// Shell out to git to get the current branch name for the given directory.
-/// Returns `None` if not a git repository or git is not installed.
+/// Richer git status for the status bar: branch, dirty flag, and line diff counts.
+#[derive(serde::Serialize, Clone)]
+pub struct GitStatus {
+    pub branch: Option<String>,
+    pub dirty: bool,
+    pub insertions: u32,
+    pub deletions: u32,
+}
+
 #[tauri::command]
-pub async fn git_branch(cwd: String) -> Result<Option<String>, String> {
-    tokio::task::spawn_blocking(move || -> Option<String> {
-        let output = std::process::Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        // Normalise MINGW/Cygwin paths (/d/foo → D:/foo) so Windows git can
+        // resolve the directory regardless of which shell reported the cwd.
+        let cwd = normalise_cwd(&cwd);
+
+        // Branch name
+        let branch = git_run(&cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
+            .filter(|b| !b.is_empty() && b != "HEAD");
+
+        if branch.is_none() {
+            return GitStatus { branch: None, dirty: false, insertions: 0, deletions: 0 };
+        }
+
+        // Any uncommitted changes (staged or unstaged)?
+        let dirty = std::process::Command::new("git")
+            .args(["status", "--porcelain"])
             .current_dir(&cwd)
             .output()
-            .ok()?;
+            .map(|o| o.status.success() && !o.stdout.is_empty())
+            .unwrap_or(false);
 
-        if output.status.success() {
-            let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if branch.is_empty() || branch == "HEAD" {
-                None
-            } else {
-                Some(branch)
-            }
-        } else {
-            None
-        }
+        // Line counts vs HEAD (staged + unstaged)
+        let (insertions, deletions) = git_run(&cwd, &["diff", "HEAD", "--shortstat"])
+            .map(|s| parse_shortstat(&s))
+            .unwrap_or((0, 0));
+
+        GitStatus { branch, dirty, insertions, deletions }
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+/// Convert MINGW/Cygwin-style Unix paths to Windows paths so Rust's
+/// `Command::current_dir` and git can resolve them.
+/// `/d/foo/bar` → `D:/foo/bar`   (any single-letter drive prefix)
+/// All other paths are returned unchanged.
+fn normalise_cwd(cwd: &str) -> String {
+    // Detect /X/... where X is a single ASCII letter (MINGW drive letter)
+    if let Some(rest) = cwd.strip_prefix('/') {
+        let mut chars = rest.chars();
+        if let Some(drive) = chars.next() {
+            if drive.is_ascii_alphabetic() {
+                let after = chars.as_str();
+                if after.is_empty() || after.starts_with('/') {
+                    return format!("{}:{}", drive.to_ascii_uppercase(), after);
+                }
+            }
+        }
+    }
+    cwd.to_string()
+}
+
+fn git_run(cwd: &str, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if out.status.success() {
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Parse `git diff --shortstat` output: " 3 files changed, 12 insertions(+), 7 deletions(-)"
+fn parse_shortstat(s: &str) -> (u32, u32) {
+    fn extract(s: &str, marker: &str) -> u32 {
+        s.find(marker)
+            .and_then(|pos| s[..pos].trim_end().rsplit_once(' ').map(|(_, n)| n))
+            .and_then(|n| n.trim_end_matches(',').parse().ok())
+            .unwrap_or(0)
+    }
+    (extract(s, "insertion"), extract(s, "deletion"))
+}
+
+/// Run `<executable> --version` and extract a semver string like `v2.1.128`.
+/// Returns `None` if the executable is not found or produces no version token.
+/// Used by the frontend to fill in the agent version when OSC 7777 hello is absent.
+#[tauri::command]
+pub async fn query_agent_version(executable: String) -> Option<String> {
+    tokio::task::spawn_blocking(move || {
+        let out = std::process::Command::new(&executable)
+            .arg("--version")
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(if out.stdout.is_empty() { &out.stderr } else { &out.stdout });
+        extract_semver(&text)
+    })
+    .await
+    .ok()?
+}
+
+/// Pull the first `X.Y.Z` or `vX.Y.Z` token out of version command output.
+fn extract_semver(s: &str) -> Option<String> {
+    for word in s.split_whitespace() {
+        let stripped = word.trim_matches(|c: char| !c.is_ascii_digit() && c != 'v');
+        let digits = stripped.strip_prefix('v').unwrap_or(stripped);
+        let parts: Vec<&str> = digits.split('.').collect();
+        if parts.len() >= 2 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+            return Some(format!("v{}", digits));
+        }
+    }
+    None
 }
 
 /// Returns true when no `config.toml` exists yet — used to show the welcome screen.
