@@ -3,7 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "description": "TypeScript SDK for emitting OSC 7777 sequences from AI agent processes",
-  "keywords": ["osc-7777", "emberterm", "terminal", "agent", "ai"],
+  "keywords": [
+    "osc-7777",
+    "emberterm",
+    "terminal",
+    "agent",
+    "ai"
+  ],
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,6 +24,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "typescript": "^5",
     "vitest": "^2"
   }
