@@ -10,7 +10,7 @@
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { drainOutputBuffer } from "../stores/app.js";
-  import { terminalConfig } from "../stores/terminalConfigStore.js";
+  import { terminalConfig, windowOpacity } from "../stores/terminalConfigStore.js";
   import { shouldInterceptKey, encodeKittyKey, FLAG_REPORT_EVENTS } from "../utils/kittyKeyboard.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
@@ -23,6 +23,17 @@
   }
 
   let { sessionId, active, onExit, onResize }: Props = $props();
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  /** Convert a hex colour to rgba(), preserving the alpha for transparency. */
+  function hexToRgba(hex: string, alpha: number): string {
+    if (!hex || !hex.startsWith("#") || alpha >= 1) return hex || "transparent";
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
 
   // ── Terminal instance ────────────────────────────────────────────────────
 
@@ -59,15 +70,21 @@
 
       const cfg = get(fontConfig);
       const tc = get(terminalConfig);
+      const baseTheme = get(activeTheme).xterm;
+      const op = get(windowOpacity);
       const t = new Terminal({
         allowProposedApi: true,
+        allowTransparency: true,
         fontFamily: cfg.fontFamily,
         fontSize: cfg.fontSize,
         lineHeight: cfg.lineHeight,
         cursorBlink: tc.cursorBlink,
         cursorStyle: tc.cursorStyle as "block" | "bar" | "underline",
         scrollback: tc.scrollbackLines,
-        theme: get(activeTheme).xterm,
+        theme: {
+          ...baseTheme,
+          background: hexToRgba(baseTheme.background ?? "#0d1117", op),
+        },
       });
 
       const fitAddon = new FitAddon();
@@ -171,10 +188,15 @@
     };
   });
 
-  // Update xterm theme when the active theme changes.
+  // Update xterm theme when the active theme or window opacity changes.
   $effect(() => {
+    const base = $activeTheme.xterm;
+    const op = $windowOpacity;
     if (term) {
-      term.options.theme = $activeTheme.xterm;
+      term.options.theme = {
+        ...base,
+        background: hexToRgba(base.background ?? "#0d1117", op),
+      };
     }
   });
 

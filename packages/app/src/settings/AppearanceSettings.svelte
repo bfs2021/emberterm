@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
   import { configUpdate, configGet } from "../ipc/client.js";
+  import { applyOpacity } from "../stores/terminalConfigStore.js";
   import { onMount } from "svelte";
 
   // Window appearance config — separate from fontStore
@@ -18,6 +19,7 @@
         windowPadding = a.window_padding ?? 8;
         acrylic = a.acrylic ?? true;
         opacity = Math.round((a.opacity ?? 0.95) * 100);
+        applyOpacity(opacity / 100);
       }
     } catch { /* keep defaults */ }
   });
@@ -53,6 +55,7 @@
 
   function onOpacityInput(e: Event) {
     opacity = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+    applyOpacity(opacity / 100);
     saveWindow().catch(() => {});
   }
 

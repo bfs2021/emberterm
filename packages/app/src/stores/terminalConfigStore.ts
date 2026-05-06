@@ -1,6 +1,21 @@
 import { writable, get } from "svelte/store";
 import { configGet, configUpdate } from "../ipc/client.js";
 
+// ── Window opacity ───────────────────────────────────────────────────────────
+
+/** 0–1 float; drives xterm.js rgba background + CSS variable for chrome. */
+export const windowOpacity = writable(1);
+
+/**
+ * Apply a new opacity value:
+ *   - updates the reactive store (Grid.svelte reacts to it live)
+ *   - sets --window-opacity on :root for any CSS that needs it
+ */
+export function applyOpacity(v: number): void {
+  windowOpacity.set(v);
+  document.documentElement.style.setProperty("--window-opacity", String(v));
+}
+
 export interface TerminalConfig {
   /** "block" | "bar" | "underline" */
   cursorStyle: string;

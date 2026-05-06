@@ -7,9 +7,9 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { navigateBlocks } from "./utils/blockNav.js";
-  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, quakeToggle, type Profile } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, configGet, profileList, quakeToggle, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
-  import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
+  import { loadTerminalConfig, applyOpacity } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
@@ -57,6 +57,11 @@
       try {
         showWelcome = await configIsFirstRun();
         await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
+        // Apply persisted window opacity so it takes effect before settings panel is opened
+        configGet().then((cfg: unknown) => {
+          const o = (cfg as { appearance?: { opacity?: number } })?.appearance?.opacity;
+          if (typeof o === "number") applyOpacity(o);
+        }).catch(() => {});
       } catch (e) { error = String(e); }
       finally { loading = false; }
       if (!active) return;
@@ -215,7 +220,7 @@
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background: var(--bg, #0d1117);
+    background: transparent;
     color: var(--fg, #e6edf3);
     font-family: system-ui, sans-serif;
     overflow: hidden;
