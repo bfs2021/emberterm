@@ -124,7 +124,11 @@
     flex-direction: column;
   }
 
-  .tab-pane.hidden { display: none; }
+  /* visibility:hidden keeps the element in layout (correct dimensions, no WebGL
+     context loss) while hiding it from the user. display:none was causing
+     xterm.js's internal ResizeObserver to measure 0-width cells and corrupt
+     the TUI layout of running applications (e.g. Claude Code). */
+  .tab-pane.hidden { visibility: hidden; pointer-events: none; }
 
   /* Shared overlay base — all agent UI floats above the terminal */
   .agent-overlay {

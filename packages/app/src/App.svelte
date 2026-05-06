@@ -289,7 +289,9 @@
     font-family: system-ui, sans-serif;
     overflow: hidden;
   }
-  .terminal-area { flex: 1; min-height: 0; position: relative; }
+  /* isolation:isolate creates a stacking context so tab-pane children
+     cannot visually or event-wise escape above the title bar / status bar. */
+  .terminal-area { flex: 1; min-height: 0; position: relative; isolation: isolate; }
   .splash { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--fg-muted, #7d8590); font-size: 14px; }
   .splash.error { color: var(--red, #f85149); }
 </style>

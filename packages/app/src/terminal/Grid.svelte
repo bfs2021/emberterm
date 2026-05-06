@@ -223,9 +223,11 @@
   });
 
   // Focus the terminal when this tab becomes active.
+  // Also call fit() in case the window was resized while this tab was hidden.
   $effect(() => {
     if (active && term) {
       term.focus();
+      fa?.fit();
     }
   });
 </script>

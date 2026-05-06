@@ -82,6 +82,7 @@
 <style>
   .title-bar {
     position: relative;
+    z-index: 100;
     display: flex;
     align-items: stretch;
     height: 36px;
