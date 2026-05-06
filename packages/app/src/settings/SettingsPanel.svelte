@@ -1,7 +1,7 @@
 <script lang="ts">
   import ThemeEditor from "./ThemeEditor.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
-  import { Btn } from "@emberterm/ui";
+  import { Btn, Kbd } from "@emberterm/ui";
   import { profileList, type Profile } from "../ipc/client.js";
 
   interface Props {
@@ -145,8 +145,8 @@
                 {#each KEYMAP as row}
                   <tr>
                     <td>{row.action}</td>
-                    <td><kbd>{row.win}</kbd></td>
-                    <td><kbd>{row.mac}</kbd></td>
+                    <td><Kbd>{row.win}</Kbd></td>
+                    <td><Kbd>{row.mac}</Kbd></td>
                   </tr>
                 {/each}
               </tbody>
@@ -323,15 +323,6 @@
     padding: 7px 0;
     color: var(--fg, #e6edf3);
     border-bottom: 1px solid color-mix(in srgb, var(--border, #21262d) 50%, transparent);
-  }
-
-  kbd {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid var(--border, #21262d);
-    border-radius: 3px;
-    font-family: monospace;
-    font-size: 11px;
-    padding: 2px 6px;
   }
 
   /* Agent */

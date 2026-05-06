@@ -1,6 +1,6 @@
 <script lang="ts">
   import Grid from "./Grid.svelte";
-  import SplitContainer from "./SplitContainer.svelte";
+  import { SplitContainer } from "@emberterm/ui";
   import ToolCard from "../agent/ToolCard.svelte";
   import BlockList from "../agent/BlockList.svelte";
   import DiffView from "../agent/DiffView.svelte";

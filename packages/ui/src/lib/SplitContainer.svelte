@@ -129,7 +129,6 @@
     background: var(--accent, #FF6B35);
   }
 
-  /* Close button for the secondary pane */
   .pane-secondary {
     position: relative;
   }

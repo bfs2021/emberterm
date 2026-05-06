@@ -102,7 +102,12 @@ packages/app/src/
 
 packages/ui/src/
   lib/
-    Btn.svelte           ← shared button component
+    Btn.svelte           ← button (primary / danger / ghost, sm / md)
+    Badge.svelte         ← status/label pill (ok, error, warning, agent, neutral)
+    Kbd.svelte           ← keyboard shortcut hint element
+    ProgressBar.svelte   ← thin accent progress bar
+    SplitContainer.svelte← resizable horizontal/vertical split pane
+    StatusDot.svelte     ← animated status indicator dot
   index.ts               ← barrel export for @emberterm/ui
 
 packages/sdk/src/

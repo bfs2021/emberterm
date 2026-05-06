@@ -7,6 +7,7 @@
     disabled?: boolean;
     type?: "button" | "submit" | "reset";
     onclick?: (e: MouseEvent) => void;
+    onfocus?: (e: FocusEvent) => void;
     children: Snippet;
   }
 
@@ -16,6 +17,7 @@
     disabled = false,
     type = "button",
     onclick,
+    onfocus,
     children,
   }: Props = $props();
 </script>
@@ -25,6 +27,7 @@
   {disabled}
   class="btn btn-{variant} btn-{size}"
   onclick={onclick}
+  onfocus={onfocus}
 >
   {@render children()}
 </button>

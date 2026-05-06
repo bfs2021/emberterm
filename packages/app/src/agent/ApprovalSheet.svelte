@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { formatAction, btnClass, resolveKey } from "./approval-utils.js";
+  import { Badge, Kbd, Btn } from "@emberterm/ui";
+  import type { BadgeVariant } from "@emberterm/ui";
+  import { formatAction, resolveKey } from "./approval-utils.js";
 
   type Risk = "safe" | "caution" | "destructive";
 
@@ -21,13 +23,25 @@
     destructive: "Destructive",
   };
 
+  const RISK_VARIANT: Record<Risk, BadgeVariant> = {
+    safe: "ok",
+    caution: "warning",
+    destructive: "error",
+  };
+
+  function btnVariant(action: string, idx: number): "primary" | "danger" | "ghost" {
+    if (idx === 0) return "primary";
+    if (action === "deny" || action === "cancel") return "danger";
+    return "ghost";
+  }
+
   let focusIdx = $state(0);
   let sheetEl = $state<HTMLDivElement | undefined>(undefined);
 
   $effect(() => {
     if (sheetEl) {
       tick().then(() => {
-        const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-action");
+        const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-footer button");
         btns?.[0]?.focus();
       });
     }
@@ -43,7 +57,7 @@
       e.preventDefault();
       const delta = key === "ArrowRight" ? 1 : -1;
       focusIdx = Math.max(0, Math.min(actions.length - 1, focusIdx + delta));
-      const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-action");
+      const btns = sheetEl?.querySelectorAll<HTMLButtonElement>(".approval-footer button");
       btns?.[focusIdx]?.focus();
       return;
     }
@@ -74,7 +88,7 @@
   >
     <!-- Header: risk badge + title -->
     <div class="approval-header">
-      <span class="risk-badge" data-risk={risk}>{RISK_LABEL[risk]}</span>
+      <Badge variant={RISK_VARIANT[risk]} label>{RISK_LABEL[risk]}</Badge>
       <span class="approval-title">{title}</span>
     </div>
 
@@ -87,19 +101,19 @@
     <!-- Footer: hint + actions -->
     <div class="approval-footer">
       <span class="approval-hint">
-        <span class="kbd">Y</span> allow once
-        · <span class="kbd">A</span> always
-        · <span class="kbd">N</span> deny
+        <Kbd>Y</Kbd> allow once
+        · <Kbd>A</Kbd> always
+        · <Kbd>N</Kbd> deny
       </span>
       <span class="footer-spacer"></span>
       {#each actions as action, i}
-        <button
-          class="approval-action {btnClass(action, i)}"
+        <Btn
+          variant={btnVariant(action, i)}
           onclick={() => act(action)}
           onfocus={() => { focusIdx = i; }}
         >
           {formatAction(action)}
-        </button>
+        </Btn>
       {/each}
     </div>
   </div>
@@ -143,34 +157,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .risk-badge {
-    font-size: 10.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 3px 8px;
-    border-radius: 4px;
-    flex-shrink: 0;
-  }
-
-  .risk-badge[data-risk="safe"] {
-    background: rgba(126, 231, 135, 0.12);
-    color: var(--green, #7ee787);
-    border: 1px solid rgba(126, 231, 135, 0.3);
-  }
-
-  .risk-badge[data-risk="caution"] {
-    background: rgba(210, 153, 34, 0.12);
-    color: var(--yellow, #d29922);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-  }
-
-  .risk-badge[data-risk="destructive"] {
-    background: rgba(255, 123, 114, 0.12);
-    color: var(--red, #ff7b72);
-    border: 1px solid rgba(255, 123, 114, 0.3);
   }
 
   .approval-title {
@@ -226,73 +212,5 @@
 
   .footer-spacer { flex: 1; min-width: 4px; }
 
-  /* ── kbd spans ────────────────────────────────── */
-  .kbd {
-    display: inline-block;
-    padding: 1px 5px;
-    background: var(--bg-elev-2, #161b22);
-    border: 1px solid var(--border, #21262d);
-    border-radius: 4px;
-    font-family: var(--mono, monospace);
-    font-size: 10.5px;
-    color: var(--fg-muted, #7d8590);
-  }
 
-  /* ── Buttons ──────────────────────────────────── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border, #21262d);
-    background: var(--bg-elev-2, #161b22);
-    color: var(--fg, #e6edf3);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 120ms, border-color 120ms, color 120ms;
-    white-space: nowrap;
-  }
-
-  .btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: var(--fg-dim, #484f58);
-  }
-
-  .btn:focus {
-    outline: 2px solid var(--accent, #FF6B35);
-    outline-offset: 1px;
-  }
-
-  .btn.btn-primary {
-    background: var(--accent, #FF6B35);
-    border-color: var(--accent, #FF6B35);
-    color: #1a0a04;
-    font-weight: 600;
-  }
-
-  .btn.btn-primary:hover {
-    background: color-mix(in srgb, var(--accent, #FF6B35) 85%, #fff);
-    border-color: color-mix(in srgb, var(--accent, #FF6B35) 85%, #fff);
-  }
-
-  .btn.btn-danger {
-    background: transparent;
-    color: var(--red, #ff7b72);
-    border-color: rgba(255, 123, 114, 0.3);
-  }
-
-  .btn.btn-danger:hover {
-    background: rgba(255, 123, 114, 0.08);
-    border-color: rgba(255, 123, 114, 0.5);
-  }
-
-  .btn.btn-ghost {
-    background: transparent;
-  }
-
-  .btn.btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.06);
-  }
 </style>

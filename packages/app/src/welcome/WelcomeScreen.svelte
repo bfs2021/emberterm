@@ -1,5 +1,6 @@
 <script lang="ts">
   import { configUpdate } from "../ipc/client.js";
+  import { Kbd } from "@emberterm/ui";
 
   interface Props {
     onComplete: () => void;
@@ -120,7 +121,7 @@
       {saving ? "Setting up…" : "Get Started"}
     </button>
 
-    <p class="hint">Press <kbd>Ctrl+Shift+P</kbd> to open the command palette at any time.</p>
+    <p class="hint">Press <Kbd>Ctrl+Shift+P</Kbd> to open the command palette at any time.</p>
   </div>
 </div>
 
@@ -410,11 +411,4 @@
     text-align: center;
   }
 
-  kbd {
-    background: var(--bg, #0d1117);
-    border: 1px solid var(--border, #21262d);
-    border-radius: 3px;
-    font-size: 10px;
-    padding: 1px 4px;
-  }
 </style>

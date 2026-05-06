@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
+  import { Badge } from "@emberterm/ui";
   import type { Block } from "../stores/app.js";
 
   interface Props {
@@ -101,13 +102,11 @@
     <span class="block-cmd">{block.command || "(no command)"}</span>
 
     {#if block.agentId}
-      <span class="block-badge agent-badge">{block.agentId}</span>
+      <Badge variant="agent">{block.agentId}</Badge>
     {/if}
 
     {#if block.exitCode != null}
-      <span class="block-badge exit-badge" class:ok={exitOk} class:err={!exitOk}>
-        {block.exitCode}
-      </span>
+      <Badge variant={exitOk ? "ok" : "error"} mono>{block.exitCode}</Badge>
     {/if}
 
     {#if durationLabel}
@@ -201,34 +200,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .block-badge {
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .agent-badge {
-    background: color-mix(in srgb, var(--accent, #FF6B35) 15%, transparent);
-    color: var(--accent, #FF6B35);
-    border: 1px solid color-mix(in srgb, var(--accent, #FF6B35) 30%, transparent);
-  }
-
-  .exit-badge { font-family: monospace; }
-
-  .exit-badge.ok {
-    background: color-mix(in srgb, var(--green, #3fb950) 12%, transparent);
-    color: var(--green, #3fb950);
-    border: 1px solid color-mix(in srgb, var(--green, #3fb950) 28%, transparent);
-  }
-
-  .exit-badge.err {
-    background: color-mix(in srgb, var(--red, #f85149) 12%, transparent);
-    color: var(--red, #f85149);
-    border: 1px solid color-mix(in srgb, var(--red, #f85149) 28%, transparent);
   }
 
   .block-dur {

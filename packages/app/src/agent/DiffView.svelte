@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Kbd } from "@emberterm/ui";
   import { parseDiff, diffStats, toSideBySide } from "./diff-utils.js";
 
   interface Props {
@@ -112,9 +113,9 @@
           class:primary={action === "accept"}
           onclick={() => act(action)}
         >
-          {#if action === "accept"}Accept <kbd>Y</kbd>
-          {:else if action === "reject"}Reject <kbd>N</kbd>
-          {:else if action === "edit"}Edit <kbd>E</kbd>
+          {#if action === "accept"}Accept <Kbd>Y</Kbd>
+          {:else if action === "reject"}Reject <Kbd>N</Kbd>
+          {:else if action === "edit"}Edit <Kbd>E</Kbd>
           {:else}{action}
           {/if}
         </button>
@@ -253,16 +254,6 @@
 
   .diff-action.primary:hover {
     background: color-mix(in srgb, var(--green, #3fb950) 25%, transparent);
-  }
-
-  kbd {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid var(--border, #30363d);
-    border-radius: 2px;
-    font-size: 9px;
-    padding: 0 3px;
-    font-family: monospace;
-    opacity: 0.7;
   }
 
   .resolved .diff-header { opacity: 0.6; }

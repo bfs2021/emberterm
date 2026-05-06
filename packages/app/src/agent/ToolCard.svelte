@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { StatusDot, ProgressBar } from "@emberterm/ui";
   import { stripAnsi } from "../utils/stripAnsi.js";
 
   export type ToolStatus = "pending" | "running" | "ok" | "error" | "cancelled";
@@ -64,8 +65,7 @@
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}
   >
-    <!-- Status dot -->
-    <span class="status-dot" aria-hidden="true"></span>
+    <StatusDot {status} />
 
     <!-- Tool icon -->
     <svg class="tool-icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -102,11 +102,8 @@
     <span class="tool-chevron" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
   </button>
 
-  <!-- Progress bar (running with known progress) -->
   {#if status === "running" && progressPct !== undefined}
-    <div class="tool-progress-bar" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
-      <div class="tool-progress-fill" style="width: {progressPct}%"></div>
-    </div>
+    <ProgressBar pct={progressPct} />
   {/if}
 
   <!-- Expanded body -->
@@ -167,29 +164,6 @@
     background: var(--accent-soft, rgba(255, 255, 255, 0.03));
   }
 
-  /* Status dot */
-  .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--fg-muted, #7d8590);
-  }
-
-  [data-status="running"] .status-dot {
-    background: var(--accent, #FF6B35);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  [data-status="ok"] .status-dot { background: var(--green, #3fb950); }
-  [data-status="error"] .status-dot { background: var(--danger, #f85149); }
-  [data-status="cancelled"] .status-dot { background: var(--fg-muted, #7d8590); opacity: 0.5; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(0.85); }
-  }
-
   .tool-icon {
     width: 12px;
     height: 12px;
@@ -239,17 +213,6 @@
   }
 
   .tool-chevron { color: var(--fg-muted, #7d8590); font-size: 9px; flex-shrink: 0; }
-
-  .tool-progress-bar {
-    height: 3px;
-    background: var(--border, #30363d);
-  }
-
-  .tool-progress-fill {
-    height: 100%;
-    background: var(--accent, #FF6B35);
-    transition: width 0.3s ease;
-  }
 
   .tool-body {
     padding: 6px 10px 8px;
