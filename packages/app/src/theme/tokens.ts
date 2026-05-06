@@ -1,4 +1,4 @@
-/** Design token CSS variable names — canonical names matching references/design.html. */
+/** Design token CSS variable names */
 export const TOKENS = {
   bg: "--bg",
   bgElev: "--bg-elev",
