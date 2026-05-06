@@ -768,11 +768,37 @@ agent receives the event and can stop the operation cleanly.
 - Fuzzy search via `fzf`-style algorithm
 
 #### Settings Panel
-- Two-pane: categories left, controls right
-- Categories: Appearance, Profiles, Keymap, Agent, Advanced
-- Search box at top filters across all categories
-- Live preview for visual settings (theme, font, opacity)
-- Footer: [Open config file] for advanced users
+
+Modelled after Tabby terminal: icon + label left nav, 820×580px overlay, six well-scoped categories.
+
+**Panel layout:**
+- Left nav: 200px, icon (12px SVG) + label per category
+- Right content pane: flex-1, scrollable
+- Search box at top of nav filters across all categories
+
+**Categories:**
+
+| # | Category | Content |
+|---|---|---|
+| 1 | **Appearance** | Font family/size/line-height; window padding; Acrylic/Mica toggle (Windows 11); opacity slider |
+| 2 | **Profiles** | Default-profile dropdown; profile list (user-created / built-in sections); `ProfileEditor` for create/edit |
+| 3 | **Terminal** | Cursor shape (block/bar/underline segmented button); cursor blink toggle; scrollback lines; bold-in-bright toggle; confirm-close toggle |
+| 4 | **Color Scheme** | Theme browser with live preview swatches; searchable built-in list; VS Code JSON import |
+| 5 | **Keymap** | Searchable table of all shortcuts and bindings (read-only display in v0.2; configurable in v1.0) |
+| 6 | **Agent** | Enable OSC 7777 toggle; auto-accept safe tool calls toggle; spec version info |
+
+**New Rust config fields** (added to `AppearanceConfig`):
+- `cursor_style: String` — `"block"` | `"bar"` | `"underline"` (default `"block"`)
+- `cursor_blink: bool` (default `true`)
+- `bold_in_bright: bool` (default `true`)
+
+**New Svelte components:**
+- `AppearanceSettings.svelte` — font + window controls (replaces the font section previously in ThemeEditor)
+- `TerminalSettings.svelte` — cursor + scrollback + behavior toggles
+- `AgentSettings.svelte` — agent config toggles
+- `ThemeEditor.svelte` — trimmed to color scheme selection + import only
+
+**Data flow:** All changes go through the existing `configUpdate` JSON merge patch IPC command. A new `terminalConfigStore.ts` bridges `appearance.cursor_*` and `behavior.scrollback_lines` to live xterm.js option updates in `Grid.svelte`.
 
 ### 6.5 Theme System
 

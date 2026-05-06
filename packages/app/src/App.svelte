@@ -9,6 +9,8 @@
   import { navigateBlocks } from "./utils/blockNav.js";
   import { sessionCreate, sessionClose, agentRespond, gitBranch as gitBranchIpc, configIsFirstRun, profileList, quakeToggle, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
+  import { loadTerminalConfig, terminalConfig } from "./stores/terminalConfigStore.js";
+  import { loadAgentConfig } from "./stores/app.js";
   import {
     onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
     onAgentHello, onToolStart, onToolProgress, onToolEnd, onClipboardWrite,
@@ -54,7 +56,7 @@
       cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([openNewTab(), loadFontConfig()]);
+        await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
       } catch (e) { error = String(e); }
       finally { loading = false; }
       if (!active) return;
@@ -132,6 +134,9 @@
   }
 
   async function closeTab(tabId: string, sessionId: string) {
+    if ($terminalConfig.confirmCloseRunning) {
+      if (!window.confirm("Close this tab? Any running process will be terminated.")) return;
+    }
     const tab = $tabs.find((t) => t.id === tabId);
     if (tab?.splitSessionId) await sessionClose(tab.splitSessionId).catch(() => {});
     await sessionClose(sessionId).catch(() => {});
@@ -170,7 +175,7 @@
 <svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="app">
-  <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} />
+  <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} onOpenSettings={() => (settingsOpen = true)} />
   <main class="terminal-area">
     {#if loading}
       <div class="splash">Starting shell…</div>

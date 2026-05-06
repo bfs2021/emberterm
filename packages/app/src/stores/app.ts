@@ -1,4 +1,5 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
+import { configGet, configUpdate } from "../ipc/client.js";
 
 export interface Tab {
   id: string;
@@ -239,6 +240,47 @@ export function closeBlock(sessionId: string, blockId: string, exitCode: number,
       b.id === blockId ? { ...b, endedAt: Date.now(), exitCode, durationMs } : b,
     ));
     return new Map(m);
+  });
+}
+
+// ── Agent config store ───────────────────────────────────────────────────────
+
+export interface AgentConfigState {
+  oscEnabled: boolean;
+  autoAccept: boolean;
+}
+
+const AGENT_CONFIG_DEFAULTS: AgentConfigState = {
+  oscEnabled: true,
+  autoAccept: false,
+};
+
+export const agentConfigStore = writable<AgentConfigState>({ ...AGENT_CONFIG_DEFAULTS });
+
+/** Pull agent settings from the persisted config and sync into the store. */
+export async function loadAgentConfig(): Promise<void> {
+  try {
+    const cfg = await configGet() as {
+      agent?: { osc_7777_enabled?: boolean; auto_accept_tool_calls?: boolean };
+    };
+    const a = cfg?.agent;
+    agentConfigStore.set({
+      oscEnabled: a?.osc_7777_enabled ?? AGENT_CONFIG_DEFAULTS.oscEnabled,
+      autoAccept: a?.auto_accept_tool_calls ?? AGENT_CONFIG_DEFAULTS.autoAccept,
+    });
+  } catch {
+    // Keep defaults
+  }
+}
+
+export async function updateAgentConfig(patch: Partial<AgentConfigState>): Promise<void> {
+  const updated = { ...get(agentConfigStore), ...patch };
+  agentConfigStore.set(updated);
+  await configUpdate({
+    agent: {
+      osc_7777_enabled: updated.oscEnabled,
+      auto_accept_tool_calls: updated.autoAccept,
+    },
   });
 }
 

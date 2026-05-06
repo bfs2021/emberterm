@@ -247,6 +247,96 @@
 
 ---
 
+## Phase 2.1 — Settings Panel Redesign
+
+> Goal: Replace the 4-category informational settings panel with a 6-category icon-nav panel that exposes all existing config fields and adds cursor/terminal behavior controls. Reference: `docs/PLAN.md` § 6.4 Settings Panel.
+
+### Rust Core — New Config Fields
+
+- [x] Add `cursor_style: String` (default `"block"`) to `AppearanceConfig` in `packages/desktop/src/config.rs`
+- [x] Add `cursor_blink: bool` (default `true`) to `AppearanceConfig` in `packages/desktop/src/config.rs`
+- [x] Add `bold_in_bright: bool` (default `true`) to `AppearanceConfig` in `packages/desktop/src/config.rs`
+- [x] Verify `config_update` JSON merge patch handles the new fields correctly (existing command, no new IPC needed)
+- [x] Run `cargo check --manifest-path packages/desktop/Cargo.toml` — new fields compile cleanly (0 errors)
+
+### Frontend — Store Layer
+
+- [x] Create `packages/app/src/stores/terminalConfigStore.ts` — reactive store for cursor_style, cursor_blink, bold_in_bright, scrollback_lines
+  - `loadTerminalConfig()`: calls `configGet()`, seeds the store
+  - `updateTerminalConfig(patch)`: calls `configUpdate(...)` and updates local store state
+- [x] Call `loadTerminalConfig()` in `packages/app/src/App.svelte` alongside `loadFontConfig()` on startup
+- [x] Add `agentConfigStore` slice to `packages/app/src/stores/app.ts` — reads `osc_7777_enabled`, `auto_accept_tool_calls` from `configGet()`; exposes `updateAgentConfig(patch)` writer
+
+### Frontend — Wire Terminal Config to Grid
+
+- [x] `packages/app/src/terminal/Grid.svelte`: replace hardcoded `scrollback: 10000` with `$terminalConfigStore.scrollbackLines`
+- [x] `packages/app/src/terminal/Grid.svelte`: replace hardcoded `cursorBlink: true` with `$terminalConfigStore.cursorBlink`
+- [x] `packages/app/src/terminal/Grid.svelte`: replace hardcoded `cursorStyle: "block"` with `$terminalConfigStore.cursorStyle`
+- [x] `packages/app/src/terminal/Grid.svelte`: add reactive `$effect` that updates `term.options` when `$terminalConfigStore` changes (live apply without restart)
+- [x] `packages/app/src/App.svelte`: read `confirm_close_running` from `$terminalConfigStore` in tab-close confirmation logic
+
+### Frontend — New Settings Components
+
+- [x] Create `packages/app/src/settings/AppearanceSettings.svelte`
+  - Font family text input (reads/writes `fontStore`)
+  - Font size number input (8–72 px)
+  - Line height number input (0.8–3.0)
+  - Window padding number input (reads/writes `configUpdate({ appearance: { window_padding } })`)
+  - Acrylic / Mica toggle (Windows-only label; writes `configUpdate({ appearance: { acrylic } })`)
+  - Opacity slider (50–100%; writes `configUpdate({ appearance: { opacity } })`)
+
+- [x] Create `packages/app/src/settings/TerminalSettings.svelte`
+  - Cursor section:
+    - Shape: segmented button — Block / Bar / Underline (writes `updateTerminalConfig({ cursorStyle })`)
+    - Blink: toggle (writes `updateTerminalConfig({ cursorBlink })`)
+  - Rendering section:
+    - Scrollback lines: number input (writes `updateTerminalConfig({ scrollbackLines })`)
+    - Draw bold in bright colors: toggle (writes `updateTerminalConfig({ boldInBright })`)
+  - Behavior section:
+    - Confirm close (running process): toggle (writes `updateTerminalConfig({ confirmCloseRunning })`)
+
+- [x] Create `packages/app/src/settings/AgentSettings.svelte`
+  - Enable agent integration toggle (reads/writes `agentConfigStore.osc_7777_enabled`)
+  - Auto-accept safe tool calls toggle (reads/writes `agentConfigStore.auto_accept_tool_calls`)
+  - Protocol info section: spec version 0.1, TERM_OSC_7777=1 note
+
+### Frontend — Refactor SettingsPanel
+
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: increase panel to 820px wide × 580px tall
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: increase nav width to 200px
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: add inline SVG icon to each nav item (12×12, same stroke style as `ToolCard.svelte`)
+  - Appearance: paintbrush / sliders icon
+  - Profiles: person / user icon
+  - Terminal: `>_` prompt icon
+  - Color Scheme: palette / swatch icon
+  - Keymap: keyboard icon
+  - Agent: sparkle / robot icon
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: add `"terminal"` and `"colorscheme"` and `"agent"` categories; update `CATEGORIES` constant with new ids, labels, and keywords
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: replace `activeCategory === "appearance"` block with `<AppearanceSettings />`
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: add `activeCategory === "terminal"` block rendering `<TerminalSettings />`
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: add `activeCategory === "colorscheme"` block rendering `<ThemeEditor />`
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: replace `activeCategory === "agent"` block with `<AgentSettings />`
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: Profiles tab — add default-profile dropdown above the profile list (reads `profileList()`, writes `configUpdate({ behavior: { default_profile } })`)
+- [x] `packages/app/src/settings/SettingsPanel.svelte`: Keymap tab — expand with a search input that filters the KEYMAP rows (no persistence change)
+
+### Frontend — Trim ThemeEditor
+
+- [x] `packages/app/src/settings/ThemeEditor.svelte`: remove font family, font size, line height inputs (moved to AppearanceSettings)
+- [ ] `packages/app/src/settings/ThemeEditor.svelte`: verify theme list, VS Code JSON import, and live preview still function after font controls removed
+
+### Testing — Phase 2.1
+
+- [x] `cargo check --manifest-path packages/desktop/Cargo.toml` — new config fields pass (0 errors, 3 warnings pre-existing)
+- [x] `pnpm turbo check` — all Svelte/TS type checks pass (0 errors, 11 warnings pre-existing)
+- [ ] Manual: Appearance tab — change font, padding, opacity; reopen settings; values persist
+- [ ] Manual: Terminal tab — change cursor to Bar; active terminal cursor changes live without restart
+- [ ] Manual: Terminal tab — reduce scrollback to 100; verify buffer limit applies to new sessions
+- [ ] Manual: Color Scheme tab — switch theme; terminal colors update immediately
+- [ ] Manual: Agent tab — toggle OSC 7777 off; open a new tab; `TERM_OSC_7777` not set in env
+- [ ] Manual: Profiles tab — change default profile; open new tab; correct shell spawns
+
+---
+
 ## Phase 2 — v0.2 (Weeks 9–16)
 
 ### Rust Core — Block Model

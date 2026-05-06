@@ -21,6 +21,11 @@ pub struct AppearanceConfig {
     pub window_padding: u32,
     pub acrylic: bool,
     pub opacity: f32,
+    /// Cursor shape: "block" | "bar" | "underline"
+    pub cursor_style: String,
+    pub cursor_blink: bool,
+    /// Draw bold ANSI text using the bright color variant
+    pub bold_in_bright: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +63,9 @@ impl Default for AppearanceConfig {
             window_padding: 8,
             acrylic: true,
             opacity: 0.95,
+            cursor_style: "block".into(),
+            cursor_blink: true,
+            bold_in_bright: true,
         }
     }
 }

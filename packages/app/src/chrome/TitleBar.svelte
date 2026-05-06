@@ -5,9 +5,10 @@
   interface Props {
     onNewTab: () => void;
     onCloseTab: (tabId: string, sessionId: string) => void;
+    onOpenSettings: () => void;
   }
 
-  let { onNewTab, onCloseTab }: Props = $props();
+  let { onNewTab, onCloseTab, onOpenSettings }: Props = $props();
 
   const win = getCurrentWindow();
 
@@ -48,6 +49,14 @@
 
   <!-- Spacer -->
   <div class="titlebar-spacer" data-tauri-drag-region></div>
+
+  <!-- Settings button -->
+  <button class="titlebar-btn" aria-label="Settings" onclick={onOpenSettings}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
 
   <!-- Window controls -->
   <div class="win-controls">
@@ -93,6 +102,7 @@
   .title-brand,
   .tab-area,
   .titlebar-spacer,
+  .titlebar-btn,
   .win-controls {
     position: relative;
     z-index: 1;
@@ -136,6 +146,26 @@
   .titlebar-spacer {
     flex: 0 1 auto;
     min-width: 8px;
+  }
+
+  /* ── Settings button ─────────────────────── */
+  .titlebar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--fg-muted, #7d8590);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .titlebar-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--fg, #e6edf3);
   }
 
   /* ── Window controls ──────────────────────── */

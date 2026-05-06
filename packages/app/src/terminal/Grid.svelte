@@ -10,6 +10,7 @@
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { drainOutputBuffer } from "../stores/app.js";
+  import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { shouldInterceptKey, encodeKittyKey, FLAG_REPORT_EVENTS } from "../utils/kittyKeyboard.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
@@ -57,14 +58,15 @@
       });
 
       const cfg = get(fontConfig);
+      const tc = get(terminalConfig);
       const t = new Terminal({
         allowProposedApi: true,
         fontFamily: cfg.fontFamily,
         fontSize: cfg.fontSize,
         lineHeight: cfg.lineHeight,
-        cursorBlink: true,
-        cursorStyle: "block",
-        scrollback: 10000,
+        cursorBlink: tc.cursorBlink,
+        cursorStyle: tc.cursorStyle as "block" | "bar" | "underline",
+        scrollback: tc.scrollbackLines,
         theme: get(activeTheme).xterm,
       });
 
@@ -187,6 +189,15 @@
     // Font changes affect cell dimensions, so update the PTY size.
     sessionResize(sessionId, term.cols, term.rows).catch(console.error);
     onResize?.(term.cols, term.rows);
+  });
+
+  // Live terminal config: apply cursor style/blink changes without restart.
+  $effect(() => {
+    const { cursorStyle, cursorBlink } = $terminalConfig;
+    if (!term) return;
+    term.options.cursorStyle = cursorStyle as "block" | "bar" | "underline";
+    term.options.cursorBlink = cursorBlink;
+    // scrollback can only be set at construction time in xterm.js — new sessions pick it up.
   });
 
   // Focus the terminal when this tab becomes active.
