@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod agent;
 mod config;
 mod ipc;
 mod platform;
@@ -36,11 +35,7 @@ fn main() {
             ipc::profile_list,
             ipc::profile_upsert,
             ipc::profile_delete,
-            ipc::block_get,
-            ipc::block_search,
-            ipc::agent_respond,
             ipc::git_status,
-            ipc::query_agent_version,
             ipc::config_is_first_run,
             ipc::detect_builtin_profiles,
         ])

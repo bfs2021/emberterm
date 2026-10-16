@@ -1,4 +1,4 @@
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, recommended_watcher};
+use notify::{recommended_watcher, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{App, Emitter, Manager};
 
 pub fn setup(app: &mut App) -> anyhow::Result<()> {
@@ -10,10 +10,7 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
 
             let relevant = matches!(
                 event.kind,
-                EventKind::Create(_)
-                    | EventKind::Modify(_)
-                    | EventKind::Remove(_)
-                    | EventKind::Any
+                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) | EventKind::Any
             );
             if !relevant {
                 return;
@@ -22,11 +19,11 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
             let state = app_handle.state::<crate::state::AppState>();
 
             for path in &event.paths {
-                if path.file_name().map_or(false, |n| n == "config.toml") {
+                if path.file_name().is_some_and(|n| n == "config.toml") {
                     let new_cfg = crate::config::Config::load();
                     *state.config.lock().unwrap() = new_cfg.clone();
                     let _ = app_handle.emit("config:updated", new_cfg);
-                } else if path.extension().map_or(false, |e| e == "toml") {
+                } else if path.extension().is_some_and(|e| e == "toml") {
                     let new_profiles = crate::profile::load_profiles();
                     *state.profiles.lock().unwrap() = new_profiles.clone();
                     let _ = app_handle.emit("profiles:updated", new_profiles);
@@ -48,7 +45,10 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
         let _ = watcher.watch(&profiles_dir, RecursiveMode::NonRecursive);
     }
 
-    *app.state::<crate::state::AppState>().watcher.lock().unwrap() = Some(watcher);
+    *app.state::<crate::state::AppState>()
+        .watcher
+        .lock()
+        .unwrap() = Some(watcher);
 
     Ok(())
 }

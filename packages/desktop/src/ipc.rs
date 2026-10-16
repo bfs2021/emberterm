@@ -3,8 +3,8 @@ use tauri::{AppHandle, State};
 use crate::config::Config;
 use crate::profile::Profile;
 use crate::state::AppState;
-use crate::terminal::session::SessionId;
 use crate::terminal::pty;
+use crate::terminal::session::SessionId;
 
 // ── Session commands ─────────────────────────────────────────────────────────
 
@@ -36,9 +36,13 @@ pub async fn session_create(
         }
     };
 
-    let session = pty::spawn_session(session_id.clone(), profile.as_ref(), app)
-        .map_err(|e| e.to_string())?;
-    state.sessions.lock().unwrap().insert(session_id.clone(), session);
+    let session =
+        pty::spawn_session(session_id.clone(), profile.as_ref(), app).map_err(|e| e.to_string())?;
+    state
+        .sessions
+        .lock()
+        .unwrap()
+        .insert(session_id.clone(), session);
     tracing::info!(
         session_id = %session_id,
         profile = profile.as_ref().map(|p| p.id.as_str()).unwrap_or("default"),
@@ -56,9 +60,11 @@ pub async fn session_write(
     // Clone Arc while holding sessions lock, then release before locking writer.
     let writer_arc = {
         let sessions = state.sessions.lock().unwrap();
-        sessions.get(&id)
+        sessions
+            .get(&id)
             .ok_or_else(|| format!("session {id} not found"))?
-            .writer.clone()
+            .writer
+            .clone()
     };
     let mut writer = writer_arc.lock().unwrap();
     use std::io::Write;
@@ -75,19 +81,23 @@ pub async fn session_resize(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let sessions = state.sessions.lock().unwrap();
-    let session = sessions.get(&id).ok_or_else(|| format!("session {id} not found"))?;
+    let session = sessions
+        .get(&id)
+        .ok_or_else(|| format!("session {id} not found"))?;
     session
         .master
-        .resize(portable_pty::PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+        .resize(portable_pty::PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn session_close(
-    id: SessionId,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<(), String> {
     state.sessions.lock().unwrap().remove(&id);
     tracing::info!(session_id = %id, "session closed");
     Ok(())
@@ -121,10 +131,7 @@ pub async fn profile_list(state: State<'_, AppState>) -> Result<Vec<Profile>, St
 }
 
 #[tauri::command]
-pub async fn profile_upsert(
-    profile: Profile,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn profile_upsert(profile: Profile, state: State<'_, AppState>) -> Result<(), String> {
     crate::profile::save_profile(&profile).map_err(|e| e.to_string())?;
     let mut profiles = state.profiles.lock().unwrap();
     match profiles.iter_mut().find(|p| p.id == profile.id) {
@@ -135,92 +142,12 @@ pub async fn profile_upsert(
 }
 
 #[tauri::command]
-pub async fn profile_delete(
-    id: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn profile_delete(id: String, state: State<'_, AppState>) -> Result<(), String> {
     crate::profile::delete_profile(&id).map_err(|e| e.to_string())?;
     let mut profiles = state.profiles.lock().unwrap();
     profiles.retain(|p| p.id != id);
     Ok(())
 }
-
-// ── Block commands ───────────────────────────────────────────────────────────
-
-/// Returns all blocks recorded for a session, ordered by start time.
-/// Useful for the block UI to restore state after reconnecting.
-#[tauri::command]
-pub async fn block_get(
-    session_id: SessionId,
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::terminal::blocks::Block>, String> {
-    // Clone the Arc while holding the sessions lock, then release it before
-    // locking blocks — avoids holding two locks simultaneously.
-    let blocks_arc = {
-        let sessions = state.sessions.lock().unwrap();
-        sessions
-            .get(&session_id)
-            .ok_or_else(|| format!("session {session_id} not found"))?
-            .blocks
-            .clone()
-    };
-    let blocks = blocks_arc.lock().unwrap().all().to_vec();
-    Ok(blocks)
-}
-
-/// Searches blocks for a session by command text (case-insensitive substring match).
-/// An empty query returns all blocks.
-#[tauri::command]
-pub async fn block_search(
-    session_id: SessionId,
-    query: String,
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::terminal::blocks::Block>, String> {
-    let blocks_arc = {
-        let sessions = state.sessions.lock().unwrap();
-        sessions
-            .get(&session_id)
-            .ok_or_else(|| format!("session {session_id} not found"))?
-            .blocks
-            .clone()
-    };
-    let store = blocks_arc.lock().unwrap();
-    let q = query.to_lowercase();
-    let results = if q.is_empty() {
-        store.all().to_vec()
-    } else {
-        store.all().iter().filter(|b| b.command.to_lowercase().contains(&q)).cloned().collect()
-    };
-    Ok(results)
-}
-
-// ── Agent commands ───────────────────────────────────────────────────────────
-
-/// Write an OSC 7777 message back into the agent's PTY input stream.
-/// `verb` is typically "reply" or "event"; `payload` is a JSON string.
-#[tauri::command]
-pub async fn agent_respond(
-    session_id: SessionId,
-    verb: String,
-    payload: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    // Format: ESC ] 7777 ; <verb> ; <payload> ESC \
-    let sequence = format!("\x1b]7777;{};{}\x1b\\", verb, payload);
-    // Clone Arc while holding sessions lock, then release before locking writer.
-    let writer_arc = {
-        let sessions = state.sessions.lock().unwrap();
-        sessions.get(&session_id)
-            .ok_or_else(|| format!("session {session_id} not found"))?
-            .writer.clone()
-    };
-    let mut writer = writer_arc.lock().unwrap();
-    use std::io::Write;
-    writer.write_all(sequence.as_bytes()).map_err(|e| e.to_string())?;
-    writer.flush().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 
 /// Richer git status for the status bar: branch, dirty flag, and line diff counts.
 #[derive(serde::Serialize, Clone)]
@@ -243,7 +170,12 @@ pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
             .filter(|b| !b.is_empty() && b != "HEAD");
 
         if branch.is_none() {
-            return GitStatus { branch: None, dirty: false, insertions: 0, deletions: 0 };
+            return GitStatus {
+                branch: None,
+                dirty: false,
+                insertions: 0,
+                deletions: 0,
+            };
         }
 
         // Any uncommitted changes (staged or unstaged)?
@@ -259,7 +191,12 @@ pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
             .map(|s| parse_shortstat(&s))
             .unwrap_or((0, 0));
 
-        GitStatus { branch, dirty, insertions, deletions }
+        GitStatus {
+            branch,
+            dirty,
+            insertions,
+            deletions,
+        }
     })
     .await
     .map_err(|e| e.to_string())
@@ -307,36 +244,6 @@ fn parse_shortstat(s: &str) -> (u32, u32) {
             .unwrap_or(0)
     }
     (extract(s, "insertion"), extract(s, "deletion"))
-}
-
-/// Run `<executable> --version` and extract a semver string like `v2.1.128`.
-/// Returns `None` if the executable is not found or produces no version token.
-/// Used by the frontend to fill in the agent version when OSC 7777 hello is absent.
-#[tauri::command]
-pub async fn query_agent_version(executable: String) -> Option<String> {
-    tokio::task::spawn_blocking(move || {
-        let out = std::process::Command::new(&executable)
-            .arg("--version")
-            .output()
-            .ok()?;
-        let text = String::from_utf8_lossy(if out.stdout.is_empty() { &out.stderr } else { &out.stdout });
-        extract_semver(&text)
-    })
-    .await
-    .ok()?
-}
-
-/// Pull the first `X.Y.Z` or `vX.Y.Z` token out of version command output.
-fn extract_semver(s: &str) -> Option<String> {
-    for word in s.split_whitespace() {
-        let stripped = word.trim_matches(|c: char| !c.is_ascii_digit() && c != 'v');
-        let digits = stripped.strip_prefix('v').unwrap_or(stripped);
-        let parts: Vec<&str> = digits.split('.').collect();
-        if parts.len() >= 2 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
-            return Some(format!("v{}", digits));
-        }
-    }
-    None
 }
 
 /// Returns true when no `config.toml` exists yet — used to show the welcome screen.
@@ -398,10 +305,8 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
             }
 
             // Windows PowerShell 5 — ships with every Windows 10/11
-            if std::path::Path::new(
-                "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
-            )
-            .exists()
+            if std::path::Path::new("C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
+                .exists()
                 || probe("powershell.exe")
             {
                 specs.push(BuiltinProfileSpec {
@@ -449,9 +354,7 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
             }
 
             // WSL — wsl.exe lives in System32 on supported Windows builds
-            if std::path::Path::new("C:/Windows/System32/wsl.exe").exists()
-                || probe("wsl.exe")
-            {
+            if std::path::Path::new("C:/Windows/System32/wsl.exe").exists() || probe("wsl.exe") {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-wsl".into(),
                     name: "WSL".into(),
@@ -484,16 +387,46 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
         #[cfg(not(windows))]
         {
             let shell_candidates: &[(&str, &str, &str, &str, &[&str], &str)] = &[
-                ("/bin/zsh",          "Zsh",  "builtin-zsh",  "bash", &[], "Z Shell"),
-                ("/bin/bash",         "Bash", "builtin-bash", "bash", &[], "Bourne Again Shell"),
-                ("/usr/bin/fish",     "Fish", "builtin-fish", "bash", &[], "Friendly Interactive Shell"),
-                ("/usr/local/bin/fish","Fish","builtin-fish", "bash", &[], "Friendly Interactive Shell"),
-                ("/bin/sh",           "sh",   "builtin-sh",   "terminal", &[], "POSIX Shell"),
+                ("/bin/zsh", "Zsh", "builtin-zsh", "bash", &[], "Z Shell"),
+                (
+                    "/bin/bash",
+                    "Bash",
+                    "builtin-bash",
+                    "bash",
+                    &[],
+                    "Bourne Again Shell",
+                ),
+                (
+                    "/usr/bin/fish",
+                    "Fish",
+                    "builtin-fish",
+                    "bash",
+                    &[],
+                    "Friendly Interactive Shell",
+                ),
+                (
+                    "/usr/local/bin/fish",
+                    "Fish",
+                    "builtin-fish",
+                    "bash",
+                    &[],
+                    "Friendly Interactive Shell",
+                ),
+                (
+                    "/bin/sh",
+                    "sh",
+                    "builtin-sh",
+                    "terminal",
+                    &[],
+                    "POSIX Shell",
+                ),
             ];
             let mut seen_fish = false;
             for (path, name, id, icon, args, desc) in shell_candidates {
                 if *id == "builtin-fish" {
-                    if seen_fish { continue; }
+                    if seen_fish {
+                        continue;
+                    }
                     seen_fish = true;
                 }
                 if std::path::Path::new(path).exists() {
