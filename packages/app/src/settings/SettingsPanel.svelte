@@ -2,8 +2,10 @@
   import AppearanceSettings from "./AppearanceSettings.svelte";
   import TerminalSettings from "./TerminalSettings.svelte";
   import ThemeEditor from "./ThemeEditor.svelte";
+  import KeymapSettings from "./KeymapSettings.svelte";
+  import AboutSettings from "./AboutSettings.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
-  import { Btn, Kbd } from "@emberterm/ui";
+  import { Btn } from "@emberterm/ui";
   import { profileList, profileUpsert, configGet, configUpdate, detectBuiltinProfiles, type Profile, type BuiltinProfileSpec } from "../ipc/client.js";
 
   interface Props {
@@ -15,7 +17,7 @@
 
   let { open, onClose, onTestProfile }: Props = $props();
 
-  type Category = "appearance" | "profiles" | "terminal" | "colorscheme" | "keymap";
+  type Category = "appearance" | "profiles" | "terminal" | "colorscheme" | "keymap" | "about";
 
   let activeCategory = $state<Category>("appearance");
   let profiles = $state<Profile[]>([]);
@@ -51,6 +53,11 @@
       id: "keymap", label: "Keymap",
       keywords: ["key", "shortcut", "hotkey", "ctrl", "cmd", "binding"],
       icon: "M1 3h10v6H1zM3 3v6M5 3v6M7 3v6M9 3v6M1 6h10",
+    },
+    {
+      id: "about", label: "About",
+      keywords: ["about", "version", "github", "license", "credits", "ember", "help", "issue"],
+      icon: "M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1zM6 5.2v3.3M6 3.4v.1",
     },
   ];
 
@@ -109,28 +116,6 @@
     defaultProfile = id;
     await configUpdate({ behavior: { default_profile: id } });
   }
-
-  const KEYMAP = [
-    { action: "New tab", win: "Ctrl+Shift+T", mac: "Cmd+T" },
-    { action: "Close tab", win: "Ctrl+Shift+W", mac: "Cmd+W" },
-    { action: "Next tab", win: "Ctrl+Tab", mac: "Cmd+Opt+→" },
-    { action: "Prev tab", win: "Ctrl+Shift+Tab", mac: "Cmd+Opt+←" },
-    { action: "Command palette", win: "Ctrl+Shift+P", mac: "Cmd+Shift+P" },
-    { action: "Settings", win: "Ctrl+,", mac: "Cmd+," },
-    { action: "Copy", win: "Ctrl+Shift+C", mac: "Cmd+C" },
-    { action: "Paste", win: "Ctrl+Shift+V", mac: "Cmd+V" },
-    { action: "Accept diff", win: "Y", mac: "Y" },
-    { action: "Reject diff", win: "N", mac: "N" },
-    { action: "Approve action", win: "Y", mac: "Y" },
-    { action: "Deny action", win: "N", mac: "N" },
-  ];
-
-  let keymapSearch = $state("");
-  const visibleKeymap = $derived(
-    keymapSearch.trim()
-      ? KEYMAP.filter((k) => k.action.toLowerCase().includes(keymapSearch.toLowerCase()))
-      : KEYMAP
-  );
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") onClose();
@@ -259,32 +244,11 @@
 
         {:else if activeCategory === "keymap"}
           <h2 class="section-title">Keymap</h2>
-          <div class="keymap-section">
-            <input
-              class="keymap-search"
-              placeholder="Search shortcuts…"
-              bind:value={keymapSearch}
-              autocomplete="off"
-              spellcheck={false}
-            />
-            <table class="keymap-table">
-              <thead>
-                <tr><th>Action</th><th>Windows / Linux</th><th>macOS</th></tr>
-              </thead>
-              <tbody>
-                {#each visibleKeymap as row}
-                  <tr>
-                    <td>{row.action}</td>
-                    <td><Kbd>{row.win}</Kbd></td>
-                    <td><Kbd>{row.mac}</Kbd></td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-            {#if visibleKeymap.length === 0}
-              <p class="keymap-empty">No shortcuts match "{keymapSearch}"</p>
-            {/if}
-          </div>
+          <KeymapSettings />
+
+        {:else if activeCategory === "about"}
+          <h2 class="section-title">About</h2>
+          <AboutSettings />
         {/if}
       </div>
     </div>
@@ -513,53 +477,4 @@
   .builtin-name { font-size: 13px; color: var(--fg, #e6edf3); }
   .builtin-desc { font-size: 11px; color: var(--fg-muted, #7d8590); }
   .builtin-shell { font-size: 11px; color: var(--fg-muted, #7d8590); font-family: monospace; flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  /* ── Keymap ─────────────────────────────────────────────── */
-  .keymap-section { display: flex; flex-direction: column; gap: 10px; }
-
-  .keymap-search {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--border, #21262d);
-    border-radius: 4px;
-    color: var(--fg, #e6edf3);
-    font-size: 12px;
-    padding: 5px 8px;
-    outline: none;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .keymap-search::placeholder { color: var(--fg-muted, #7d8590); }
-  .keymap-search:focus { border-color: var(--accent, #FF6B35); }
-
-  .keymap-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  .keymap-table th {
-    text-align: left;
-    color: var(--fg-muted, #7d8590);
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0 0 8px;
-    border-bottom: 1px solid var(--border, #21262d);
-  }
-
-  .keymap-table td {
-    padding: 7px 0;
-    color: var(--fg, #e6edf3);
-    border-bottom: 1px solid color-mix(in srgb, var(--border, #21262d) 50%, transparent);
-  }
-
-  .keymap-empty {
-    font-size: 12px;
-    color: var(--fg-muted, #7d8590);
-    text-align: center;
-    padding: 12px 0;
-    margin: 0;
-  }
 </style>

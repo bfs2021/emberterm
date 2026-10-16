@@ -11,6 +11,8 @@
   import { getOutputSink } from "./outputSink.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { parseOsc7, parseOsc52 } from "../utils/osc.js";
+  import { isCopyChord } from "./copyKey.js";
+  import { shortcutFor } from "../utils/shortcuts.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,17 @@
         return true;
       });
       t.onTitleChange((title) => onTitle?.(title));
+      t.attachCustomKeyEventHandler((e) => {
+        // App shortcuts must reach the window handler; xterm would otherwise consume Tab
+        // (so Ctrl+Tab never switched tabs) by sending it to the shell.
+        if (shortcutFor(e)) return false;
+        if (!isCopyChord(e, t.hasSelection())) return true;
+        if (t.hasSelection()) {
+          navigator.clipboard.writeText(t.getSelection()).catch(console.error);
+          t.clearSelection();
+        }
+        return false; // never forward a Ctrl+Shift+C to the shell as input
+      });
       fitAddon.fit();
 
       t.onData((data) => {

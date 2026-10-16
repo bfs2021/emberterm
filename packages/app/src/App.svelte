@@ -8,6 +8,7 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { formatWarning } from "./utils/warnings.js";
+  import { shortcutFor } from "./utils/shortcuts.js";
   import { sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
@@ -136,15 +137,19 @@
   });
 
   function handleWindowKeydown(e: KeyboardEvent) {
-    const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.shiftKey && e.key === "P") { e.preventDefault(); paletteOpen = !paletteOpen; return; }
-    if (mod && e.shiftKey && e.key === "T") { e.preventDefault(); openNewTab(); return; }
-    if (mod && e.shiftKey && e.key === "W") { e.preventDefault(); closeActiveTab(); return; }
-    if (mod && e.key === ",") { e.preventDefault(); settingsOpen = true; return; }
-    if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(1); return; }
-    if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
-    if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
-    if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
+    const action = shortcutFor(e);
+    if (!action) return;
+    e.preventDefault();
+    switch (action) {
+      case "palette": paletteOpen = !paletteOpen; break;
+      case "newTab": openNewTab(); break;
+      case "closeTab": closeActiveTab(); break;
+      case "settings": settingsOpen = true; break;
+      case "nextTab": cycleTab(1); break;
+      case "prevTab": cycleTab(-1); break;
+      case "splitHorizontal": splitActiveTab("horizontal"); break;
+      case "splitVertical": splitActiveTab("vertical"); break;
+    }
   }
 
   function cycleTab(dir: 1 | -1) {

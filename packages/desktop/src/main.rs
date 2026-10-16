@@ -19,6 +19,7 @@ fn main() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(state::AppState::new())
         .setup(|app| {
             if let Err(e) = watcher::setup(app) {
