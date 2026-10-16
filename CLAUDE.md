@@ -37,6 +37,7 @@ packages/desktop/src/
   main.rs                ← Tauri entry, window setup, AppState registration
   state.rs               ← AppState (sessions, config, profiles, startup warnings), lock_or_recover
   ipc.rs                 ← all #[tauri::command] handlers
+  fonts.rs               ← font_list: installed font families (fontdb), for the font picker
   fsutil.rs              ← write_atomic, quarantine, load_user_file, StartupWarning
   profile.rs             ← Profile TOML + loading (broken files are quarantined)
   config.rs              ← Config TOML + loading; save_to refuses to overwrite a broken file
@@ -48,10 +49,6 @@ packages/desktop/src/
     shell_hooks.rs       ← per-shell OSC 7 hook injection + folder restore (Bash/WSL/pwsh)
     which.rs             ← PATH lookup, cached default shell
     events.rs            ← SessionExitPayload
-  platform/
-    windows.rs           ← Mica via window-vibrancy
-    macos.rs             ← NSWindow vibrancy via window-vibrancy
-    linux.rs             ← no-op
 
 packages/app/src/
   main.ts                ← Svelte mount
@@ -65,6 +62,8 @@ packages/app/src/
     terminalConfigStore.ts
   session/
     autosave.ts          ← debounced save with flush/suspend
+    profiles.ts          ← pickProfile: requested id → default → first
+    spawnPane.ts         ← starts a PTY session, wires output + background-tab indicators
   terminal/
     Grid.svelte          ← xterm.js Terminal per session; OSC 7 / title / OSC 52 handlers
     TabPane.svelte       ← one tab: one Grid or a split of two
@@ -72,6 +71,8 @@ packages/app/src/
   utils/
     osc.ts               ← parseOsc7, parseOsc52
     warnings.ts          ← formatWarning
+    tabLabel.ts          ← tab text: user name / program title / last folder
+    fontFamily.ts        ← CSS font stack helpers for the font picker
   chrome/
     TitleBar.svelte      ← custom title bar with tab strip + window controls
     TabStrip.svelte      ← tab list: rename, close, drag-reorder
@@ -206,6 +207,7 @@ startup    ──► session_load ──► session_create(profile, cwd, channel
 | `configGet()` / `configUpdate(patch)` / `configIsFirstRun()` | | `configUpdate` refuses to overwrite a broken file |
 | `gitStatus(cwd)` | `Promise<GitStatus>` | |
 | `detectBuiltinProfiles()` | `Promise<BuiltinProfileSpec[]>` | |
+| `fontList()` | `Promise<{ name, monospaced }[]>` | installed font families, cached per run |
 
 ### Tauri Events (Rust → frontend)
 

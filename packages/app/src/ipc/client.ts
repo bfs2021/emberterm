@@ -1,6 +1,7 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { toBytes } from "../terminal/outputSink.js";
 import type { SavedSession } from "../stores/sessionSnapshot.js";
+import type { InstalledFont } from "../utils/fontFamily.js";
 
 export type SessionId = string;
 
@@ -27,6 +28,11 @@ export async function sessionResize(id: SessionId, cols: number, rows: number): 
 
 export async function sessionClose(id: SessionId): Promise<void> {
   return invoke("session_close", { id });
+}
+
+/** Font families installed on this computer. */
+export async function fontList(): Promise<InstalledFont[]> {
+  return invoke("font_list");
 }
 
 // ── Config commands ───────────────────────────────────────────────────────────

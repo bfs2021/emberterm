@@ -21,7 +21,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "6"
 notify = "6"
-window-vibrancy = "0.6"
+fontdb = "0.23"
 
 [dev-dependencies]
 tempfile = "3"

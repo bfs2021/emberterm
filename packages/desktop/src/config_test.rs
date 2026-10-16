@@ -77,3 +77,21 @@ fn save_refuses_to_overwrite_non_utf8_file() {
     assert!(Config::default().save_to(&path).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
 }
+
+#[test]
+fn config_with_removed_window_effect_keys_still_loads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[appearance]
+font_size = 16
+acrylic = true
+opacity = 0.75
+",
+    )
+    .unwrap();
+    let (cfg, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert_eq!(cfg.appearance.font_size, 16);
+}

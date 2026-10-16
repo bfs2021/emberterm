@@ -1,221 +1,182 @@
 <script lang="ts">
-  import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
-  import { configUpdate, configGet } from "../ipc/client.js";
   import { onMount } from "svelte";
+  import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
+  import { configUpdate, configGet, fontList } from "../ipc/client.js";
+  import { primaryFamily, stackFor, pickableFamilies, type InstalledFont } from "../utils/fontFamily.js";
+  import NumberStepper from "./NumberStepper.svelte";
 
-  // Window appearance config — separate from fontStore
   let windowPadding = $state(8);
-  let acrylic = $state(true);
+
+  // Installed fonts come from the OS via Rust. `null` = still loading, `[]` + loadFailed = fall back to typing.
+  let installed = $state<InstalledFont[] | null>(null);
+  let loadFailed = $state(false);
+  let showAll = $state(false);
+
+  const current = $derived(primaryFamily($fontConfig.fontFamily));
+  const options = $derived(pickableFamilies(installed ?? [], showAll, current));
+  const currentInstalled = $derived((installed ?? []).some((f) => f.name === current));
 
   onMount(async () => {
     try {
-      const cfg = await configGet() as {
-        appearance?: { window_padding?: number; acrylic?: boolean };
-      };
-      const a = cfg?.appearance;
-      if (a) {
-        windowPadding = a.window_padding ?? 8;
-        acrylic = a.acrylic ?? true;
-      }
-    } catch { /* keep defaults */ }
+      const cfg = (await configGet()) as { appearance?: { window_padding?: number } };
+      windowPadding = cfg?.appearance?.window_padding ?? 8;
+    } catch { /* keep default */ }
+    try {
+      installed = await fontList();
+    } catch {
+      loadFailed = true;
+    }
   });
 
-  async function saveWindow() {
-    await configUpdate({
-      appearance: {
-        window_padding: windowPadding,
-        acrylic,
-      },
-    });
+  function pickFamily(e: Event) {
+    const name = (e.currentTarget as HTMLSelectElement).value;
+    updateFontConfig({ fontFamily: stackFor(name) }).catch(() => {});
   }
 
-  function onFontFamilyInput(e: Event) {
+  function typeFamily(e: Event) {
     updateFontConfig({ fontFamily: (e.currentTarget as HTMLInputElement).value }).catch(() => {});
   }
 
-  function onFontSizeInput(e: Event) {
-    const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-    if (n >= 8 && n <= 72) updateFontConfig({ fontSize: n }).catch(() => {});
-  }
-
-  function onLineHeightInput(e: Event) {
-    const n = parseFloat((e.currentTarget as HTMLInputElement).value);
-    if (n >= 0.8 && n <= 3.0) updateFontConfig({ lineHeight: n }).catch(() => {});
-  }
-
-  function onPaddingInput(e: Event) {
-    const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-    if (n >= 0 && n <= 64) { windowPadding = n; saveWindow().catch(() => {}); }
-  }
-
-  function toggleAcrylic() {
-    acrylic = !acrylic;
-    saveWindow().catch(() => {});
+  function savePadding(n: number) {
+    windowPadding = n;
+    configUpdate({ appearance: { window_padding: n } }).catch(() => {});
   }
 </script>
 
 <div class="appearance-settings">
-  <!-- Font -->
-  <section class="section">
-    <h3>Font</h3>
-    <label class="field">
-      <span class="label">Family</span>
-      <input
-        type="text"
-        value={$fontConfig.fontFamily}
-        oninput={onFontFamilyInput}
-        placeholder="JetBrains Mono, monospace"
-        spellcheck={false}
+  <section class="section" aria-labelledby="h-font">
+    <h3 id="h-font">Font</h3>
+
+    <div class="field">
+      <label class="label" for="font-family">Family</label>
+      {#if loadFailed}
+        <input
+          id="font-family"
+          type="text"
+          class="text"
+          value={$fontConfig.fontFamily}
+          oninput={typeFamily}
+          placeholder="JetBrains Mono, monospace"
+          spellcheck={false}
+        />
+        <span class="hint">Couldn't list installed fonts; type a font name instead.</span>
+      {:else}
+        <select id="font-family" class="select" value={current} onchange={pickFamily} disabled={installed === null}>
+          {#if installed === null}
+            <option value={current}>Loading fonts…</option>
+          {:else}
+            {#if !currentInstalled}
+              <option value={current}>{current || "Default"} (not installed)</option>
+            {/if}
+            {#each options as f (f.name)}
+              <option value={f.name} style:font-family={`"${f.name}", monospace`}>{f.name}</option>
+            {/each}
+          {/if}
+        </select>
+        <label class="check">
+          <input type="checkbox" bind:checked={showAll} />
+          <span>Show all fonts, not just fixed-width ones</span>
+        </label>
+      {/if}
+    </div>
+
+    <div class="field">
+      <span class="label" id="lbl-preview">Preview</span>
+      <div
+        class="preview"
+        role="img"
+        aria-labelledby="lbl-preview"
+        style:font-family={$fontConfig.fontFamily}
+        style:font-size="{$fontConfig.fontSize}px"
+        style:line-height={$fontConfig.lineHeight}
+      >
+        <div><span class="ok">~/code/emberterm</span> <span class="info">(main)</span></div>
+        <div>$ cargo test</div>
+        <div>test result: <span class="ok">ok</span>. 55 passed; 0 failed</div>
+        <div class="dim">0O 1lI| {"{}"} [] () =&gt; != === -&gt; … ✓</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <NumberStepper
+        label="Size"
+        suffix="px"
+        value={$fontConfig.fontSize}
+        min={8}
+        max={48}
+        onChange={(n) => updateFontConfig({ fontSize: n }).catch(() => {})}
       />
-    </label>
-    <div class="field-row">
-      <label class="field">
-        <span class="label">Size (px)</span>
-        <input
-          type="number"
-          min="8" max="72"
-          value={$fontConfig.fontSize}
-          oninput={onFontSizeInput}
-        />
-      </label>
-      <label class="field">
-        <span class="label">Line height</span>
-        <input
-          type="number"
-          min="0.8" max="3.0" step="0.05"
-          value={$fontConfig.lineHeight}
-          oninput={onLineHeightInput}
-        />
-      </label>
+      <NumberStepper
+        label="Line height"
+        value={$fontConfig.lineHeight}
+        min={1}
+        max={2}
+        step={0.1}
+        decimals={1}
+        onChange={(n) => updateFontConfig({ lineHeight: n }).catch(() => {})}
+      />
     </div>
   </section>
 
-  <!-- Window -->
-  <section class="section">
-    <h3>Window</h3>
-
-    <label class="field">
-      <span class="label">Padding (px)</span>
-      <input
-        type="number"
-        min="0" max="64"
-        value={windowPadding}
-        oninput={onPaddingInput}
-        style="max-width: 80px;"
-      />
-    </label>
-
-    <div class="toggle-row" role="button" tabindex="0"
-      onclick={toggleAcrylic}
-      onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleAcrylic(); } }}
-    >
-      <span class="toggle-label">
-        <span class="toggle-title">Acrylic / Mica</span>
-        <span class="toggle-hint">Translucent window effect (Windows 11 / macOS)</span>
-      </span>
-      <span class="toggle-wrap">
-        <input type="checkbox" class="toggle-input" checked={acrylic} readonly id="acrylic-toggle" />
-        <span class="toggle-track" aria-hidden="true"></span>
-      </span>
-    </div>
-
+  <section class="section" aria-labelledby="h-window">
+    <h3 id="h-window">Window</h3>
+    <NumberStepper label="Padding" suffix="px" value={windowPadding} min={0} max={64} step={2} onChange={savePadding} />
   </section>
 </div>
 
 <style>
-  .appearance-settings { display: flex; flex-direction: column; gap: 20px; }
+  .appearance-settings { display: flex; flex-direction: column; gap: 24px; }
 
-  .section { display: flex; flex-direction: column; gap: 10px; }
+  .section { display: flex; flex-direction: column; gap: 14px; }
 
   h3 {
-    margin: 0 0 2px;
+    margin: 0;
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--fg-muted, #7d8590);
+    color: var(--fg-muted);
   }
 
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field-row { display: flex; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
 
-  .label {
-    font-size: 12px;
-    color: var(--fg-muted, #7d8590);
-  }
+  .label { font-size: 12px; color: var(--fg-muted); }
+  .hint { font-size: 11px; color: var(--fg-muted); }
 
-  input[type="text"], input[type="number"] {
-    background: var(--bg, #0d1117);
-    border: 1px solid var(--border, #21262d);
-    border-radius: 4px;
-    color: var(--fg, #e6edf3);
-    font-size: 13px;
-    padding: 5px 8px;
-    outline: none;
+  .select, .text {
     width: 100%;
     box-sizing: border-box;
-    font-family: inherit;
-  }
-
-  input[type="text"]:focus, input[type="number"]:focus {
-    border-color: var(--accent, #FF6B35);
-  }
-
-  /* Toggle row */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 10px;
     outline: none;
-    padding: 4px 0;
+    color-scheme: dark;
   }
 
-  .toggle-row:focus-visible { outline: 2px solid var(--accent-glow, rgba(255,107,53,0.5)); border-radius: 4px; }
+  .select option { background: var(--bg-elev-2); color: var(--fg); }
 
-  .toggle-label {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .select:focus, .text:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .select:disabled { opacity: 0.6; }
+
+  .check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-muted); cursor: pointer; }
+  .check input { accent-color: var(--accent); color-scheme: dark; margin: 0; }
+
+  .preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    color: var(--fg);
+    white-space: pre;
+    overflow: hidden;
   }
 
-  .toggle-title { font-size: 13px; color: var(--fg, #e6edf3); }
-
-  .toggle-hint { font-size: 11px; color: var(--fg-muted, #7d8590); }
-
-  .toggle-wrap { position: relative; flex-shrink: 0; }
-
-  .toggle-input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .toggle-track {
-    display: block;
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
-    background: var(--border, #21262d);
-    cursor: pointer;
-    transition: background 0.2s;
-    position: relative;
-  }
-
-  .toggle-track::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: white;
-    transition: transform 0.2s;
-  }
-
-  .toggle-input:checked + .toggle-track { background: var(--accent, #FF6B35); }
-  .toggle-input:checked + .toggle-track::after { transform: translateX(16px); }
+  .preview .ok { color: var(--green); }
+  .preview .info { color: var(--blue); }
+  .preview .dim { color: var(--fg-muted); }
 </style>

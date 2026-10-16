@@ -20,8 +20,6 @@ pub struct AppearanceConfig {
     pub font_size: u32,
     pub line_height: f32,
     pub window_padding: u32,
-    pub acrylic: bool,
-    pub opacity: f32,
     /// Cursor shape: "block" | "bar" | "underline"
     pub cursor_style: String,
     pub cursor_blink: bool,
@@ -45,8 +43,6 @@ impl Default for AppearanceConfig {
             font_size: 13,
             line_height: 1.2,
             window_padding: 8,
-            acrylic: true,
-            opacity: 0.95,
             cursor_style: "block".into(),
             cursor_blink: true,
             bold_in_bright: true,

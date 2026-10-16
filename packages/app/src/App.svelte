@@ -279,7 +279,7 @@
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background: transparent;
+    background: var(--bg, #0d1117);
     color: var(--fg, #e6edf3);
     font-family: system-ui, sans-serif;
     overflow: hidden;

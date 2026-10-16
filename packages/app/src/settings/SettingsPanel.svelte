@@ -29,7 +29,7 @@
   const CATEGORIES: { id: Category; label: string; keywords: string[]; icon: string }[] = [
     {
       id: "appearance", label: "Appearance",
-      keywords: ["theme", "font", "color", "style", "opacity", "acrylic", "padding", "window"],
+      keywords: ["theme", "font", "family", "size", "line height", "color", "style", "padding", "window"],
       icon: "M2 9a1 1 0 0 1 1-1h1.5l1-3h3l1 3H11a1 1 0 0 1 1 1v1H2zM4 10v2h8v-2M6 4l.5 1.5h3L10 4",
     },
     {

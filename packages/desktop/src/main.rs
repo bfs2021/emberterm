@@ -1,9 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod fonts;
 mod fsutil;
 mod ipc;
-mod platform;
 mod profile;
 mod session_store;
 mod state;
@@ -21,7 +21,6 @@ fn main() {
     tauri::Builder::default()
         .manage(state::AppState::new())
         .setup(|app| {
-            platform::setup_window(app)?;
             if let Err(e) = watcher::setup(app) {
                 tracing::warn!("file watcher setup failed: {e}");
             }
@@ -32,6 +31,7 @@ fn main() {
             ipc::session_write,
             ipc::session_resize,
             ipc::session_close,
+            fonts::font_list,
             ipc::startup_warnings,
             ipc::session_load,
             ipc::session_save,

@@ -17,7 +17,6 @@ What's working:
 - File-watcher hot-reload for config and profiles; a broken file never blocks startup
 - Git branch in status bar
 - Welcome screen on first launch
-- Windows 11 Mica / macOS vibrancy
 
 ## Features
 
