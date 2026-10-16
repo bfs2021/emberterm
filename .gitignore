@@ -35,3 +35,6 @@ Thumbs.db
 
 # Design scratch files (not committed)
 design-extract/
+
+# Local scratch
+tmp/
