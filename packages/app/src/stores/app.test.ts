@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 import {
   tabs,
   toasts,
   pushToast,
   dismissToast,
+  noteOutput,
   addTab,
   removeTab,
   activateTab,
@@ -240,5 +241,76 @@ describe("no-op updates keep tab identity", () => {
     const before = get(tabs)[0];
     setPaneCwd("s10", "/d/x");
     expect(get(tabs)[0]).toBe(before);
+  });
+});
+
+describe("background output indicators", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const two = () => {
+    const a = addTab("sa", "a");
+    const b = addTab("sb", "b"); // b is active
+    return { a, b };
+  };
+  const tabOf = (id: string) => get(tabs).find((x) => x.id === id)!;
+
+  it("marks an inactive tab busy and unread, and clears busy after 1.5 s of silence", () => {
+    const { a } = two();
+    noteOutput("sa", true);
+    expect(tabOf(a).isBusy).toBe(true);
+    expect(tabOf(a).hasUnread).toBe(true);
+    vi.advanceTimersByTime(1499);
+    expect(tabOf(a).isBusy).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(tabOf(a).isBusy).toBe(false);
+    expect(tabOf(a).hasUnread).toBe(true); // unread stays until the tab is viewed
+  });
+
+  it("new output restarts the silence timer", () => {
+    const { a } = two();
+    noteOutput("sa", true);
+    vi.advanceTimersByTime(1000);
+    noteOutput("sa", true);
+    vi.advanceTimersByTime(1000);
+    expect(tabOf(a).isBusy).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(tabOf(a).isBusy).toBe(false);
+  });
+
+  it("startup output shows busy but does not count as unread", () => {
+    const { a } = two();
+    noteOutput("sa", false);
+    expect(tabOf(a).isBusy).toBe(true);
+    expect(tabOf(a).hasUnread).toBe(false);
+  });
+
+  it("never marks the active tab", () => {
+    const { b } = two();
+    noteOutput("sb", true);
+    expect(tabOf(b).isBusy).toBe(false);
+    expect(tabOf(b).hasUnread).toBe(false);
+  });
+
+  it("maps output from a split pane to its tab", () => {
+    const { a } = two();
+    setTabSplit(a, "sa-split", "vertical");
+    noteOutput("sa-split", true);
+    expect(tabOf(a).hasUnread).toBe(true);
+  });
+
+  it("repeated output leaves the tab object untouched", () => {
+    const { a } = two();
+    noteOutput("sa", true);
+    const before = tabOf(a);
+    noteOutput("sa", true);
+    expect(tabOf(a)).toBe(before);
+  });
+
+  it("viewing a tab clears its unread flag", () => {
+    const { a } = two();
+    noteOutput("sa", true);
+    activateTab(a);
+    expect(tabOf(a).hasUnread).toBe(false);
   });
 });

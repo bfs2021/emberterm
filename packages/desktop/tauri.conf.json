@@ -1,6 +1,5 @@
 {
   "productName": "EmberTerm",
-  "version": "0.1.0",
   "identifier": "dev.emberterm.app",
   "build": {
     "frontendDist": "../app/dist",
@@ -18,7 +17,7 @@
         "minWidth": 600,
         "minHeight": 400,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "resizable": true
       }
     ],
@@ -26,8 +25,16 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEREQUI3RkYwMTg0REQ4MjgKUldRbzJFMFk4SCtyM1RWTk11VXZ3cW15NDZHbjloQTJXT25nRStVTTlGa3NnM2R2UjVSMjFLUjAK",
+      "endpoints": ["https://github.com/emberterm/emberterm/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -37,8 +44,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Agent-native terminal emulator",
-    "longDescription": "EmberTerm is a lightweight, agent-native terminal emulator built with Tauri and Svelte. It implements OSC 7777, an open protocol for AI coding agent integration.",
+    "shortDescription": "A fast, simple terminal",
+    "longDescription": "EmberTerm is a lightweight terminal for Windows: tabs with different shells (Git Bash, WSL, PowerShell), split panes, and your last session restored on reopen.",
     "copyright": "Copyright © 2026 EmberTerm Contributors",
     "license": "MIT",
     "windows": {

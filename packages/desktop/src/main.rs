@@ -1,9 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod fonts;
 mod fsutil;
 mod ipc;
-mod platform;
 mod profile;
 mod session_store;
 mod state;
@@ -19,9 +19,22 @@ fn main() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        // Size, position and maximized state only: visibility is ours to manage.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .manage(state::AppState::new())
         .setup(|app| {
-            platform::setup_window(app)?;
             if let Err(e) = watcher::setup(app) {
                 tracing::warn!("file watcher setup failed: {e}");
             }
@@ -32,6 +45,8 @@ fn main() {
             ipc::session_write,
             ipc::session_resize,
             ipc::session_close,
+            ipc::session_busy,
+            fonts::font_list,
             ipc::startup_warnings,
             ipc::session_load,
             ipc::session_save,

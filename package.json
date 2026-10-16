@@ -1,6 +1,7 @@
 {
   "name": "emberterm",
   "private": true,
+  "version": "0.1.0",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "cd packages/desktop && cargo tauri dev",
@@ -8,7 +9,9 @@
     "build": "turbo build",
     "check": "turbo check",
     "test": "turbo test",
-    "lint": "turbo lint"
+    "lint": "turbo lint",
+    "version:check": "node scripts/version.mjs check",
+    "version:set": "node scripts/version.mjs set"
   },
   "devDependencies": {
     "turbo": "^2"

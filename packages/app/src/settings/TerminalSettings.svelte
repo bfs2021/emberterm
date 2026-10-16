@@ -20,6 +20,10 @@
     updateTerminalConfig({ boldInBright: !$terminalConfig.boldInBright }).catch(() => {});
   }
 
+  function toggleBellSound() {
+    updateTerminalConfig({ bellSound: !$terminalConfig.bellSound }).catch(() => {});
+  }
+
   function toggleConfirmClose() {
     updateTerminalConfig({ confirmCloseRunning: !$terminalConfig.confirmCloseRunning }).catch(() => {});
   }
@@ -95,6 +99,20 @@
   <!-- Behavior -->
   <section class="section">
     <h3>Behavior</h3>
+
+    <div class="toggle-row" role="button" tabindex="0"
+      onclick={toggleBellSound}
+      onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleBellSound(); } }}
+    >
+      <span class="toggle-label">
+        <span class="toggle-title">Bell sound</span>
+        <span class="toggle-hint">Play a short beep when a program rings the terminal bell</span>
+      </span>
+      <span class="toggle-wrap">
+        <input type="checkbox" class="toggle-input" checked={$terminalConfig.bellSound} readonly />
+        <span class="toggle-track" aria-hidden="true"></span>
+      </span>
+    </div>
 
     <div class="toggle-row" role="button" tabindex="0"
       onclick={toggleConfirmClose}

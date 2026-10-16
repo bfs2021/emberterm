@@ -1,12 +1,21 @@
 <script lang="ts">
   import { tabs, activateTab, renameTab, reorderTab, type Tab } from "../stores/app.js";
+  import { tabLabels } from "../utils/tabLabel.js";
+  import ProfileMenu from "./ProfileMenu.svelte";
+  import type { Profile } from "../ipc/client.js";
 
   interface Props {
-    onNewTab: () => void;
+    onNewTab: (profileId?: string) => void;
     onCloseTab: (tabId: string, sessionId: string) => void;
+    profiles?: Profile[];
+    defaultProfileId?: string;
   }
 
-  let { onNewTab, onCloseTab }: Props = $props();
+  let { onNewTab, onCloseTab, profiles = [], defaultProfileId = "" }: Props = $props();
+
+  // Display text per tab (last folder, or the program's / user's title).
+  const labels = $derived(tabLabels($tabs));
+  const labelOf = (tab: Tab) => labels.get(tab.id) ?? tab.title;
 
   // Inline rename state
   let renamingTabId = $state<string | null>(null);
@@ -32,7 +41,7 @@
   function startRename(tab: Tab, e: MouseEvent) {
     e.stopPropagation();
     renamingTabId = tab.id;
-    renameValue = tab.title;
+    renameValue = labelOf(tab);
   }
 
   function commitRename() {
@@ -86,9 +95,10 @@
     dragOverId = null;
   }
 
-  // Dot visibility: unread (inactive) > running (inactive)
+  // Background tabs only: green pulse while output is flowing, blue once it has gone quiet
+  // but has not been looked at yet.
+  function showBusyDot(tab: Tab) { return tab.isBusy && !tab.isActive; }
   function showUnreadDot(tab: Tab) { return tab.hasUnread && !tab.isActive; }
-  function showRunningDot(tab: Tab) { return tab.isRunning && !tab.isActive && !tab.hasUnread; }
 </script>
 
 <div class="tab-strip">
@@ -137,14 +147,14 @@
           autofocus
         />
       {:else}
-        <span class="tab-title">{tab.title}</span>
+        <span class="tab-title" title={tab.cwd ? `${tab.title} — ${tab.cwd}` : tab.title}>{labelOf(tab)}</span>
       {/if}
 
       <!-- Status dot -->
-      {#if showUnreadDot(tab)}
+      {#if showBusyDot(tab)}
+        <span class="tab-dot busy-dot" aria-hidden="true"></span>
+      {:else if showUnreadDot(tab)}
         <span class="tab-dot unread-dot" aria-hidden="true"></span>
-      {:else if showRunningDot(tab)}
-        <span class="tab-dot running-dot" aria-hidden="true"></span>
       {/if}
 
       <!-- Close button -->
@@ -169,6 +179,7 @@
       <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
     </svg>
   </button>
+  <ProfileMenu {profiles} {defaultProfileId} onPick={(id) => onNewTab(id)} />
 </div>
 
 <style>
@@ -191,46 +202,39 @@
     padding: 0 8px 0 10px;
     height: 30px;
     background: transparent;
-    border: 1px solid transparent;
-    border-bottom: none;
+    border: none;
     border-radius: 8px 8px 0 0;
     color: var(--tab-inactive-fg, #7d8590);
     cursor: pointer;
     white-space: nowrap;
     font-size: 12px;
-    transition: color 0.1s, background 0.1s, border-color 0.1s;
-    min-width: 120px;
+    transition: color 0.1s, background 0.1s;
+    min-width: 104px;
     max-width: 220px;
     flex-shrink: 1;
     box-sizing: border-box;
   }
 
+  /* Theme-aware tint: a fixed white overlay vanishes on light themes. */
   .tab:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: color-mix(in srgb, var(--fg, #e6edf3) 7%, transparent);
     color: var(--tab-active-fg, #e6edf3);
   }
 
+  /* The active tab is the terminal's own background, flush with the pane below (the title
+     bar's bottom line stops behind it). Inset shadows follow the rounded corners: a 2px
+     accent along the top and a hairline on each side. */
   .tab.active {
     background: var(--tab-active-bg, #0d1117);
-    border-color: var(--border, #21262d);
     color: var(--tab-active-fg, #e6edf3);
+    box-shadow:
+      inset 0 2px 0 var(--accent, #FF6B35),
+      inset 1px 0 0 var(--border, #21262d),
+      inset -1px 0 0 var(--border, #21262d);
   }
 
   .tab.drag-over {
-    border-left: 2px solid var(--accent, #FF6B35);
-  }
-
-  /* Top accent line for active tab */
-  .tab.active::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 10px;
-    right: 10px;
-    height: 2px;
-    background: var(--accent, #FF6B35);
-    border-radius: 0 0 2px 2px;
-    box-shadow: 0 0 8px var(--accent-glow, rgba(255, 107, 53, 0.35));
+    box-shadow: inset 2px 0 0 var(--accent, #FF6B35);
   }
 
   /* ── Shell icon ───────────────────────────── */
@@ -290,12 +294,12 @@
     background: var(--blue, #58a6ff);
   }
 
-  .running-dot {
+  .busy-dot {
     background: var(--green, #7ee787);
-    animation: running-pulse 1.4s ease-in-out infinite;
+    animation: busy-pulse 1.4s ease-in-out infinite;
   }
 
-  @keyframes running-pulse {
+  @keyframes busy-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.8); }
   }

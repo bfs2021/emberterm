@@ -1,4 +1,7 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
+import { configGet, configUpdate } from "../ipc/client.js";
+import { pushToast } from "../stores/app.js";
+import { parseThemeConfig, resolveThemeId } from "./themeConfig.js";
 import { vscodeToTheme, applyThemeVars, type EmberTheme, type VsCodeTheme } from "./vscode-import.js";
 
 import emberDark from "./themes/ember-dark.json";
@@ -39,14 +42,23 @@ activeTheme.subscribe((theme) => {
   applyThemeVars(theme);
 });
 
-export function setTheme(id: string) {
-  activeThemeId.set(id);
+const DEFAULT_THEME_ID = "ember-dark";
+
+// Imported themes are saved as the original JSON text and re-imported at startup.
+const customSources = new Map<string, string>();
+
+function persist(appearance: Record<string, unknown>) {
+  configUpdate({ appearance }).catch((e) => pushToast(`Couldn't save the theme: ${e}`));
 }
 
-export function importTheme(json: string): EmberTheme | null {
+export function setTheme(id: string) {
+  activeThemeId.set(id);
+  persist({ theme: id });
+}
+
+function addCustomTheme(json: string): EmberTheme | null {
   try {
-    const vsc = JSON.parse(json) as VsCodeTheme;
-    const theme = vscodeToTheme(vsc);
+    const theme = vscodeToTheme(JSON.parse(json) as VsCodeTheme);
     customThemes.update((ts) => {
       const idx = ts.findIndex((t) => t.id === theme.id);
       if (idx >= 0) {
@@ -55,8 +67,27 @@ export function importTheme(json: string): EmberTheme | null {
       }
       return [...ts, theme];
     });
+    customSources.set(theme.id, json);
     return theme;
   } catch {
     return null;
+  }
+}
+
+export function importTheme(json: string): EmberTheme | null {
+  const theme = addCustomTheme(json);
+  if (theme) persist({ custom_themes: [...customSources.values()] });
+  return theme;
+}
+
+/** Restores the imported themes and the selected theme from config.toml (call once at startup). */
+export async function loadThemeConfig(): Promise<void> {
+  try {
+    const { themeId, customJson } = parseThemeConfig(await configGet());
+    customJson.forEach(addCustomTheme);
+    const ids = get(allThemes).map((t) => t.id);
+    activeThemeId.set(resolveThemeId(themeId, ids, DEFAULT_THEME_ID));
+  } catch {
+    // keep the default theme
   }
 }

@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -49,6 +50,7 @@ pub fn spawn_session(
         profile_cwd,
         restore_cwd,
         inherited_prompt_command: std::env::var_os("PROMPT_COMMAND").is_some(),
+        inherited_ps0: std::env::var_os("PS0").is_some(),
         inherited_wslenv: wslenv.as_deref(),
         dir_exists: &|p: &std::path::Path| p.is_dir(),
     });
@@ -70,7 +72,7 @@ pub fn spawn_session(
         cmd.env(k, v);
     }
 
-    let _child = pty_pair
+    let mut child = pty_pair
         .slave
         .spawn_command(cmd)
         .context("failed to spawn shell")?;
@@ -89,21 +91,28 @@ pub fn spawn_session(
 
     let app_clone = app.clone();
     let sid = session_id.clone();
+    let pid = child.process_id();
+    let exit_once = Arc::new(ExitOnce::default());
+
+    // On Windows ConPTY the reader gets no EOF when the shell exits, so wait on the process itself.
+    let (wait_app, wait_sid, wait_once) = (app.clone(), session_id.clone(), exit_once.clone());
+    std::thread::Builder::new()
+        .name(format!("pty-wait-{wait_sid}"))
+        .spawn(move || {
+            let code = child
+                .wait()
+                .map(|s| i32::try_from(s.exit_code()).unwrap_or(-1))
+                .unwrap_or(-1);
+            emit_exit(&wait_app, &wait_sid, code, &wait_once);
+        })
+        .context("failed to spawn PTY wait thread")?;
 
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
             let exit_app = app_clone.clone();
             let exit_sid = sid.clone();
-            let _exit_guard = OnDrop(move || {
-                let _ = exit_app.emit(
-                    "terminal:exit",
-                    SessionExitPayload {
-                        session_id: exit_sid.clone(),
-                        code: 0,
-                    },
-                );
-            });
+            let _exit_guard = OnDrop(move || emit_exit(&exit_app, &exit_sid, 0, &exit_once));
             let mut buf = vec![0u8; 8192];
             // DEC 2026 synchronized output: buffer chunks between begin/end markers.
             let mut sync_buf: Vec<u8> = Vec::new();
@@ -145,7 +154,31 @@ pub fn spawn_session(
     Ok(Session {
         master: pty_pair.master,
         writer,
+        pid,
     })
+}
+
+/// The wait thread and the reader thread both notice a shell exiting; only the first reports it.
+#[derive(Default)]
+pub(crate) struct ExitOnce(AtomicBool);
+
+impl ExitOnce {
+    fn first(&self) -> bool {
+        !self.0.swap(true, Ordering::SeqCst)
+    }
+}
+
+fn emit_exit(app: &AppHandle, session_id: &str, code: i32, once: &ExitOnce) {
+    if !once.first() {
+        return;
+    }
+    let _ = app.emit(
+        "terminal:exit",
+        SessionExitPayload {
+            session_id: session_id.to_string(),
+            code,
+        },
+    );
 }
 
 /// Runs a closure on drop — including during a panic unwind — so the
@@ -203,6 +236,13 @@ mod tests {
         });
         assert!(result.is_err());
         assert!(ran.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn exit_is_reported_once_whichever_thread_gets_there_first() {
+        let once = super::ExitOnce::default();
+        assert!(once.first());
+        assert!(!once.first());
     }
 
     use super::detect_sync;

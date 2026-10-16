@@ -77,3 +77,73 @@ fn save_refuses_to_overwrite_non_utf8_file() {
     assert!(Config::default().save_to(&path).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
 }
+
+#[test]
+fn config_with_removed_window_effect_keys_still_loads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[appearance]
+font_size = 16
+acrylic = true
+opacity = 0.75
+",
+    )
+    .unwrap();
+    let (cfg, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert_eq!(cfg.appearance.font_size, 16);
+}
+
+#[test]
+fn custom_themes_survive_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let mut cfg = Config::default();
+    cfg.appearance.theme = "my-theme".into();
+    // VS Code theme JSON: quotes, newlines and backslashes must all round-trip.
+    cfg.appearance.custom_themes =
+        vec!["{\n  \"name\": \"My \\ Theme\",\n  \"colors\": {}\n}".to_string()];
+    cfg.save_to(&path).unwrap();
+    let (loaded, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert_eq!(loaded.appearance.theme, "my-theme");
+    assert_eq!(
+        loaded.appearance.custom_themes,
+        cfg.appearance.custom_themes
+    );
+}
+
+#[test]
+fn config_without_custom_themes_gets_an_empty_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[appearance]
+theme = \"dracula\"
+",
+    )
+    .unwrap();
+    let (cfg, _) = Config::load_from(&path, true);
+    assert!(cfg.appearance.custom_themes.is_empty());
+}
+
+#[test]
+fn bell_sound_defaults_on_and_survives_old_configs() {
+    assert!(Config::default().behavior.bell_sound);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[behavior]
+scrollback_lines = 500
+",
+    )
+    .unwrap();
+    let (cfg, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert!(cfg.behavior.bell_sound, "missing key must default to on");
+    assert_eq!(cfg.behavior.scrollback_lines, 500);
+}

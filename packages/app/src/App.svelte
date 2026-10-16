@@ -6,17 +6,26 @@
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
-  import { playBell } from "./utils/bell.js";
   import { formatWarning } from "./utils/warnings.js";
-  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
+  import { shortcutFor } from "./utils/shortcuts.js";
+  import { closeWindowWhenEmpty } from "./session/closeWindow.js";
+  import { isPaneBusy } from "./stores/paneBusy.js";
+  import { sessionClose, sessionBusy, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
+  import { loadPadding } from "./theme/paddingStore.js";
+  import { loadThemeConfig } from "./theme/store.js";
+  import { removeOutputSink } from "./terminal/outputSink.js";
+  import ConfirmDialog from "./chrome/ConfirmDialog.svelte";
+  import { gitInfo, refreshGit } from "./stores/gitStatus.js";
+  import { terminalConfig } from "./stores/terminalConfigStore.js";
+  import { shouldConfirmClose } from "./session/confirmClose.js";
+  import { spawnPane } from "./session/spawnPane.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { createAutosave } from "./session/autosave.js";
   import { pickProfile } from "./session/profiles.js";
   import { toSnapshot, clampActiveTab, type SavedSession } from "./stores/sessionSnapshot.js";
-  import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
+  import { onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
     addTab, removeTab, activateTab, setPaneCwd, setTabTitle,
@@ -27,10 +36,6 @@
   let error = $state<string | null>(null);
   let paletteOpen = $state(false);
   let settingsOpen = $state(false);
-  let currentGitBranch = $state("");
-  let gitDirty = $state(false);
-  let gitInsertions = $state(0);
-  let gitDeletions = $state(0);
   let showWelcome = $state(false);
   let termCols = $state(0);
   let termRows = $state(0);
@@ -44,27 +49,7 @@
   }
 
 
-  $effect(() => {
-    const cwd = $activeCwd;
-    if (cwd) {
-      gitStatusIpc(cwd).then((s) => {
-        currentGitBranch = s.branch ?? "";
-        gitDirty = s.dirty;
-        gitInsertions = s.insertions;
-        gitDeletions = s.deletions;
-      }).catch(() => {
-        currentGitBranch = "";
-        gitDirty = false;
-        gitInsertions = 0;
-        gitDeletions = 0;
-      });
-    } else {
-      currentGitBranch = "";
-      gitDirty = false;
-      gitInsertions = 0;
-      gitDeletions = 0;
-    }
-  });
+  $effect(() => { refreshGit($activeCwd); });
 
   async function loadDefaultProfileId() {
     try {
@@ -73,8 +58,7 @@
     } catch { /* keep the previous value */ }
   }
 
-  let autosaveReady = $state(false);
-  let lastSaveErrorAt = 0;
+  let autosaveReady = $state(false), lastSaveErrorAt = 0;
   const autosave = createAutosave({
     delayMs: 500,
     save: sessionSave,
@@ -112,7 +96,7 @@
     (async () => {
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadDefaultProfileId()]);
+        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadPadding(), loadThemeConfig(), loadDefaultProfileId()]);
         const { session, warning } = await sessionLoad();
         if (warning) pushToast(formatWarning(warning));
         const restored = session ? await restoreSession(session) : false;
@@ -122,7 +106,6 @@
       finally { loading = false; }
       if (!active) return;
       const fns = await Promise.all([
-        onTerminalBell(() => playBell()),
         onAppWarning((w) => pushToast(formatWarning(w))),
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
         onConfigUpdated(() => { loadDefaultProfileId(); }),
@@ -135,15 +118,19 @@
   });
 
   function handleWindowKeydown(e: KeyboardEvent) {
-    const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.shiftKey && e.key === "P") { e.preventDefault(); paletteOpen = !paletteOpen; return; }
-    if (mod && e.shiftKey && e.key === "T") { e.preventDefault(); openNewTab(); return; }
-    if (mod && e.shiftKey && e.key === "W") { e.preventDefault(); closeActiveTab(); return; }
-    if (mod && e.key === ",") { e.preventDefault(); settingsOpen = true; return; }
-    if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(1); return; }
-    if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
-    if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
-    if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
+    const action = shortcutFor(e);
+    if (!action) return;
+    e.preventDefault();
+    switch (action) {
+      case "palette": paletteOpen = !paletteOpen; break;
+      case "newTab": openNewTab(); break;
+      case "closeTab": closeActiveTab(); break;
+      case "settings": settingsOpen = true; break;
+      case "nextTab": cycleTab(1); break;
+      case "prevTab": cycleTab(-1); break;
+      case "splitHorizontal": splitActiveTab("horizontal"); break;
+      case "splitVertical": splitActiveTab("vertical"); break;
+    }
   }
 
   function cycleTab(dir: 1 | -1) {
@@ -153,14 +140,7 @@
   }
   async function closeActiveTab() {
     const tab = $tabs.find((t) => t.isActive);
-    if (tab) await closeTab(tab.id, tab.sessionId);
-  }
-
-  async function spawnPane(profileId?: string, cwd?: string): Promise<string> {
-    const sink = createOutputSink();
-    const sessionId = await sessionCreate({ profileId, cwd, onOutput: sink.push });
-    registerOutputSink(sessionId, sink);
-    return sessionId;
+    if (tab) await askCloseTab(tab.id, tab.sessionId);
   }
 
   /** Requested id, else the configured default, else the first profile (see pickProfile). */
@@ -210,6 +190,19 @@
     return true;
   }
 
+  let pendingClose = $state<{ tabId: string; sessionId: string } | null>(null);
+
+  /** A close the user asked for: confirm first if a program is still running in the tab. */
+  async function askCloseTab(tabId: string, sessionId: string) {
+    const tab = $tabs.find((t) => t.id === tabId);
+    const ids = [sessionId, ...(tab?.splitSessionId ? [tab.splitSessionId] : [])];
+    if (await shouldConfirmClose(ids, $terminalConfig.confirmCloseRunning, (id) => isPaneBusy(id, sessionBusy))) {
+      pendingClose = { tabId, sessionId };
+    } else {
+      await closeTab(tabId, sessionId);
+    }
+  }
+
   async function closeTab(tabId: string, sessionId: string) {
     const tab = $tabs.find((t) => t.id === tabId);
     if (tab?.splitSessionId) {
@@ -219,13 +212,13 @@
     await sessionClose(sessionId).catch(() => {});
     removeOutputSink(sessionId);
     removeTab(tabId);
-    if ($tabs.length === 0) showWelcome = true;
+    if ($tabs.length === 0) await closeWindowWhenEmpty().catch(console.error);
   }
 
-  async function splitActiveTab(direction: "horizontal" | "vertical") {
+  async function splitActiveTab(direction: "horizontal" | "vertical", profileId?: string) {
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
-    await splitTab(tab.id, direction);
+    await splitTab(tab.id, direction, profileId);
   }
 
   async function closeSplitPane(tabId: string) {
@@ -247,7 +240,7 @@
   and always appear fully opaque, regardless of the user's transparency setting.
 -->
 <div class="app">
-  <TitleBar onNewTab={openNewTab} onCloseTab={closeTab} onOpenSettings={() => (settingsOpen = true)} />
+  <TitleBar onNewTab={openNewTab} onCloseTab={askCloseTab} onOpenSettings={() => (settingsOpen = true)} profiles={profileCache} {defaultProfileId} />
   <main class="terminal-area">
     {#if loading}
       <div class="splash">Starting shell…</div>
@@ -268,14 +261,23 @@
       {/each}
     {/if}
   </main>
-  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={$gitInfo.branch} gitDirty={$gitInfo.dirty} gitInsertions={$gitInfo.insertions} gitDeletions={$gitInfo.deletions} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
 </div>
 
 <!-- Modals outside .app — unaffected by window opacity -->
-<CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
+<CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onSplit={splitActiveTab} onOpenSettings={() => (settingsOpen = true)} />
 <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
 {#if showWelcome}
   <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
+{/if}
+{#if pendingClose}
+  <ConfirmDialog
+    title="Close this tab?"
+    message="A program is still running in it and will be stopped."
+    confirmLabel="Close tab"
+    onCancel={() => (pendingClose = null)}
+    onConfirm={() => { const p = pendingClose; pendingClose = null; if (p) closeTab(p.tabId, p.sessionId); }}
+  />
 {/if}
 <Toasts />
 
@@ -285,7 +287,7 @@
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background: transparent;
+    background: var(--bg, #0d1117);
     color: var(--fg, #e6edf3);
     font-family: system-ui, sans-serif;
     overflow: hidden;

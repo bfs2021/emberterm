@@ -1,20 +1,28 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import TabStrip from "./TabStrip.svelte";
+  import type { Profile } from "../ipc/client.js";
 
   interface Props {
-    onNewTab: () => void;
+    onNewTab: (profileId?: string) => void;
     onCloseTab: (tabId: string, sessionId: string) => void;
     onOpenSettings: () => void;
+    profiles?: Profile[];
+    defaultProfileId?: string;
   }
 
-  let { onNewTab, onCloseTab, onOpenSettings }: Props = $props();
+  let { onNewTab, onCloseTab, onOpenSettings, profiles = [], defaultProfileId = "" }: Props = $props();
 
   const win = getCurrentWindow();
 
   async function minimize() { await win.minimize(); }
   async function toggleMaximize() { await win.toggleMaximize(); }
   async function close() { await win.close(); }
+
+  // Anything the user can click, type in or drag-reorder must not start a window drag: on
+  // Windows startDragging() enters the native move loop on mousedown and swallows the
+  // mouseup, so a tab press would never become a click.
+  const INTERACTIVE = "button, input, [role='tab'], [role='button']";
 
   /**
    * Initiate window drag on left-button press over non-interactive areas.
@@ -24,13 +32,13 @@
    */
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    if ((e.target as Element).closest("button")) return;
+    if ((e.target as Element).closest(INTERACTIVE)) return;
     win.startDragging().catch(() => {});
   }
 
   /** Maximize/restore on double-click outside buttons. */
   function handleDblClick(e: MouseEvent) {
-    if ((e.target as Element).closest("button")) return;
+    if ((e.target as Element).closest(INTERACTIVE)) return;
     toggleMaximize();
   }
 </script>
@@ -52,7 +60,7 @@
 
   <!-- Tabs (new-tab button lives inside TabStrip) -->
   <div class="tab-area">
-    <TabStrip {onNewTab} {onCloseTab} />
+    <TabStrip {onNewTab} {onCloseTab} {profiles} {defaultProfileId} />
   </div>
 
   <!-- Spacer -->
@@ -94,7 +102,8 @@
     align-items: stretch;
     height: 36px;
     background: var(--bg-elev, #010409);
-    border-bottom: 1px solid var(--border, #21262d);
+    /* Drawn behind the tabs, so the active tab can cover it and join the pane below. */
+    box-shadow: inset 0 -1px 0 var(--border, #21262d);
     flex-shrink: 0;
     user-select: none;
   }
@@ -104,9 +113,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 14px 0 12px;
+    /* The tab strip starts 6px down, so tab text centres in the lower 30px; match it. */
+    padding: 6px 14px 0 12px;
     flex-shrink: 0;
-    border-right: 1px solid var(--border, #21262d);
   }
 
   .brand-mark {

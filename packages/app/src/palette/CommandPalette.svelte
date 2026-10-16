@@ -6,13 +6,14 @@
     open: boolean;
     onClose: () => void;
     onNewTab?: (profileId?: string) => void;
+    onSplit?: (direction: "horizontal" | "vertical", profileId?: string) => void;
     onOpenSettings?: () => void;
     profiles?: Profile[];
     defaultProfileId?: string;
   }
 
   let {
-    open, onClose, onNewTab, onOpenSettings,
+    open, onClose, onNewTab, onSplit, onOpenSettings,
     profiles = [], defaultProfileId = "",
   }: Props = $props();
 
@@ -70,6 +71,19 @@
         badge: profile.id === defaultProfileId ? "default" : undefined,
         action: () => { onNewTab?.(profile.id); onClose(); },
       });
+    }
+
+    // Splitting needs a choice of shell too; the keyboard shortcuts always use the default one.
+    for (const [direction, verb] of [["horizontal", "side by side"], ["vertical", "stacked"]] as const) {
+      for (const profile of profiles) {
+        items.push({
+          id: `split.${direction}.${profile.id}`,
+          label: `Split ${verb}: ${profile.name}`,
+          section: "Split pane",
+          kind: "command",
+          action: () => { onSplit?.(direction, profile.id); onClose(); },
+        });
+      }
     }
 
     for (const theme of $allThemes) {

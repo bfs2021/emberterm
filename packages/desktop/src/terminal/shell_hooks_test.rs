@@ -14,6 +14,7 @@ fn input<'a>(
         profile_cwd: PathBuf::from("C:/Users/me"),
         restore_cwd: restore,
         inherited_prompt_command: false,
+        inherited_ps0: false,
         inherited_wslenv: None,
         dir_exists: exists,
     }
@@ -88,7 +89,7 @@ fn wsl_forwards_hook_and_restore_dir_via_wslenv() {
     assert!(pc.contains("]7;file://localhost%s"));
     assert_eq!(
         env(&plan, "WSLENV"),
-        Some("USERPROFILE/p:PROMPT_COMMAND/u:EMBER_CWD/u")
+        Some("USERPROFILE/p:PROMPT_COMMAND/u:PS0/u:EMBER_CWD/u")
     );
     assert_eq!(plan.cwd, PathBuf::from("C:/Users/me"));
 }
@@ -199,4 +200,29 @@ fn decode_utf16le_base64(s: &str) -> String {
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect();
     String::from_utf16(&units).unwrap()
+}
+
+#[test]
+fn bash_announces_command_start_and_prompt_for_busy_detection() {
+    let yes = |_: &Path| true;
+    let plan = prepare(&input(ShellKind::Bash, &[], None, &yes));
+    // PS0 is printed right before each command runs; the prompt hook runs when it returns.
+    assert!(env(&plan, "PS0").unwrap().contains("133;C"));
+    assert!(env(&plan, "PROMPT_COMMAND").unwrap().contains("133;A"));
+}
+
+#[test]
+fn bash_keeps_a_ps0_the_user_already_has() {
+    let yes = |_: &Path| true;
+    let mut i = input(ShellKind::Bash, &[], None, &yes);
+    i.inherited_ps0 = true;
+    assert!(env(&prepare(&i), "PS0").is_none());
+}
+
+#[test]
+fn wsl_forwards_ps0_too() {
+    let yes = |_: &Path| true;
+    let plan = prepare(&input(ShellKind::Wsl, &[], None, &yes));
+    assert!(env(&plan, "PS0").unwrap().contains("133;C"));
+    assert!(env(&plan, "WSLENV").unwrap().contains("PS0/u"));
 }

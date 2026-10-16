@@ -16,12 +16,12 @@ pub struct Config {
 #[serde(default)]
 pub struct AppearanceConfig {
     pub theme: String,
+    /// VS Code theme JSON the user imported, kept verbatim so it can be re-imported at startup.
+    pub custom_themes: Vec<String>,
     pub font_family: String,
     pub font_size: u32,
     pub line_height: f32,
     pub window_padding: u32,
-    pub acrylic: bool,
-    pub opacity: f32,
     /// Cursor shape: "block" | "bar" | "underline"
     pub cursor_style: String,
     pub cursor_blink: bool,
@@ -34,6 +34,8 @@ pub struct AppearanceConfig {
 pub struct BehaviorConfig {
     pub default_profile: String,
     pub confirm_close_running: bool,
+    /// Play a sound when a program rings the terminal bell (BEL).
+    pub bell_sound: bool,
     pub scrollback_lines: usize,
 }
 
@@ -41,12 +43,11 @@ impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
             theme: "ember-dark".into(),
+            custom_themes: Vec::new(),
             font_family: "JetBrains Mono, Cascadia Code, Fira Code, monospace".into(),
             font_size: 13,
             line_height: 1.2,
             window_padding: 8,
-            acrylic: true,
-            opacity: 0.95,
             cursor_style: "block".into(),
             cursor_blink: true,
             bold_in_bright: true,
@@ -59,6 +60,7 @@ impl Default for BehaviorConfig {
         Self {
             default_profile: "default".into(),
             confirm_close_running: true,
+            bell_sound: true,
             scrollback_lines: 10000,
         }
     }

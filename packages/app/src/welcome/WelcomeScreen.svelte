@@ -50,7 +50,6 @@
         await profileUpsert({
           id: profileId,
           name: spec.name,
-          icon: spec.icon,
           shell: spec.shell,
           args: spec.args,
           cwd: "~",

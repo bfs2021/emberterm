@@ -2,90 +2,77 @@
 
 > A fast, simple terminal.
 
-A lightweight personal terminal emulator built on Tauri 2 (Rust) + Svelte 5 + xterm.js, using `portable-pty`. Many tabs with different shells (Git Bash, WSL, PowerShell), splits, and the previous session restored on reopen.
+A lightweight terminal for Windows, built on Tauri 2 (Rust) + Svelte 5 + xterm.js with `portable-pty`.
+Many tabs, each with its own shell (Git Bash, WSL, PowerShell, cmd), split panes, and your last
+session back when you reopen it. No account, no telemetry.
 
-## Status
-
-**Pre-v0.1 — active development.** Phase 1 (v0.1 feature set) is implemented and under internal testing.
-
-What's working:
-- Multi-tab terminal (xterm.js) with custom title bar, tab strip, and status bar
-- Tab and split-pane restore: tabs, titles, shells and each pane's folder come back on reopen
-- OSC 7 (folder), window title and OSC 52 clipboard write, handled in xterm.js
-- VS Code theme system (7 built-in themes + paste any VS Code JSON)
-- Command palette, settings panel, profile manager
-- File-watcher hot-reload for config and profiles; a broken file never blocks startup
-- Git branch in status bar
-- Welcome screen on first launch
-- Windows 11 Mica / macOS vibrancy
+![EmberTerm with two tabs and a split pane](docs/screenshot.png)
 
 ## Features
 
-- **Session restore** — closing and reopening brings back every tab, split and folder
-- **Light** — Tauri instead of Electron
-- **No account, no telemetry by default, no cloud**
-- **VS Code theme ecosystem** — paste any VS Code theme JSON and it works
+- **Session restore:** closing and reopening brings back every tab, split, title and folder
+- **Shells per tab:** pick Git Bash, WSL, PowerShell or cmd from the arrow beside `+`, or set a default profile
+- **Splits:** side by side or stacked, any shell in each pane
+- **Copy, paste, find:** Ctrl+C (with a selection) / Ctrl+Shift+C, Ctrl+V, a right-click menu, and Ctrl+Shift+F to search the scrollback
+- **Tab status:** a dot marks a tab that is running a command or has new output; closing a tab with a program running asks first
+- **Themes:** 7 built-in, or paste any VS Code theme JSON; the choice is remembered
+- **Settings you would expect:** fixed-width font picker, font size, padding, cursor, scrollback, bell, keymap reference
+- **Command palette:** Ctrl+Shift+P for tabs, profiles, splits and themes
+- **Status bar:** shell, folder, git branch and changes, size, clock
+- **Window memory:** size, position and maximized state come back
+- **Updates:** Settings → About → Check for updates downloads and installs the latest release in one click
+- **Robust files:** config, profiles and `session.json` hot-reload; a broken file is moved aside with a toast and never blocks startup
 
 ## Folder restore
 
 EmberTerm restores each tab's folder for Git Bash, WSL and PowerShell by injecting a prompt hook.
-If your `~/.bashrc` *assigns* `PROMPT_COMMAND=...`, the hook is replaced. Append instead:
+If your `~/.bashrc` *assigns* `PROMPT_COMMAND=...` or `PS0=...`, the hook is replaced. Append instead:
 
     PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}your_command"
 
-## Quick Start
+The same hook tells EmberTerm when a command is running in Git Bash and WSL (needs bash 4.4+), which is
+what makes "close this tab?" accurate there. cmd does not restore its folder.
 
-### Prerequisites
+## Install
 
-- [Rust](https://rustup.rs/) 1.85+
-- [Node.js](https://nodejs.org/) 22+
-- [pnpm](https://pnpm.io/) 9+ (`npm install -g pnpm`)
-- **Windows:** WebView2 (pre-installed on Windows 11)
-- **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+Download the latest `-setup.exe` from the [Releases](https://github.com/emberterm/emberterm/releases)
+page. Builds are not code-signed, so Windows SmartScreen may ask you to confirm. After that, updates
+come from inside the app.
 
-### Development
+## Development
+
+Prerequisites: [Rust](https://rustup.rs/) 1.85+, [Node.js](https://nodejs.org/) 22+,
+[pnpm](https://pnpm.io/) 9+, and WebView2 (preinstalled on Windows 11).
 
 ```sh
-# Clone and install all dependencies (JS workspace + Rust)
 git clone https://github.com/emberterm/emberterm
 cd emberterm
 pnpm install
-
-# Start dev server (Vite hot-reload UI + Rust rebuild on change)
-pnpm dev
+pnpm dev                 # desktop app with hot reload
 ```
-
-### Build
 
 ```sh
-# Build all JS packages then the Tauri app
-pnpm turbo build
-cargo build --manifest-path packages/desktop/Cargo.toml
+pnpm turbo build                                          # frontend
+cargo build --manifest-path packages/desktop/Cargo.toml   # app
+cargo test --manifest-path packages/desktop/Cargo.toml    # Rust tests
+pnpm turbo check test                                     # type-check + frontend tests
 ```
 
-Installers are written to `packages/desktop/target/release/bundle/`.
+Installers are written to `packages/desktop/target/release/bundle/`. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for code style, pull requests, versioning and releases.
 
-### Run tests
-
-```sh
-# Rust unit tests
-cargo test --manifest-path packages/desktop/Cargo.toml
-
-# All JS/TS tests across every package
-pnpm turbo test
-```
-
-## Project Structure
+## Project structure
 
 ```
 packages/
-  desktop/   Rust/Tauri core — PTY, shell hooks, IPC, config, profiles, session file
-  app/       Svelte 5 UI — xterm.js, tabs, theme system (@emberterm/app)
-  ui/        Shared Svelte component library (@emberterm/ui)
-docs/        Plan and task list
+  desktop/   Rust/Tauri core: PTY, shell hooks, config, profiles, session file, IPC
+  app/       Svelte 5 UI: xterm.js, tabs, splits, settings, themes (@emberterm/app)
+  ui/        Shared Svelte components (@emberterm/ui)
+scripts/     version.mjs: one version for the whole repo
+docs/        theming.md: writing and importing themes
 ```
 
-See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and non-goals.
+[CLAUDE.md](CLAUDE.md) has the architecture, file map and IPC reference.
 
 ## License
 

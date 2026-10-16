@@ -1,6 +1,7 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { toBytes } from "../terminal/outputSink.js";
 import type { SavedSession } from "../stores/sessionSnapshot.js";
+import type { InstalledFont } from "../utils/fontFamily.js";
 
 export type SessionId = string;
 
@@ -25,8 +26,18 @@ export async function sessionResize(id: SessionId, cols: number, rows: number): 
   return invoke("session_resize", { id, cols, rows });
 }
 
+/** True while a program is still running inside the session's shell. */
+export async function sessionBusy(id: SessionId): Promise<boolean> {
+  return invoke("session_busy", { id });
+}
+
 export async function sessionClose(id: SessionId): Promise<void> {
   return invoke("session_close", { id });
+}
+
+/** Font families installed on this computer. */
+export async function fontList(): Promise<InstalledFont[]> {
+  return invoke("font_list");
 }
 
 // ── Config commands ───────────────────────────────────────────────────────────
@@ -44,14 +55,10 @@ export async function configUpdate(patch: Record<string, unknown>): Promise<unkn
 export interface Profile {
   id: string;
   name: string;
-  icon: string;
   shell: string;
   args: string[];
   cwd: string;
   env: Record<string, string>;
-  theme?: string;
-  font_family?: string;
-  font_size?: number;
 }
 
 export async function profileList(): Promise<Profile[]> {
@@ -69,7 +76,6 @@ export async function profileDelete(id: string): Promise<void> {
 export interface BuiltinProfileSpec {
   id: string;
   name: string;
-  icon: string;
   shell: string;
   args: string[];
   description: string;

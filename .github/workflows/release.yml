@@ -1,0 +1,47 @@
+name: Release
+
+# Push a tag like v0.2.0 after `pnpm version:set 0.2.0` and merging it (see CONTRIBUTING.md).
+# Builds the Windows installer, signs the update with TAURI_SIGNING_PRIVATE_KEY and publishes
+# latest.json, which the in-app "Check for updates" button reads.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop
+
+      - run: pnpm install --frozen-lockfile
+
+      # A tag that disagrees with the files would publish an installer labelled with the wrong version.
+      - run: node scripts/version.mjs check ${{ github.ref_name }}
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: EmberTerm ${{ github.ref_name }}
+          releaseDraft: false
+          uploadUpdaterJson: true

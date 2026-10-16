@@ -32,3 +32,14 @@ export function parseOsc52(data: string): string | null {
     return null;
   }
 }
+
+/**
+ * OSC 133 prompt marks from our bash hook: `C` = a command started (busy), `A` / `D` = the shell
+ * is back at a prompt (idle). Anything else (e.g. `B`) says nothing about busyness.
+ */
+export function parseOsc133(data: string): boolean | null {
+  const mark = data.split(";")[0];
+  if (mark === "C") return true;
+  if (mark === "A" || mark === "D") return false;
+  return null;
+}

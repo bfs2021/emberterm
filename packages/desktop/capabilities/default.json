@@ -17,6 +17,10 @@
     "core:window:allow-set-size",
     "core:window:allow-set-position",
     "core:window:allow-set-focus",
-    "core:webview:default"
+    "core:webview:default",
+    "opener:default",
+    "clipboard-manager:allow-read-text",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

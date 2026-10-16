@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatClock, msUntilNextMinute } from "../utils/clock.js";
   interface Props {
     shell?: string;
     cwd?: string;
@@ -30,15 +31,27 @@
   let clock = $state("");
 
   $effect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    // Re-arm for the next minute boundary rather than a fixed 60 s from startup, which left
+    // the display up to a minute behind the system clock.
     function tick() {
-      const now = new Date();
-      const h = now.getHours().toString().padStart(2, "0");
-      const m = now.getMinutes().toString().padStart(2, "0");
-      clock = `${h}:${m}`;
+      clock = formatClock(new Date());
+      clearTimeout(timer);
+      timer = setTimeout(tick, msUntilNextMinute(new Date()) + 50);
     }
+
+    // Timers are throttled while the window is hidden and stop during sleep; catch up on return.
+    const resync = () => { if (!document.hidden) tick(); };
+
     tick();
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("focus", resync);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+    };
   });
 
   const hasShell = $derived(!!shell);

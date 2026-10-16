@@ -4,13 +4,22 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
+  import { SearchAddon } from "@xterm/addon-search";
+  import { readText } from "@tauri-apps/plugin-clipboard-manager";
+  import FindBar from "./FindBar.svelte";
+  import TermMenu from "./TermMenu.svelte";
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onSessionExit } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { getOutputSink } from "./outputSink.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
-  import { parseOsc7, parseOsc52 } from "../utils/osc.js";
+  import { terminalPadding } from "../theme/paddingStore.js";
+  import { parseOsc7, parseOsc52, parseOsc133 } from "../utils/osc.js";
+  import { markPaneBusy, forgetPane } from "../stores/paneBusy.js";
+  import { isCopyChord, isPasteChord, isFindChord } from "./termKeys.js";
+  import { shortcutFor } from "../utils/shortcuts.js";
+  import { playBell } from "../utils/bell.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -35,6 +44,9 @@
   let term = $state<Terminal | undefined>(undefined);
   /** Exposed so the font-change effect can call fitAddon.fit() after resize. */
   let fa = $state<FitAddon | undefined>(undefined);
+  let searchAddon = $state<SearchAddon | undefined>(undefined);
+  let findOpen = $state(false);
+  let menu = $state<{ x: number; y: number } | null>(null);
 
   $effect(() => {
     // Read once, untracked: a tracked read here re-ran this effect (tearing the
@@ -55,6 +67,7 @@
         fontSize: cfg.fontSize,
         lineHeight: cfg.lineHeight,
         cursorBlink: tc.cursorBlink,
+        drawBoldTextInBrightColors: tc.boldInBright,
         cursorStyle: tc.cursorStyle as "block" | "bar" | "underline",
         scrollback: tc.scrollbackLines,
         theme: { ...baseTheme },
@@ -64,6 +77,9 @@
       fa = fitAddon;
       t.loadAddon(fitAddon);
       t.loadAddon(new WebLinksAddon());
+      const search = new SearchAddon();
+      t.loadAddon(search);
+      searchAddon = search;
 
       t.open(container);
       t.parser.registerOscHandler(7, (data) => {
@@ -76,7 +92,28 @@
         if (text !== null) navigator.clipboard.writeText(text).catch(console.error);
         return true;
       });
+      t.parser.registerOscHandler(133, (data) => {
+        const busy = parseOsc133(data);
+        if (busy !== null) markPaneBusy(sid, busy);
+        return true;
+      });
       t.onTitleChange((title) => onTitle?.(title));
+      t.onBell(() => { if (get(terminalConfig).bellSound) playBell(); });
+      t.attachCustomKeyEventHandler((e) => {
+        // App shortcuts must reach the window handler; xterm would otherwise consume Tab
+        // (so Ctrl+Tab never switched tabs) by sending it to the shell.
+        if (shortcutFor(e)) return false;
+        // Paste is left to the browser's own paste event, which xterm turns into (bracketed)
+        // input; xterm would otherwise send Ctrl+V to the shell as a literal ^V.
+        if (isPasteChord(e)) return false;
+        if (isFindChord(e)) { e.preventDefault(); findOpen = true; return false; }
+        if (!isCopyChord(e, t.hasSelection())) return true;
+        if (t.hasSelection()) {
+          navigator.clipboard.writeText(t.getSelection()).catch(console.error);
+          t.clearSelection();
+        }
+        return false; // never forward a Ctrl+Shift+C to the shell as input
+      });
       fitAddon.fit();
 
       t.onData((data) => {
@@ -121,7 +158,9 @@
 
     return () => {
       mounted = false;
+      forgetPane(sid);
       fa = undefined;
+      searchAddon = undefined;
       getOutputSink(sid)?.detach();
       unlistenExit?.();
       resizeObserver?.disconnect();
@@ -151,10 +190,20 @@
     untrack(() => onResize)?.(term.cols, term.rows);
   });
 
+  // Padding changes the usable grid size: re-fit and tell the PTY.
+  $effect(() => {
+    void $terminalPadding;
+    if (!term || !fa) return;
+    fa.fit();
+    sessionResize(paneSession, term.cols, term.rows).catch(console.error);
+    untrack(() => onResize)?.(term.cols, term.rows);
+  });
+
   // Live terminal config: apply cursor style/blink changes without restart.
   $effect(() => {
-    const { cursorStyle, cursorBlink } = $terminalConfig;
+    const { cursorStyle, cursorBlink, boldInBright } = $terminalConfig;
     if (!term) return;
+    term.options.drawBoldTextInBrightColors = boldInBright;
     term.options.cursorStyle = cursorStyle as "block" | "bar" | "underline";
     term.options.cursorBlink = cursorBlink;
     // scrollback can only be set at construction time in xterm.js — new sessions pick it up.
@@ -168,25 +217,65 @@
       fa?.fit();
     }
   });
+
+  function openMenu(e: MouseEvent) {
+    e.preventDefault();
+    menu = { x: e.clientX, y: e.clientY };
+  }
+
+  function closeFind() {
+    findOpen = false;
+    term?.focus();
+  }
+
+  function closeMenu() {
+    menu = null;
+    term?.focus();
+  }
+
+  function copySelection() {
+    if (term?.hasSelection()) navigator.clipboard.writeText(term.getSelection()).catch(console.error);
+  }
+
+  // term.paste() applies bracketed-paste mode, like the keyboard path does. The plugin reads the
+  // clipboard natively: the webview's own clipboard.readText() asks for permission every time.
+  function pasteClipboard() {
+    readText().then((text) => term?.paste(text)).catch(console.error);
+  }
 </script>
 
-<div
-  bind:this={container}
-  class="grid-container"
-></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="grid-wrap" oncontextmenu={openMenu}>
+  <div bind:this={container} class="grid-container"></div>
+  {#if findOpen && searchAddon}
+    <FindBar search={searchAddon} onClose={closeFind} />
+  {/if}
+</div>
+
+{#if menu && term}
+  <TermMenu x={menu.x} y={menu.y} canCopy={term.hasSelection()} onCopy={copySelection}
+            onPaste={pasteClipboard} onSelectAll={() => term?.selectAll()}
+            onFind={() => (findOpen = true)} onClose={closeMenu} />
+{/if}
 
 <style>
-  .grid-container {
+  .grid-wrap {
+    position: relative;
     width: 100%;
     height: 100%;
-    overflow: hidden;
     flex: 1;
     min-height: 0;
   }
 
+  .grid-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
   :global(.xterm) {
     height: 100%;
-    padding: 4px 8px;
+    padding: var(--term-pad, 8px);
   }
 
   :global(.xterm-viewport) {

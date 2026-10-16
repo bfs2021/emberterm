@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseOsc7, parseOsc52 } from "./osc.js";
+import { parseOsc7, parseOsc52, parseOsc133 } from "./osc.js";
 
 describe("parseOsc7", () => {
   it("reads a Git Bash MSYS path", () => {
@@ -42,5 +42,18 @@ describe("parseOsc52", () => {
   it("ignores malformed payloads", () => {
     expect(parseOsc52("c")).toBeNull();
     expect(parseOsc52("c;%%%")).toBeNull();
+  });
+});
+
+describe("parseOsc133", () => {
+  it("C means a command started, A and D mean the shell is back at a prompt", () => {
+    expect(parseOsc133("C")).toBe(true);
+    expect(parseOsc133("A")).toBe(false);
+    expect(parseOsc133("D;0")).toBe(false);
+  });
+  it("ignores other marks and junk", () => {
+    expect(parseOsc133("B")).toBeNull();
+    expect(parseOsc133("")).toBeNull();
+    expect(parseOsc133("X;1")).toBeNull();
   });
 });
