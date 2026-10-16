@@ -6,6 +6,8 @@ A lightweight terminal for Windows, built on Tauri 2 (Rust) + Svelte 5 + xterm.j
 Many tabs, each with its own shell (Git Bash, WSL, PowerShell, cmd), split panes, and your last
 session back when you reopen it. No account, no telemetry.
 
+![EmberTerm with two tabs and a split pane](docs/screenshot.png)
+
 ## Features
 
 - **Session restore:** closing and reopening brings back every tab, split, title and folder
@@ -71,11 +73,6 @@ docs/        theming.md: writing and importing themes
 ```
 
 [CLAUDE.md](CLAUDE.md) has the architecture, file map and IPC reference.
-
-## Non-goals
-
-AI-agent protocols, scrollback restore, background shells that outlive the window, native GPU rendering,
-and macOS/Linux packaging. The code builds on macOS in CI, but only Windows is supported and tested.
 
 ## License
 
