@@ -4,6 +4,7 @@ use tauri::{AppHandle, State};
 use crate::config::Config;
 use crate::fsutil::StartupWarning;
 use crate::profile::Profile;
+use crate::session_store::SavedSession;
 use crate::state::{lock_or_recover, AppState};
 use crate::terminal::pty;
 use crate::terminal::session::SessionId;
@@ -113,6 +114,32 @@ pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<
 #[tauri::command]
 pub async fn startup_warnings(state: State<'_, AppState>) -> Result<Vec<StartupWarning>, String> {
     Ok(std::mem::take(&mut *lock_or_recover(&state.warnings)))
+}
+
+#[derive(serde::Serialize)]
+pub struct SessionLoad {
+    pub session: Option<SavedSession>,
+    pub warning: Option<StartupWarning>,
+}
+
+#[tauri::command]
+pub async fn session_load() -> SessionLoad {
+    match crate::session_store::session_path() {
+        Some(path) => {
+            let (session, warning) = crate::session_store::load_from(&path);
+            SessionLoad { session, warning }
+        }
+        None => SessionLoad {
+            session: None,
+            warning: None,
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn session_save(session: SavedSession) -> Result<(), String> {
+    let path = crate::session_store::session_path().ok_or("no config directory")?;
+    crate::session_store::save_to(&path, &session).map_err(|e| e.to_string())
 }
 
 // ── Config commands ──────────────────────────────────────────────────────────

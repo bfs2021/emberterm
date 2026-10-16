@@ -5,6 +5,7 @@ mod fsutil;
 mod ipc;
 mod platform;
 mod profile;
+mod session_store;
 mod state;
 mod terminal;
 mod watcher;
@@ -32,6 +33,8 @@ fn main() {
             ipc::session_resize,
             ipc::session_close,
             ipc::startup_warnings,
+            ipc::session_load,
+            ipc::session_save,
             ipc::config_get,
             ipc::config_update,
             ipc::profile_list,
