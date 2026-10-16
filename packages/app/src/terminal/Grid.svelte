@@ -4,6 +4,10 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
+  import { SearchAddon } from "@xterm/addon-search";
+  import { readText } from "@tauri-apps/plugin-clipboard-manager";
+  import FindBar from "./FindBar.svelte";
+  import TermMenu from "./TermMenu.svelte";
   import { sessionWrite, sessionResize } from "../ipc/client.js";
   import { onSessionExit } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
@@ -13,7 +17,7 @@
   import { terminalPadding } from "../theme/paddingStore.js";
   import { parseOsc7, parseOsc52, parseOsc133 } from "../utils/osc.js";
   import { markPaneBusy, forgetPane } from "../stores/paneBusy.js";
-  import { isCopyChord } from "./copyKey.js";
+  import { isCopyChord, isPasteChord, isFindChord } from "./termKeys.js";
   import { shortcutFor } from "../utils/shortcuts.js";
   import { playBell } from "../utils/bell.js";
 
@@ -40,6 +44,9 @@
   let term = $state<Terminal | undefined>(undefined);
   /** Exposed so the font-change effect can call fitAddon.fit() after resize. */
   let fa = $state<FitAddon | undefined>(undefined);
+  let searchAddon = $state<SearchAddon | undefined>(undefined);
+  let findOpen = $state(false);
+  let menu = $state<{ x: number; y: number } | null>(null);
 
   $effect(() => {
     // Read once, untracked: a tracked read here re-ran this effect (tearing the
@@ -70,6 +77,9 @@
       fa = fitAddon;
       t.loadAddon(fitAddon);
       t.loadAddon(new WebLinksAddon());
+      const search = new SearchAddon();
+      t.loadAddon(search);
+      searchAddon = search;
 
       t.open(container);
       t.parser.registerOscHandler(7, (data) => {
@@ -93,6 +103,10 @@
         // App shortcuts must reach the window handler; xterm would otherwise consume Tab
         // (so Ctrl+Tab never switched tabs) by sending it to the shell.
         if (shortcutFor(e)) return false;
+        // Paste is left to the browser's own paste event, which xterm turns into (bracketed)
+        // input; xterm would otherwise send Ctrl+V to the shell as a literal ^V.
+        if (isPasteChord(e)) return false;
+        if (isFindChord(e)) { e.preventDefault(); findOpen = true; return false; }
         if (!isCopyChord(e, t.hasSelection())) return true;
         if (t.hasSelection()) {
           navigator.clipboard.writeText(t.getSelection()).catch(console.error);
@@ -146,6 +160,7 @@
       mounted = false;
       forgetPane(sid);
       fa = undefined;
+      searchAddon = undefined;
       getOutputSink(sid)?.detach();
       unlistenExit?.();
       resizeObserver?.disconnect();
@@ -202,20 +217,60 @@
       fa?.fit();
     }
   });
+
+  function openMenu(e: MouseEvent) {
+    e.preventDefault();
+    menu = { x: e.clientX, y: e.clientY };
+  }
+
+  function closeFind() {
+    findOpen = false;
+    term?.focus();
+  }
+
+  function closeMenu() {
+    menu = null;
+    term?.focus();
+  }
+
+  function copySelection() {
+    if (term?.hasSelection()) navigator.clipboard.writeText(term.getSelection()).catch(console.error);
+  }
+
+  // term.paste() applies bracketed-paste mode, like the keyboard path does. The plugin reads the
+  // clipboard natively: the webview's own clipboard.readText() asks for permission every time.
+  function pasteClipboard() {
+    readText().then((text) => term?.paste(text)).catch(console.error);
+  }
 </script>
 
-<div
-  bind:this={container}
-  class="grid-container"
-></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="grid-wrap" oncontextmenu={openMenu}>
+  <div bind:this={container} class="grid-container"></div>
+  {#if findOpen && searchAddon}
+    <FindBar search={searchAddon} onClose={closeFind} />
+  {/if}
+</div>
+
+{#if menu && term}
+  <TermMenu x={menu.x} y={menu.y} canCopy={term.hasSelection()} onCopy={copySelection}
+            onPaste={pasteClipboard} onSelectAll={() => term?.selectAll()}
+            onFind={() => (findOpen = true)} onClose={closeMenu} />
+{/if}
 
 <style>
+  .grid-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
   .grid-container {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    flex: 1;
-    min-height: 0;
   }
 
   :global(.xterm) {

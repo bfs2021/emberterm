@@ -39,10 +39,11 @@ export const SHORTCUTS: Shortcut[] = [
   { action: "settings", label: "Settings", keys: "Ctrl+,", matches: (e, m) => m && !e.shiftKey && e.key === "," },
 ];
 
-/** Shortcuts handled inside the terminal itself (see terminal/copyKey.ts). */
+/** Shortcuts handled inside the terminal itself (see terminal/termKeys.ts). */
 export const TERMINAL_SHORTCUTS = [
   { label: "Copy", keys: "Ctrl+Shift+C, or Ctrl+C while text is selected" },
-  { label: "Paste", keys: "Ctrl+Shift+V" },
+  { label: "Paste", keys: "Ctrl+V or Ctrl+Shift+V (also in the right-click menu)" },
+  { label: "Find in scrollback", keys: "Ctrl+Shift+F" },
 ];
 
 export function shortcutFor(e: KeyInfo): ShortcutAction | null {

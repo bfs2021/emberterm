@@ -20,6 +20,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(state::AppState::new())
         .setup(|app| {
             if let Err(e) = watcher::setup(app) {
