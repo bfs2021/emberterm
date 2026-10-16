@@ -75,20 +75,33 @@ Create a JSON file following the VS Code color reference. The keys EmberTerm rea
 }
 ```
 
-Keys not present fall back to safe defaults (the Ember Dark values).
+Keys not present fall back to safe defaults (the Ember Dark values), so a theme only needs the ones
+it wants to change. `tokenColors` and everything else in the file is ignored.
 
 ## CSS Variables
 
-EmberTerm maps theme colors to CSS custom properties on `:root`:
+EmberTerm maps theme colors to CSS custom properties on `:root`. Where the VS Code key is missing, the
+fallback is derived from the other colors.
 
-| Variable | Mapped from |
-|---|---|
-| `--bg` | `editor.background` |
-| `--bg-elev` | `sideBar.background` |
-| `--border` | `sideBar.border` |
-| `--fg` | `terminal.foreground` |
-| `--fg-muted` | `tab.inactiveForeground` |
-| `--accent` | `focusBorder` |
-| `--danger` | `errorForeground` |
-| `--status-bg` | `statusBar.background` |
-| `--status-fg` | `statusBar.foreground` |
+| Variable | Mapped from | Used for |
+|---|---|---|
+| `--bg` | `editor.background` | app background |
+| `--bg-elev` | `sideBar.background` | title bar, raised surfaces |
+| `--bg-elev-2` | `editorWidget.background` | dialogs, menus, find bar |
+| `--bg-block` | `editor.lineHighlightBackground` | subtle highlights |
+| `--border` | `sideBar.border` | outlines |
+| `--border-subtle` | `panel.border` | dividers |
+| `--fg` | `terminal.foreground` | text |
+| `--fg-muted` | `tab.inactiveForeground` | secondary text |
+| `--fg-dim` | `terminal.ansiBlack` | disabled and tertiary text |
+| `--accent` | `focusBorder` | active tab, buttons, links, focus |
+| `--accent-soft`, `--accent-glow` | `focusBorder` at 12% / 35% | hover and focus ring |
+| `--danger` | `errorForeground` | destructive actions |
+| `--green` `--red` `--yellow` `--blue` `--cyan` `--magenta` | `terminal.ansi*` | status colors |
+| `--status-bg`, `--status-fg` | `statusBar.background`, `statusBar.foreground` | status bar |
+| `--tab-active-bg`, `--tab-inactive-bg`, `--tab-active-fg`, `--tab-inactive-fg` | `tab.*Background`, `tab.*Foreground` | tab strip |
+
+The terminal grid itself is colored through xterm.js from the `terminal.*` keys above (background,
+foreground, cursor and the 16 ANSI colors), not through these variables.
+
+Use `var(--bg-elev)`, not `--bg-elevated`, in component CSS.
