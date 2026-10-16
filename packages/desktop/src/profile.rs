@@ -2,12 +2,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(TS))]
-#[cfg_attr(test, ts(export, export_to = "../frontend/bindings/Profile.ts"))]
 #[serde(default)]
 pub struct Profile {
     pub id: String,

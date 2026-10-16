@@ -39,8 +39,6 @@ impl BlockStore {
 
 /// Persistent block record stored on the session for `block_get` IPC queries.
 #[derive(Debug, Clone, serde::Serialize, Default)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(export, export_to = "../../frontend/bindings/Block.ts"))]
 pub struct Block {
     pub id: BlockId,
     pub command: String,

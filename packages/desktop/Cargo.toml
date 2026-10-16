@@ -15,11 +15,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 portable-pty = "0.9"
 termwiz = "0.23"
-# wezterm-term: git dep from the wezterm monorepo; integration deferred.
-# Uses branch = "main" — pin to a specific rev once integration begins.
-# When enabling the `wezterm` feature, also add [patch.crates-io] to override
-# termwiz with the same git source to prevent duplicate-crate link errors.
-wezterm-term = { git = "https://github.com/wezterm/wezterm", branch = "main", optional = true }
 toml = "0.8"
 thiserror = "2"
 anyhow = "1"
@@ -29,19 +24,9 @@ dirs = "6"
 notify = "6"
 window-vibrancy = "0.6"
 
-[features]
-default = []
-# Enable the wezterm-term VT model; requires network access when building.
-wezterm = ["dep:wezterm-term"]
-
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-ts-rs = { version = "10", features = ["serde-compat"] }
 proptest = "1"
-
-[[bench]]
-name = "osc_parser"
-harness = false
+tempfile = "3"
 
 [profile.release]
 panic = "abort"
