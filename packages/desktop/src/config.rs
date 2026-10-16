@@ -16,6 +16,8 @@ pub struct Config {
 #[serde(default)]
 pub struct AppearanceConfig {
     pub theme: String,
+    /// VS Code theme JSON the user imported, kept verbatim so it can be re-imported at startup.
+    pub custom_themes: Vec<String>,
     pub font_family: String,
     pub font_size: u32,
     pub line_height: f32,
@@ -39,6 +41,7 @@ impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
             theme: "ember-dark".into(),
+            custom_themes: Vec::new(),
             font_family: "JetBrains Mono, Cascadia Code, Fira Code, monospace".into(),
             font_size: 13,
             line_height: 1.2,

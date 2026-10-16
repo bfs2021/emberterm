@@ -13,6 +13,7 @@
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
   import { loadPadding } from "./theme/paddingStore.js";
+  import { loadThemeConfig } from "./theme/store.js";
   import { removeOutputSink } from "./terminal/outputSink.js";
   import { spawnPane } from "./session/spawnPane.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -115,7 +116,7 @@
     (async () => {
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadPadding(), loadDefaultProfileId()]);
+        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadPadding(), loadThemeConfig(), loadDefaultProfileId()]);
         const { session, warning } = await sessionLoad();
         if (warning) pushToast(formatWarning(warning));
         const restored = session ? await restoreSession(session) : false;

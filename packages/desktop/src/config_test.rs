@@ -95,3 +95,37 @@ opacity = 0.75
     assert!(w.is_none());
     assert_eq!(cfg.appearance.font_size, 16);
 }
+
+#[test]
+fn custom_themes_survive_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let mut cfg = Config::default();
+    cfg.appearance.theme = "my-theme".into();
+    // VS Code theme JSON: quotes, newlines and backslashes must all round-trip.
+    cfg.appearance.custom_themes =
+        vec!["{\n  \"name\": \"My \\ Theme\",\n  \"colors\": {}\n}".to_string()];
+    cfg.save_to(&path).unwrap();
+    let (loaded, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert_eq!(loaded.appearance.theme, "my-theme");
+    assert_eq!(
+        loaded.appearance.custom_themes,
+        cfg.appearance.custom_themes
+    );
+}
+
+#[test]
+fn config_without_custom_themes_gets_an_empty_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[appearance]
+theme = \"dracula\"
+",
+    )
+    .unwrap();
+    let (cfg, _) = Config::load_from(&path, true);
+    assert!(cfg.appearance.custom_themes.is_empty());
+}
