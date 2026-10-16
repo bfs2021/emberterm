@@ -151,3 +151,23 @@ export function drainOutputBuffer(sessionId: string): Uint8Array[] {
   _outputBuffers.delete(sessionId);
   return buf;
 }
+
+// ── Toasts ────────────────────────────────────────────────────────────────────
+export interface Toast {
+  id: number;
+  message: string;
+}
+
+export const toasts = writable<Toast[]>([]);
+let toastCounter = 0;
+
+export function pushToast(message: string, ttlMs = 8000): number {
+  const id = ++toastCounter;
+  toasts.update((ts) => [...ts, { id, message }]);
+  setTimeout(() => dismissToast(id), ttlMs);
+  return id;
+}
+
+export function dismissToast(id: number) {
+  toasts.update((ts) => ts.filter((t) => t.id !== id));
+}

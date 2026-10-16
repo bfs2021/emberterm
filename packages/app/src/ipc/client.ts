@@ -85,6 +85,17 @@ export async function gitStatus(cwd: string): Promise<GitStatus> {
   return invoke<GitStatus>("git_status", { cwd });
 }
 
+export interface StartupWarning {
+  file: string;
+  message: string;
+  backup?: string | null;
+}
+
+/** Warnings from loading config/profiles at startup (drained on read). */
+export async function startupWarnings(): Promise<StartupWarning[]> {
+  return invoke("startup_warnings");
+}
+
 /** Returns true when no config.toml exists yet (first run). */
 export async function configIsFirstRun(): Promise<boolean> {
   return invoke<boolean>("config_is_first_run");

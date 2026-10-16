@@ -22,11 +22,20 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
 
             for path in &event.paths {
                 if path.file_name().is_some_and(|n| n == "config.toml") {
-                    let new_cfg = crate::config::Config::load();
-                    *lock_or_recover(&state.config) = new_cfg.clone();
-                    let _ = app_handle.emit("config:updated", new_cfg);
+                    match crate::config::Config::load(false) {
+                        (_, Some(warning)) => {
+                            let _ = app_handle.emit("app:warning", warning);
+                        }
+                        (new_cfg, None) => {
+                            *lock_or_recover(&state.config) = new_cfg.clone();
+                            let _ = app_handle.emit("config:updated", new_cfg);
+                        }
+                    }
                 } else if path.extension().is_some_and(|e| e == "toml") {
-                    let new_profiles = crate::profile::load_profiles();
+                    let (new_profiles, warnings) = crate::profile::load_profiles(false);
+                    for warning in warnings {
+                        let _ = app_handle.emit("app:warning", warning);
+                    }
                     *lock_or_recover(&state.profiles) = new_profiles.clone();
                     let _ = app_handle.emit("profiles:updated", new_profiles);
                 }

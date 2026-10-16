@@ -31,6 +31,7 @@ fn main() {
             ipc::session_write,
             ipc::session_resize,
             ipc::session_close,
+            ipc::startup_warnings,
             ipc::config_get,
             ipc::config_update,
             ipc::profile_list,

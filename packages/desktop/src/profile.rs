@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::fsutil::write_atomic;
+use crate::fsutil::{load_user_file, write_atomic, StartupWarning};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -54,38 +54,37 @@ pub fn profiles_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("ember").join("profiles"))
 }
 
-pub fn load_profiles() -> Vec<Profile> {
-    let dir = match profiles_dir() {
-        Some(d) => d,
-        None => return vec![Profile::default()],
-    };
-
-    if !dir.exists() {
-        return vec![Profile::default()];
+pub fn load_profiles(quarantine_broken: bool) -> (Vec<Profile>, Vec<StartupWarning>) {
+    match profiles_dir() {
+        Some(dir) => load_profiles_from(&dir, quarantine_broken),
+        None => (vec![Profile::default()], Vec::new()),
     }
+}
 
+pub fn load_profiles_from(
+    dir: &Path,
+    quarantine_broken: bool,
+) -> (Vec<Profile>, Vec<StartupWarning>) {
     let mut profiles = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                if let Some(p) = load_profile_file(&path) {
-                    profiles.push(p);
-                }
+    let mut warnings = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for path in entries.flatten().map(|e| e.path()) {
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
             }
+            let (profile, warning) = load_user_file(&path, quarantine_broken, |text| {
+                toml::from_str::<Profile>(text)
+                    .map(Some)
+                    .map_err(|e| e.to_string())
+            });
+            profiles.extend(profile);
+            warnings.extend(warning);
         }
     }
-
     if profiles.is_empty() {
         profiles.push(Profile::default());
     }
-
-    profiles
-}
-
-fn load_profile_file(path: &Path) -> Option<Profile> {
-    let text = std::fs::read_to_string(path).ok()?;
-    toml::from_str(&text).ok()
+    (profiles, warnings)
 }
 
 pub fn save_profile(profile: &Profile) -> Result<()> {
@@ -135,3 +134,7 @@ fn default_args() -> Vec<String> {
         vec![]
     }
 }
+
+#[cfg(test)]
+#[path = "profile_test.rs"]
+mod tests;

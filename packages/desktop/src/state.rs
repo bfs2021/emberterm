@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::config::Config;
+use crate::fsutil::StartupWarning;
 use crate::profile::Profile;
 use crate::terminal::session::{Session, SessionId};
 
@@ -11,6 +12,8 @@ pub struct AppState {
     pub profiles: Mutex<Vec<Profile>>,
     /// Keeps the file watcher alive for the duration of the app.
     pub watcher: Mutex<Option<notify::RecommendedWatcher>>,
+    /// Warnings collected while loading config and profiles at startup.
+    pub warnings: Mutex<Vec<StartupWarning>>,
     next_id: Mutex<u64>,
 }
 
@@ -22,11 +25,14 @@ impl Default for AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        let (config, config_warning) = Config::load(true);
+        let (profiles, profile_warnings) = crate::profile::load_profiles(true);
         Self {
             sessions: Mutex::new(HashMap::new()),
-            config: Mutex::new(Config::load()),
-            profiles: Mutex::new(crate::profile::load_profiles()),
+            config: Mutex::new(config),
+            profiles: Mutex::new(profiles),
             watcher: Mutex::new(None),
+            warnings: Mutex::new(config_warning.into_iter().chain(profile_warnings).collect()),
             next_id: Mutex::new(1),
         }
     }

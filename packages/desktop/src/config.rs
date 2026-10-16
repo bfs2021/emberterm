@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::fsutil::write_atomic;
+use crate::fsutil::{load_user_file, write_atomic, StartupWarning};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -65,21 +65,32 @@ impl Default for BehaviorConfig {
 }
 
 impl Config {
-    pub fn load() -> Self {
+    pub fn load(quarantine_broken: bool) -> (Self, Option<StartupWarning>) {
         match config_path() {
-            Some(path) if path.exists() => match std::fs::read_to_string(&path) {
-                Ok(text) => toml::from_str(&text).unwrap_or_default(),
-                Err(_) => Config::default(),
-            },
-            _ => Config::default(),
+            Some(path) => Self::load_from(&path, quarantine_broken),
+            None => (Self::default(), None),
         }
     }
 
+    pub fn load_from(path: &Path, quarantine_broken: bool) -> (Self, Option<StartupWarning>) {
+        load_user_file(path, quarantine_broken, |text| {
+            toml::from_str(text).map_err(|e| e.to_string())
+        })
+    }
+
     pub fn save(&self) -> Result<()> {
-        if let Some(path) = config_path() {
-            let text = toml::to_string_pretty(self)?;
-            write_atomic(&path, text.as_bytes())?;
+        let path = config_path().ok_or_else(|| anyhow::anyhow!("no config directory"))?;
+        self.save_to(&path)
+    }
+
+    /// Refuses to overwrite a config.toml the user is part-way through editing.
+    pub fn save_to(&self, path: &Path) -> Result<()> {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if let Err(e) = toml::from_str::<Config>(&text) {
+                anyhow::bail!("config.toml has an error; fix it before changing settings: {e}");
+            }
         }
+        write_atomic(path, toml::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
 }
@@ -87,3 +98,7 @@ impl Config {
 pub fn config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("ember").join("config.toml"))
 }
+
+#[cfg(test)]
+#[path = "config_test.rs"]
+mod tests;

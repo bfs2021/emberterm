@@ -23,8 +23,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 /// Moves a file that failed to parse aside so a later save cannot overwrite
 /// the user's text. Returns the backup path.
-// Used by load_user_file in the next task; the allow goes away there.
-#[allow(dead_code)]
 pub fn quarantine(path: &Path) -> std::io::Result<PathBuf> {
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -39,6 +37,62 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut s = path.as_os_str().to_owned();
     s.push(suffix);
     PathBuf::from(s)
+}
+
+/// A user-editable file that could not be read or parsed.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StartupWarning {
+    pub file: String,
+    pub message: String,
+    pub backup: Option<String>,
+}
+
+impl StartupWarning {
+    fn new(path: &Path, message: String, backup: Option<PathBuf>) -> Self {
+        Self {
+            file: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            message,
+            backup: backup.map(|b| b.display().to_string()),
+        }
+    }
+}
+
+/// Reads and parses a user-editable file. A parse failure yields the default
+/// value plus a warning; at startup (`quarantine_broken`) the file is also moved
+/// aside so the next save cannot overwrite it. Missing files are not an error.
+pub fn load_user_file<T: Default>(
+    path: &Path,
+    quarantine_broken: bool,
+    parse: impl FnOnce(&str) -> Result<T, String>,
+) -> (T, Option<StartupWarning>) {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (T::default(), None),
+        Err(e) => {
+            return (
+                T::default(),
+                Some(StartupWarning::new(path, e.to_string(), None)),
+            )
+        }
+    };
+    match parse(&text) {
+        Ok(value) => (value, None),
+        Err(message) => {
+            tracing::warn!(file = %path.display(), %message, "user file failed to parse");
+            let backup = if quarantine_broken {
+                quarantine(path).ok()
+            } else {
+                None
+            };
+            (
+                T::default(),
+                Some(StartupWarning::new(path, message, backup)),
+            )
+        }
+    }
 }
 
 #[cfg(test)]

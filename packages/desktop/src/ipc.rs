@@ -1,6 +1,7 @@
 use tauri::{AppHandle, State};
 
 use crate::config::Config;
+use crate::fsutil::StartupWarning;
 use crate::profile::Profile;
 use crate::state::{lock_or_recover, AppState};
 use crate::terminal::pty;
@@ -99,6 +100,12 @@ pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<
     Ok(())
 }
 
+/// Warnings collected while loading config and profiles at startup. Drained on read.
+#[tauri::command]
+pub async fn startup_warnings(state: State<'_, AppState>) -> Result<Vec<StartupWarning>, String> {
+    Ok(std::mem::take(&mut *lock_or_recover(&state.warnings)))
+}
+
 // ── Config commands ──────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -114,8 +121,10 @@ pub async fn config_update(
     let mut cfg = lock_or_recover(&state.config);
     let mut current = serde_json::to_value(cfg.clone()).map_err(|e| e.to_string())?;
     json_merge(&mut current, patch);
-    *cfg = serde_json::from_value(current).map_err(|e| e.to_string())?;
-    cfg.save().map_err(|e| e.to_string())?;
+    let updated: Config = serde_json::from_value(current).map_err(|e| e.to_string())?;
+    // Save first: if the file on disk is broken, memory must not drift from it.
+    updated.save().map_err(|e| e.to_string())?;
+    *cfg = updated;
     Ok(cfg.clone())
 }
 

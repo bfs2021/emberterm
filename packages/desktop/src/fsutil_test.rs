@@ -53,3 +53,35 @@ fn quarantine_moves_file_aside() {
     let name = backup.file_name().unwrap().to_string_lossy().into_owned();
     assert!(name.starts_with("config.toml.broken-"), "{name}");
 }
+
+#[test]
+fn load_user_file_missing_is_default_without_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let (v, w): (u32, _) = load_user_file(&dir.path().join("nope"), true, |_| Ok(7));
+    assert_eq!(v, 0);
+    assert!(w.is_none());
+}
+
+#[test]
+fn load_user_file_broken_quarantines_and_warns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("x.toml");
+    std::fs::write(&path, "bad").unwrap();
+    let (v, w): (u32, _) = load_user_file(&path, true, |_| Err("line 1: bad".into()));
+    assert_eq!(v, 0);
+    let w = w.unwrap();
+    assert_eq!(w.file, "x.toml");
+    assert_eq!(w.message, "line 1: bad");
+    assert!(w.backup.unwrap().contains("x.toml.broken-"));
+    assert!(!path.exists());
+}
+
+#[test]
+fn load_user_file_broken_without_quarantine_keeps_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("x.toml");
+    std::fs::write(&path, "bad").unwrap();
+    let (_, w): (u32, _) = load_user_file(&path, false, |_| Err("bad".into()));
+    assert!(w.unwrap().backup.is_none());
+    assert!(path.exists());
+}

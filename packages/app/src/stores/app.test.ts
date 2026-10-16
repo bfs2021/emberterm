@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 import {
   tabs,
+  toasts,
+  pushToast,
+  dismissToast,
   addTab,
   removeTab,
   activateTab,
@@ -163,5 +166,21 @@ describe("reorderTab", () => {
     reorderTab("nonexistent", t1);
     const ids = get(tabs).map((t) => t.id);
     expect(ids).toEqual([t1]);
+  });
+});
+
+describe("toasts", () => {
+  it("pushToast adds and auto-dismisses", () => {
+    vi.useFakeTimers();
+    pushToast("hello", 1000);
+    expect(get(toasts).map((t) => t.message)).toEqual(["hello"]);
+    vi.advanceTimersByTime(1000);
+    expect(get(toasts)).toEqual([]);
+    vi.useRealTimers();
+  });
+  it("dismissToast removes by id", () => {
+    const id = pushToast("bye");
+    dismissToast(id);
+    expect(get(toasts).find((t) => t.id === id)).toBeUndefined();
   });
 });

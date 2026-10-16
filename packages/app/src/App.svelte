@@ -2,18 +2,20 @@
   import TabPane from "./terminal/TabPane.svelte";
   import TitleBar from "./chrome/TitleBar.svelte";
   import StatusBar from "./chrome/StatusBar.svelte";
+  import Toasts from "./chrome/Toasts.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
-  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, type Profile } from "./ipc/client.js";
+  import { formatWarning } from "./utils/warnings.js";
+  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { onTerminalOutput, onTerminalBell, onProfilesUpdated, onConfigUpdated } from "./ipc/events.js";
+  import { onTerminalOutput, onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
     addTab, removeTab, activateTab, setTabCwd, setTabTitle,
-    setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer,
+    setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer, pushToast,
   } from "./stores/app.js";
 
   let loading = $state(true);
@@ -77,6 +79,7 @@
       if (!active) return;
       const fns = await Promise.all([
         onTerminalBell(() => playBell()),
+        onAppWarning((w) => pushToast(formatWarning(w))),
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
         onConfigUpdated(() => {
           configGet().then((cfg: unknown) => {
@@ -87,6 +90,7 @@
       ]);
       if (!active) { fns.forEach((f) => f()); return; }
       cleanup.push(...fns);
+      startupWarnings().then((ws) => ws.forEach((w) => pushToast(formatWarning(w)))).catch(console.error);
     })();
     return () => { active = false; cleanup.forEach((f) => f()); };
   });
@@ -195,6 +199,7 @@
 {#if showWelcome}
   <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
 {/if}
+<Toasts />
 
 <style>
   .app {
