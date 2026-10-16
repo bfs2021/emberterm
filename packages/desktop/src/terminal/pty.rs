@@ -9,12 +9,13 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 
 use super::events::SessionExitPayload;
+use super::output::OutputPipe;
 use super::session::{Session, SessionId};
 use super::shell_hooks;
 
 /// Spawns a PTY session using `profile` (or the platform default shell when
-/// `None`) and starts the PTY reader thread that forwards output bytes to the
-/// webview as Tauri events.
+/// `None`) and starts the threads that read its output and send it to the
+/// webview over `on_output`.
 pub fn spawn_session(
     session_id: SessionId,
     profile: Option<&crate::profile::Profile>,
@@ -107,49 +108,38 @@ pub fn spawn_session(
         })
         .context("failed to spawn PTY wait thread")?;
 
+    // Reading and sending are decoupled: one IPC send per ConPTY chunk is what made floods slow.
+    let pipe = Arc::new(OutputPipe::default());
+    let reader_pipe = pipe.clone();
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
-            let exit_app = app_clone.clone();
-            let exit_sid = sid.clone();
-            let _exit_guard = OnDrop(move || emit_exit(&exit_app, &exit_sid, 0, &exit_once));
+            let _close = OnDrop(|| reader_pipe.close());
             let mut buf = vec![0u8; 8192];
-            // DEC 2026 synchronized output: buffer chunks between begin/end markers.
-            let mut sync_buf: Vec<u8> = Vec::new();
-            let mut in_sync = false;
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let chunk = &buf[..n];
-
-                        // DEC 2026: detect begin/end synchronized output markers.
-                        // \x1b[?2026h = begin, \x1b[?2026l = end.
-                        // Buffer chunks during sync to coalesce into a single IPC event.
-                        let had_sync_end = detect_sync(chunk, &mut in_sync, &mut sync_buf);
-
-                        // Forward bytes to xterm.js: either the buffered+flushed sync data,
-                        // or the raw chunk (when not in sync mode).
-                        let to_emit: Vec<u8> = if had_sync_end {
-                            // sync_buf was flushed by detect_sync; take it.
-                            std::mem::take(&mut sync_buf)
-                        } else if in_sync {
-                            // Still accumulating — don't emit yet.
-                            continue;
-                        } else {
-                            chunk.to_vec()
-                        };
-
-                        if let Err(e) = on_output.send(InvokeResponseBody::Raw(to_emit)) {
-                            tracing::debug!(session_id = %sid, error = %e, "output channel closed; stopping reader");
-                            break;
-                        }
-                    }
-                    Err(_) => break,
+            while let Ok(n @ 1..) = reader.read(&mut buf) {
+                if !reader_pipe.push(&buf[..n]) {
+                    break;
                 }
             }
         })
         .context("failed to spawn PTY reader thread")?;
+
+    std::thread::Builder::new()
+        .name(format!("pty-sender-{sid}"))
+        .spawn(move || {
+            // Reports the exit after the last output is sent, also when this thread panics.
+            let _exit_guard = OnDrop(|| {
+                pipe.close();
+                emit_exit(&app_clone, &sid, 0, &exit_once);
+            });
+            while let Some(bytes) = pipe.next_batch() {
+                if let Err(e) = on_output.send(InvokeResponseBody::Raw(bytes)) {
+                    tracing::debug!(session_id = %sid, error = %e, "output channel closed; stopping sender");
+                    break;
+                }
+            }
+        })
+        .context("failed to spawn PTY sender thread")?;
 
     Ok(Session {
         master: pty_pair.master,
@@ -191,39 +181,8 @@ impl<F: FnMut()> Drop for OnDrop<F> {
     }
 }
 
-/// DEC 2026 synchronized output — update sync state based on `chunk`.
-///
-/// - Detects `ESC [ ? 2026 h` (begin sync) and `ESC [ ? 2026 l` (end sync).
-/// - While in sync mode, appends incoming bytes to `sync_buf` instead of emitting.
-/// - Returns `true` when an end-sync marker is found; at that point `sync_buf`
-///   holds the complete coalesced frame and the caller should emit it.
-pub(super) fn detect_sync(chunk: &[u8], in_sync: &mut bool, sync_buf: &mut Vec<u8>) -> bool {
-    const BEGIN: &[u8] = b"\x1b[?2026h";
-    const END: &[u8] = b"\x1b[?2026l";
-
-    let has_begin = chunk.windows(BEGIN.len()).any(|w| w == BEGIN);
-    let has_end = chunk.windows(END.len()).any(|w| w == END);
-
-    if has_begin && !*in_sync {
-        *in_sync = true;
-    }
-
-    if *in_sync {
-        sync_buf.extend_from_slice(chunk);
-    }
-
-    if has_end && *in_sync {
-        *in_sync = false;
-        return true; // caller should emit sync_buf
-    }
-
-    false
-}
-
 #[cfg(test)]
 mod tests {
-    // ── DEC 2026 synchronized output ──────────────────────────────────────────
-
     #[test]
     fn on_drop_runs_during_panic() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -243,51 +202,5 @@ mod tests {
         let once = super::ExitOnce::default();
         assert!(once.first());
         assert!(!once.first());
-    }
-
-    use super::detect_sync;
-
-    #[test]
-    fn dec2026_begin_and_end_in_same_chunk_returns_true() {
-        let mut in_sync = false;
-        let mut buf = Vec::new();
-        // One chunk contains both begin and end
-        let chunk = b"\x1b[?2026hsome output\x1b[?2026l";
-        assert!(detect_sync(chunk, &mut in_sync, &mut buf));
-        assert!(!in_sync);
-        assert_eq!(buf, chunk);
-    }
-
-    #[test]
-    fn dec2026_begin_chunk_does_not_emit() {
-        let mut in_sync = false;
-        let mut buf = Vec::new();
-        // First chunk: begin only
-        let chunk1 = b"\x1b[?2026hpart1";
-        assert!(!detect_sync(chunk1, &mut in_sync, &mut buf));
-        assert!(in_sync);
-        assert_eq!(&buf[..chunk1.len()], chunk1.as_ref());
-    }
-
-    #[test]
-    fn dec2026_end_chunk_coalesces_and_returns_true() {
-        let mut in_sync = false;
-        let mut buf = Vec::new();
-        let chunk1 = b"\x1b[?2026hpart1";
-        let chunk2 = b"part2\x1b[?2026l";
-        detect_sync(chunk1, &mut in_sync, &mut buf);
-        assert!(detect_sync(chunk2, &mut in_sync, &mut buf));
-        assert!(!in_sync);
-        let expected: Vec<u8> = [chunk1.as_ref(), chunk2.as_ref()].concat();
-        assert_eq!(buf, expected);
-    }
-
-    #[test]
-    fn dec2026_no_markers_plain_passthrough() {
-        let mut in_sync = false;
-        let mut buf = Vec::new();
-        assert!(!detect_sync(b"plain output", &mut in_sync, &mut buf));
-        assert!(!in_sync);
-        assert!(buf.is_empty());
     }
 }
