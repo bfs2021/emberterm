@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -8,6 +9,7 @@ use tauri::{AppHandle, Emitter};
 
 use super::events::SessionExitPayload;
 use super::session::{Session, SessionId};
+use super::shell_hooks;
 
 /// Spawns a PTY session using `profile` (or the platform default shell when
 /// `None`) and starts the PTY reader thread that forwards output bytes to the
@@ -15,6 +17,7 @@ use super::session::{Session, SessionId};
 pub fn spawn_session(
     session_id: SessionId,
     profile: Option<&crate::profile::Profile>,
+    restore_cwd: Option<&str>,
     on_output: Channel,
     app: AppHandle,
 ) -> Result<Session> {
@@ -33,38 +36,38 @@ pub fn spawn_session(
         .map(|p| p.shell.clone())
         .unwrap_or_else(super::which::default_shell);
 
-    let mut cmd = CommandBuilder::new(&shell);
+    let profile_args = profile
+        .map(|p| p.args.clone())
+        .unwrap_or_else(super::which::default_args);
+    let profile_cwd = profile
+        .map(|p| p.resolved_cwd())
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")));
+    let wslenv = std::env::var("WSLENV").ok();
+    let plan = shell_hooks::prepare(&shell_hooks::HookInput {
+        kind: shell_hooks::shell_kind(&shell),
+        profile_args: &profile_args,
+        profile_cwd,
+        restore_cwd,
+        inherited_prompt_command: std::env::var_os("PROMPT_COMMAND").is_some(),
+        inherited_wslenv: wslenv.as_deref(),
+        dir_exists: &|p: &std::path::Path| p.is_dir(),
+    });
 
-    // Profile-defined arguments (e.g. ["-NoLogo"] for pwsh, ["--login", "-i"] for git bash)
+    let mut cmd = CommandBuilder::new(&shell);
+    cmd.args(&plan.args);
+    cmd.cwd(&plan.cwd);
     if let Some(p) = profile {
-        for arg in &p.args {
-            cmd.arg(arg);
-        }
-        // Set working directory
-        cmd.cwd(p.resolved_cwd());
-        // Per-profile environment overrides
         for (k, v) in &p.env {
             cmd.env(k, v);
         }
     }
-
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-
     if let Ok(path) = std::env::var("PATH") {
         cmd.env("PATH", path);
     }
-
-    // Shell integration: emit OSC 7 (cwd) before every prompt for bash/zsh/sh.
-    // This enables the git status display and cwd tracking in the status bar.
-    // The env var is only set when no PROMPT_COMMAND is already present so we
-    // don't clobber a user's existing config.  If the user's .bashrc sets their
-    // own PROMPT_COMMAND they can append the sequence themselves.
-    if is_bash_like(&shell) && std::env::var("PROMPT_COMMAND").is_err() {
-        cmd.env(
-            "PROMPT_COMMAND",
-            r#"printf '\033]7;file://%s\033\\' "$PWD""#,
-        );
+    for (k, v) in &plan.env {
+        cmd.env(k, v);
     }
 
     let _child = pty_pair
@@ -182,19 +185,6 @@ pub(super) fn detect_sync(chunk: &[u8], in_sync: &mut bool, sync_buf: &mut Vec<u
     }
 
     false
-}
-
-/// Returns true for bash, zsh, sh, or any variant ending in those names
-/// (e.g. "git bash", "bash.exe").  Used to decide whether to inject OSC 7
-/// emission via PROMPT_COMMAND.
-fn is_bash_like(shell: &str) -> bool {
-    let name = shell
-        .split(['/', '\\'])
-        .next_back()
-        .unwrap_or(shell)
-        .to_lowercase();
-    let stem = name.trim_end_matches(".exe");
-    matches!(stem, "bash" | "zsh" | "sh" | "ash" | "dash")
 }
 
 #[cfg(test)]

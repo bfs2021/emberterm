@@ -117,9 +117,9 @@
     if (tab) await closeTab(tab.id, tab.sessionId);
   }
 
-  async function spawnPane(profileId?: string): Promise<string> {
+  async function spawnPane(profileId?: string, cwd?: string): Promise<string> {
     const sink = createOutputSink();
-    const sessionId = await sessionCreate({ profileId, onOutput: sink.push });
+    const sessionId = await sessionCreate({ profileId, cwd, onOutput: sink.push });
     registerOutputSink(sessionId, sink);
     return sessionId;
   }

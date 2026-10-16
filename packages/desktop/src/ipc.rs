@@ -13,6 +13,7 @@ use crate::terminal::session::SessionId;
 #[tauri::command]
 pub async fn session_create(
     profile_id: Option<String>,
+    cwd: Option<String>,
     on_output: Channel,
     app: AppHandle,
     state: State<'_, AppState>,
@@ -39,8 +40,14 @@ pub async fn session_create(
         }
     };
 
-    let session = pty::spawn_session(session_id.clone(), profile.as_ref(), on_output, app)
-        .map_err(|e| e.to_string())?;
+    let session = pty::spawn_session(
+        session_id.clone(),
+        profile.as_ref(),
+        cwd.as_deref(),
+        on_output,
+        app,
+    )
+    .map_err(|e| e.to_string())?;
     lock_or_recover(&state.sessions).insert(session_id.clone(), session);
     tracing::info!(
         session_id = %session_id,
