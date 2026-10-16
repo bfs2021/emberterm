@@ -8,6 +8,7 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { formatWarning } from "./utils/warnings.js";
   import { shortcutFor } from "./utils/shortcuts.js";
+  import { closeWindowWhenEmpty } from "./session/closeWindow.js";
   import { isPaneBusy } from "./stores/paneBusy.js";
   import { sessionClose, sessionBusy, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
@@ -57,8 +58,7 @@
     } catch { /* keep the previous value */ }
   }
 
-  let autosaveReady = $state(false);
-  let lastSaveErrorAt = 0;
+  let autosaveReady = $state(false), lastSaveErrorAt = 0;
   const autosave = createAutosave({
     delayMs: 500,
     save: sessionSave,
@@ -212,7 +212,7 @@
     await sessionClose(sessionId).catch(() => {});
     removeOutputSink(sessionId);
     removeTab(tabId);
-    if ($tabs.length === 0) showWelcome = true;
+    if ($tabs.length === 0) await closeWindowWhenEmpty().catch(console.error);
   }
 
   async function splitActiveTab(direction: "horizontal" | "vertical") {
