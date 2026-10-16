@@ -72,6 +72,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Versions agree
+        run: node scripts/version.mjs check
+
       - name: Type check
         run: pnpm turbo check
 

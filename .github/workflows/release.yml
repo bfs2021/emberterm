@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.2.0 (after bumping "version" in packages/desktop/tauri.conf.json and Cargo.toml).
+# Push a tag like v0.2.0 after `pnpm version:set 0.2.0` and merging it (see CONTRIBUTING.md).
 # Builds the Windows installer, signs the update with TAURI_SIGNING_PRIVATE_KEY and publishes
 # latest.json, which the in-app "Check for updates" button reads.
 on:
@@ -30,6 +30,9 @@ jobs:
           workspaces: packages/desktop
 
       - run: pnpm install --frozen-lockfile
+
+      # A tag that disagrees with the files would publish an installer labelled with the wrong version.
+      - run: node scripts/version.mjs check ${{ github.ref_name }}
 
       - uses: tauri-apps/tauri-action@v0
         env:
