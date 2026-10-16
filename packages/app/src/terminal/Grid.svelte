@@ -13,6 +13,7 @@
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { getOutputSink } from "./outputSink.js";
+  import { attachWebgl } from "./webglRenderer.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { terminalPadding } from "../theme/paddingStore.js";
   import { parseOsc7, parseOsc52, parseOsc133 } from "../utils/osc.js";
@@ -207,6 +208,18 @@
     term.options.cursorStyle = cursorStyle as "block" | "bar" | "underline";
     term.options.cursorBlink = cursorBlink;
     // scrollback can only be set at construction time in xterm.js — new sessions pick it up.
+  });
+
+  // WebGL only while the tab is shown: Chromium keeps ~16 live WebGL contexts across all tabs and
+  // splits and silently drops the oldest. Hidden tabs fall back to the DOM renderer.
+  $effect(() => {
+    if (!paneActive || !term || !fa) return;
+    const detach = attachWebgl(term);
+    // WebGL rounds cells to whole device pixels, so the grid size can change: re-fit, tell the PTY.
+    fa.fit();
+    sessionResize(paneSession, term.cols, term.rows).catch(console.error);
+    untrack(() => onResize)?.(term.cols, term.rows);
+    return detach;
   });
 
   // Focus the terminal when this tab becomes active.
