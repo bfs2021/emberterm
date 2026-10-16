@@ -4,8 +4,6 @@
 
 EmberTerm is a lightweight Windows terminal for daily use: Tauri 2 (Rust) + Svelte 5 + xterm.js, built on `portable-pty`. Many tabs with different shells (Git Bash, WSL, pwsh, cmd), split panes, and the previous session restored on reopen. It replaces Tabby, which failed to launch after updates and forgot sessions.
 
-**Non-goals:** AI-agent protocols, scrollback restore, background shells that outlive the window, native GPU rendering, macOS/Linux packaging (macOS only builds in CI), cmd folder tracking.
-
 **Stack:**
 - Rust `1.85`: `tauri 2`, `portable-pty 0.9`, `serde`, `anyhow`/`thiserror`, `notify`, `tracing`, `sysinfo`, `fontdb`; Tauri plugins: opener, clipboard-manager (read), window-state, updater (no `zip` feature, see Cargo.toml), process
 - Frontend: Svelte 5 (runes), TypeScript, Vite 6, xterm.js 5 (fit, web-links, search addons)
