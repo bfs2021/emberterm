@@ -99,7 +99,8 @@
     align-items: stretch;
     height: 36px;
     background: var(--bg-elev, #010409);
-    border-bottom: 1px solid var(--border, #21262d);
+    /* Drawn behind the tabs, so the active tab can cover it and join the pane below. */
+    box-shadow: inset 0 -1px 0 var(--border, #21262d);
     flex-shrink: 0;
     user-select: none;
   }

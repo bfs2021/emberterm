@@ -197,46 +197,39 @@
     padding: 0 8px 0 10px;
     height: 30px;
     background: transparent;
-    border: 1px solid transparent;
-    border-bottom: none;
+    border: none;
     border-radius: 8px 8px 0 0;
     color: var(--tab-inactive-fg, #7d8590);
     cursor: pointer;
     white-space: nowrap;
     font-size: 12px;
-    transition: color 0.1s, background 0.1s, border-color 0.1s;
-    min-width: 120px;
+    transition: color 0.1s, background 0.1s;
+    min-width: 104px;
     max-width: 220px;
     flex-shrink: 1;
     box-sizing: border-box;
   }
 
+  /* Theme-aware tint: a fixed white overlay vanishes on light themes. */
   .tab:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: color-mix(in srgb, var(--fg, #e6edf3) 7%, transparent);
     color: var(--tab-active-fg, #e6edf3);
   }
 
+  /* The active tab is the terminal's own background, flush with the pane below (the title
+     bar's bottom line stops behind it). Inset shadows follow the rounded corners: a 2px
+     accent along the top and a hairline on each side. */
   .tab.active {
     background: var(--tab-active-bg, #0d1117);
-    border-color: var(--border, #21262d);
     color: var(--tab-active-fg, #e6edf3);
+    box-shadow:
+      inset 0 2px 0 var(--accent, #FF6B35),
+      inset 1px 0 0 var(--border, #21262d),
+      inset -1px 0 0 var(--border, #21262d);
   }
 
   .tab.drag-over {
-    border-left: 2px solid var(--accent, #FF6B35);
-  }
-
-  /* Top accent line for active tab */
-  .tab.active::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 10px;
-    right: 10px;
-    height: 2px;
-    background: var(--accent, #FF6B35);
-    border-radius: 0 0 2px 2px;
-    box-shadow: 0 0 8px var(--accent-glow, rgba(255, 107, 53, 0.35));
+    box-shadow: inset 2px 0 0 var(--accent, #FF6B35);
   }
 
   /* ── Shell icon ───────────────────────────── */
