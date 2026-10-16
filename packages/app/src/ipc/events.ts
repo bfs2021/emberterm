@@ -12,16 +12,6 @@ export interface SessionExitPayload {
   code: number;
 }
 
-export interface TerminalTitlePayload {
-  session_id: string;
-  title: string;
-}
-
-export interface TerminalCwdPayload {
-  session_id: string;
-  cwd: string;
-}
-
 export interface AgentHelloPayload {
   session_id: string;
   name: string;
@@ -64,14 +54,6 @@ export function onSessionExit(cb: (p: SessionExitPayload) => void): Promise<Unli
   return listen<SessionExitPayload>("terminal:exit", (e) => cb(e.payload));
 }
 
-export function onTerminalTitle(cb: (p: TerminalTitlePayload) => void): Promise<UnlistenFn> {
-  return listen<TerminalTitlePayload>("terminal:title", (e) => cb(e.payload));
-}
-
-export function onTerminalCwd(cb: (p: TerminalCwdPayload) => void): Promise<UnlistenFn> {
-  return listen<TerminalCwdPayload>("terminal:cwd", (e) => cb(e.payload));
-}
-
 export function onAgentHello(cb: (p: AgentHelloPayload) => void): Promise<UnlistenFn> {
   return listen<AgentHelloPayload>("agent:hello", (e) => cb(e.payload));
 }
@@ -86,30 +68,6 @@ export function onToolProgress(cb: (p: ToolProgressPayload) => void): Promise<Un
 
 export function onToolEnd(cb: (p: ToolEndPayload) => void): Promise<UnlistenFn> {
   return listen<ToolEndPayload>("agent:tool_end", (e) => cb(e.payload));
-}
-
-// ── Hyperlink / clipboard events ──────────────────────────────────────────
-
-export interface TerminalHyperlinkPayload {
-  session_id: string;
-  url: string;
-  id?: string;
-}
-
-export interface ClipboardWritePayload {
-  session_id: string;
-  /** Plain-text clipboard content (termwiz decodes base64 from the OSC 52 wire format). */
-  data: string;
-}
-
-/** Fired when a terminal program emits an OSC 8 hyperlink start sequence. */
-export function onTerminalHyperlink(cb: (p: TerminalHyperlinkPayload) => void): Promise<UnlistenFn> {
-  return listen<TerminalHyperlinkPayload>("terminal:hyperlink", (e) => cb(e.payload));
-}
-
-/** Fired when a terminal program requests a clipboard write via OSC 52. */
-export function onClipboardWrite(cb: (p: ClipboardWritePayload) => void): Promise<UnlistenFn> {
-  return listen<ClipboardWritePayload>("terminal:clipboard-write", (e) => cb(e.payload));
 }
 
 // ── Agent diff / approval (Phase 2) ──────────────────────────────────────

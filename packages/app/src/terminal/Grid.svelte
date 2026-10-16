@@ -9,6 +9,7 @@
   import { fontConfig } from "../theme/fontStore.js";
   import { drainOutputBuffer } from "../stores/app.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
+  import { parseOsc7, parseOsc52 } from "../utils/osc.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -17,9 +18,11 @@
     active: boolean;
     onExit?: (code: number) => void;
     onResize?: (cols: number, rows: number) => void;
+    onCwd?: (cwd: string) => void;
+    onTitle?: (title: string) => void;
   }
 
-  let { sessionId, active, onExit, onResize }: Props = $props();
+  let { sessionId, active, onExit, onResize, onCwd, onTitle }: Props = $props();
 
   // ── Terminal instance ────────────────────────────────────────────────────
 
@@ -72,6 +75,17 @@
       t.loadAddon(new WebLinksAddon());
 
       t.open(container);
+      t.parser.registerOscHandler(7, (data) => {
+        const cwd = parseOsc7(data);
+        if (cwd) onCwd?.(cwd);
+        return true;
+      });
+      t.parser.registerOscHandler(52, (data) => {
+        const text = parseOsc52(data);
+        if (text !== null) navigator.clipboard.writeText(text).catch(console.error);
+        return true;
+      });
+      t.onTitleChange((title) => onTitle?.(title));
       fitAddon.fit();
 
       t.onData((data) => {

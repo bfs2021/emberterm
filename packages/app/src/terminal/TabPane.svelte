@@ -26,6 +26,8 @@
     onApprovalAction: (id: string, result: string) => void;
     onDismissHello: () => void;
     onCloseSplit: () => void;
+    onPaneCwd: (sessionId: string, cwd: string) => void;
+    onPaneTitle: (sessionId: string, title: string) => void;
   }
 
   let {
@@ -33,6 +35,7 @@
     pendingDiff, pendingApproval, pendingHello,
     onExit, onSplitExit, onResize,
     onCancelTool, onDiffAction, onApprovalAction, onDismissHello, onCloseSplit,
+    onPaneCwd, onPaneTitle,
   }: Props = $props();
 
   let splitRatio = $state(0.5);
@@ -47,16 +50,19 @@
       onClose={onCloseSplit}
     >
       {#snippet primary()}
-        <Grid sessionId={tab.sessionId} active={isActive} {onExit} {onResize} />
+        <Grid sessionId={tab.sessionId} active={isActive} {onExit} {onResize}
+          onCwd={(c) => onPaneCwd(tab.sessionId, c)} onTitle={(t) => onPaneTitle(tab.sessionId, t)} />
         <BlockList blocks={blocks} />
       {/snippet}
       {#snippet secondary()}
-        <Grid sessionId={tab.splitSessionId!} active={isActive} onExit={onSplitExit} />
+        <Grid sessionId={tab.splitSessionId!} active={isActive} onExit={onSplitExit}
+          onCwd={(c) => onPaneCwd(tab.splitSessionId!, c)} onTitle={(t) => onPaneTitle(tab.splitSessionId!, t)} />
         <BlockList blocks={splitBlocks} />
       {/snippet}
     </SplitContainer>
   {:else}
-    <Grid sessionId={tab.sessionId} active={isActive} {onExit} {onResize} />
+    <Grid sessionId={tab.sessionId} active={isActive} {onExit} {onResize}
+          onCwd={(c) => onPaneCwd(tab.sessionId, c)} onTitle={(t) => onPaneTitle(tab.sessionId, t)} />
     <BlockList blocks={blocks} />
   {/if}
 
