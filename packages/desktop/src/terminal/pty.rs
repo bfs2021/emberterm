@@ -49,6 +49,7 @@ pub fn spawn_session(
         profile_cwd,
         restore_cwd,
         inherited_prompt_command: std::env::var_os("PROMPT_COMMAND").is_some(),
+        inherited_ps0: std::env::var_os("PS0").is_some(),
         inherited_wslenv: wslenv.as_deref(),
         dir_exists: &|p: &std::path::Path| p.is_dir(),
     });
@@ -70,7 +71,7 @@ pub fn spawn_session(
         cmd.env(k, v);
     }
 
-    let _child = pty_pair
+    let child = pty_pair
         .slave
         .spawn_command(cmd)
         .context("failed to spawn shell")?;
@@ -145,6 +146,7 @@ pub fn spawn_session(
     Ok(Session {
         master: pty_pair.master,
         writer,
+        pid: child.process_id(),
     })
 }
 

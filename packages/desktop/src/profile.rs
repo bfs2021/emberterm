@@ -10,14 +10,10 @@ use crate::fsutil::{load_user_file, write_atomic, StartupWarning};
 pub struct Profile {
     pub id: String,
     pub name: String,
-    pub icon: String,
     pub shell: String,
     pub args: Vec<String>,
     pub cwd: String,
     pub env: std::collections::HashMap<String, String>,
-    pub theme: Option<String>,
-    pub font_family: Option<String>,
-    pub font_size: Option<u32>,
 }
 
 impl Default for Profile {
@@ -25,14 +21,10 @@ impl Default for Profile {
         Self {
             id: "default".into(),
             name: "Default Shell".into(),
-            icon: "terminal".into(),
             shell: crate::terminal::which::default_shell(),
             args: crate::terminal::which::default_args(),
             cwd: "~".into(),
             env: std::collections::HashMap::new(),
-            theme: None,
-            font_family: None,
-            font_size: None,
         }
     }
 }

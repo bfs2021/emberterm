@@ -34,6 +34,8 @@ pub struct AppearanceConfig {
 pub struct BehaviorConfig {
     pub default_profile: String,
     pub confirm_close_running: bool,
+    /// Play a sound when a program rings the terminal bell (BEL).
+    pub bell_sound: bool,
     pub scrollback_lines: usize,
 }
 
@@ -58,6 +60,7 @@ impl Default for BehaviorConfig {
         Self {
             default_profile: "default".into(),
             confirm_close_running: true,
+            bell_sound: true,
             scrollback_lines: 10000,
         }
     }

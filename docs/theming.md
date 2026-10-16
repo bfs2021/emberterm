@@ -15,21 +15,16 @@ out of the box.
 | GitHub Dark | Dark |
 | Solarized Dark | Dark |
 
-Switch themes via `Ctrl+Shift+P` → type "Theme" — or open **Settings → Appearance**.
+Switch themes via `Ctrl+Shift+P` → type "Theme" — or open **Settings → Color Scheme**. Your choice is remembered across restarts.
 
 ## Importing a VS Code Theme
 
-### Paste JSON
-
 1. Find a theme on the [VS Code Marketplace](https://marketplace.visualstudio.com/search?target=VSCode&category=Themes).
 2. Download the `.json` file from the extension's source (usually `themes/*.json`).
-3. Open Settings → Appearance → **Import VS Code theme**.
-4. Paste the JSON and click **Apply**.
+3. Open Settings → Color Scheme → **Import VS Code Theme**.
+4. Paste the JSON and click **Import**.
 
-### Drop a file
-
-Place any `.json` VS Code theme in `~/.config/ember/themes/`. EmberTerm picks it
-up automatically (no restart required).
+Imported themes are stored in `~/.config/ember/config.toml` and stay available after a restart.
 
 ## Writing a Custom Theme
 
@@ -89,7 +84,7 @@ EmberTerm maps theme colors to CSS custom properties on `:root`:
 | Variable | Mapped from |
 |---|---|
 | `--bg` | `editor.background` |
-| `--bg-elevated` | `sideBar.background` |
+| `--bg-elev` | `sideBar.background` |
 | `--border` | `sideBar.border` |
 | `--fg` | `terminal.foreground` |
 | `--fg-muted` | `tab.inactiveForeground` |
@@ -97,5 +92,3 @@ EmberTerm maps theme colors to CSS custom properties on `:root`:
 | `--danger` | `errorForeground` |
 | `--status-bg` | `statusBar.background` |
 | `--status-fg` | `statusBar.foreground` |
-
-You can use these variables in custom CSS or when building EmberTerm plugins.

@@ -49,6 +49,7 @@ fn make_session() -> Session {
     Session {
         master: Box::new(MockMasterPty),
         writer: Arc::new(Mutex::new(Box::new(std::io::sink()))),
+        pid: None,
     }
 }
 

@@ -9,6 +9,7 @@ export interface TerminalConfig {
   boldInBright: boolean;
   scrollbackLines: number;
   confirmCloseRunning: boolean;
+  bellSound: boolean;
 }
 
 /** Defaults mirror config.rs defaults. */
@@ -18,6 +19,7 @@ const DEFAULTS: TerminalConfig = {
   boldInBright: true,
   scrollbackLines: 10000,
   confirmCloseRunning: true,
+  bellSound: true,
 };
 
 export const terminalConfig = writable<TerminalConfig>({ ...DEFAULTS });
@@ -34,6 +36,7 @@ export async function loadTerminalConfig(): Promise<void> {
       behavior?: {
         scrollback_lines?: number;
         confirm_close_running?: boolean;
+        bell_sound?: boolean;
       };
     };
     const a = cfg?.appearance;
@@ -44,6 +47,7 @@ export async function loadTerminalConfig(): Promise<void> {
       boldInBright: a?.bold_in_bright ?? DEFAULTS.boldInBright,
       scrollbackLines: b?.scrollback_lines ?? DEFAULTS.scrollbackLines,
       confirmCloseRunning: b?.confirm_close_running ?? DEFAULTS.confirmCloseRunning,
+      bellSound: b?.bell_sound ?? DEFAULTS.bellSound,
     });
   } catch {
     // Keep defaults if config isn't available yet
@@ -67,6 +71,7 @@ export async function updateTerminalConfig(patch: Partial<TerminalConfig>): Prom
     behavior: {
       scrollback_lines: updated.scrollbackLines,
       confirm_close_running: updated.confirmCloseRunning,
+      bell_sound: updated.bellSound,
     },
   });
 }

@@ -31,6 +31,7 @@ pub struct HookInput<'a> {
     /// Last folder this pane reported via OSC 7, in the shell's own format.
     pub restore_cwd: Option<&'a str>,
     pub inherited_prompt_command: bool,
+    pub inherited_ps0: bool,
     pub inherited_wslenv: Option<&'a str>,
     pub dir_exists: &'a dyn Fn(&Path) -> bool,
 }
@@ -44,7 +45,11 @@ pub struct SpawnPlan {
 /// Emits OSC 7 for `$PWD`; avoids `pwd -W`, whose fork is slow under MSYS. `%`, ESC and
 /// BEL are percent-encoded so a folder name cannot end the sequence early or be
 /// mis-decoded, and `$?` is preserved for anything the user appends to PROMPT_COMMAND.
-const BASH_OSC7: &str = r#"__ember_osc7() { local s=$? p=${PWD//%/%25}; p=${p//$'\e'/%1B}; p=${p//$'\a'/%07}; printf '\033]7;file://localhost%s\033\\' "$p"; return $s; }; __ember_osc7"#;
+const BASH_OSC7: &str = r#"__ember_osc7() { local s=$? p=${PWD//%/%25}; p=${p//$'\e'/%1B}; p=${p//$'\a'/%07}; printf '\033]7;file://localhost%s\033\\\033]133;A\033\\' "$p"; return $s; }; __ember_osc7"#;
+/// Printed by bash right before each command runs (bash >= 4.4): OSC 133;C, "a program started".
+/// With the prompt hook's 133;A this tells the app whether something is running in the tab,
+/// which the process tree cannot show for MSYS (its fork helper exits, orphaning the child).
+const BASH_PS0: &str = r"\e]133;C\e\\";
 /// Runs once before the first WSL prompt; a missing folder is a silent no-op.
 const WSL_RESTORE: &str =
     r#"[ -n "$EMBER_CWD" ] && { cd -- "$EMBER_CWD" 2>/dev/null; unset EMBER_CWD; }"#;
@@ -72,6 +77,9 @@ pub fn prepare(input: &HookInput) -> SpawnPlan {
             if !input.inherited_prompt_command {
                 plan.env.push(("PROMPT_COMMAND".into(), BASH_OSC7.into()));
             }
+            if !input.inherited_ps0 {
+                plan.env.push(("PS0".into(), BASH_PS0.into()));
+            }
             let dir = input.restore_cwd.and_then(|raw| {
                 if cfg!(windows) {
                     msys_to_windows(raw)
@@ -86,7 +94,8 @@ pub fn prepare(input: &HookInput) -> SpawnPlan {
                 "PROMPT_COMMAND".into(),
                 format!("{WSL_RESTORE}; {BASH_OSC7}"),
             ));
-            let mut forwarded = vec!["PROMPT_COMMAND/u"];
+            plan.env.push(("PS0".into(), BASH_PS0.into()));
+            let mut forwarded = vec!["PROMPT_COMMAND/u", "PS0/u"];
             if let Some(dir) = input.restore_cwd {
                 plan.env.push(("EMBER_CWD".into(), dir.into()));
                 forwarded.push("EMBER_CWD/u");

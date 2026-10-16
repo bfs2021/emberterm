@@ -129,3 +129,21 @@ theme = \"dracula\"
     let (cfg, _) = Config::load_from(&path, true);
     assert!(cfg.appearance.custom_themes.is_empty());
 }
+
+#[test]
+fn bell_sound_defaults_on_and_survives_old_configs() {
+    assert!(Config::default().behavior.bell_sound);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[behavior]
+scrollback_lines = 500
+",
+    )
+    .unwrap();
+    let (cfg, w) = Config::load_from(&path, true);
+    assert!(w.is_none());
+    assert!(cfg.behavior.bell_sound, "missing key must default to on");
+    assert_eq!(cfg.behavior.scrollback_lines, 500);
+}

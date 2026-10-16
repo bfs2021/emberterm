@@ -1,3 +1,4 @@
+pub mod busy;
 pub mod events;
 pub mod pty;
 pub mod session;

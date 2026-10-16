@@ -98,7 +98,6 @@
       const profile: Profile = {
         id: spec.id.replace("builtin-", ""),
         name: spec.name,
-        icon: spec.icon,
         shell: spec.shell,
         args: spec.args,
         cwd: "~",

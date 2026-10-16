@@ -32,6 +32,7 @@ fn main() {
             ipc::session_write,
             ipc::session_resize,
             ipc::session_close,
+            ipc::session_busy,
             fonts::font_list,
             ipc::startup_warnings,
             ipc::session_load,

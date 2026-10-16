@@ -14,16 +14,6 @@ export function onSessionExit(cb: (p: SessionExitPayload) => void): Promise<Unli
   return listen<SessionExitPayload>("terminal:exit", (e) => cb(e.payload));
 }
 
-// ── Bell ──────────────────────────────────────────────────────────────────
-
-export interface TerminalBellPayload {
-  session_id: string;
-}
-
-export function onTerminalBell(cb: (p: TerminalBellPayload) => void): Promise<UnlistenFn> {
-  return listen<TerminalBellPayload>("terminal:bell", (e) => cb(e.payload));
-}
-
 // ── Hot-reload events ──────────────────────────────────────────────────────
 
 /** Fired when ~/.config/ember/profiles/ changes on disk. */

@@ -7,6 +7,8 @@ pub struct Session {
     pub master: Box<dyn portable_pty::MasterPty + Send>,
     /// Write half of the PTY master, used by `session_write`.
     pub writer: Arc<Mutex<Box<dyn std::io::Write + Send>>>,
+    /// Process id of the shell, for "is something still running in it" checks.
+    pub pid: Option<u32>,
 }
 
 #[cfg(test)]

@@ -103,6 +103,21 @@ pub async fn session_resize(
     Ok(())
 }
 
+/// True while a program is still running inside the session's shell (not just an idle prompt).
+#[tauri::command]
+pub async fn session_busy(id: SessionId, state: State<'_, AppState>) -> Result<bool, String> {
+    let pid = lock_or_recover(&state.sessions)
+        .get(&id)
+        .ok_or_else(|| format!("session {id} not found"))?
+        .pid;
+    let Some(pid) = pid else { return Ok(false) };
+    tokio::task::spawn_blocking(move || {
+        crate::terminal::busy::has_busy_child(pid, &crate::terminal::busy::snapshot())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<(), String> {
     lock_or_recover(&state.sessions).remove(&id);
@@ -303,7 +318,6 @@ pub async fn config_is_first_run() -> bool {
 pub struct BuiltinProfileSpec {
     pub id: String,
     pub name: String,
-    pub icon: String,
     pub shell: String,
     pub args: Vec<String>,
     pub description: String,
@@ -329,7 +343,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-cmd".into(),
                     name: "Command Prompt".into(),
-                    icon: "terminal".into(),
                     shell: "cmd.exe".into(),
                     args: vec![],
                     description: "Windows Command Prompt".into(),
@@ -344,7 +357,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-powershell5".into(),
                     name: "Windows PowerShell".into(),
-                    icon: "pwsh".into(),
                     shell: "powershell.exe".into(),
                     args: vec!["-NoLogo".into()],
                     description: "PowerShell 5 (built into Windows)".into(),
@@ -356,7 +368,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-pwsh".into(),
                     name: "PowerShell".into(),
-                    icon: "pwsh".into(),
                     shell: "pwsh.exe".into(),
                     args: vec!["-NoLogo".into()],
                     description: "PowerShell 7+".into(),
@@ -378,7 +389,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-gitbash".into(),
                     name: "Git Bash".into(),
-                    icon: "bash".into(),
                     shell: path.to_string(),
                     args: vec!["--login".into(), "-i".into()],
                     description: "Git for Windows Bash shell".into(),
@@ -390,7 +400,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-wsl".into(),
                     name: "WSL".into(),
-                    icon: "bash".into(),
                     shell: "wsl.exe".into(),
                     args: vec![],
                     description: "Windows Subsystem for Linux".into(),
@@ -402,7 +411,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-docker".into(),
                     name: "Docker".into(),
-                    icon: "docker".into(),
                     shell: "docker".into(),
                     args: vec![
                         "run".into(),
@@ -418,9 +426,8 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
 
         #[cfg(not(windows))]
         {
-            // (path, name, id, icon, args, description)
+            // (path, name, id, args, description)
             type ShellCandidate = (
-                &'static str,
                 &'static str,
                 &'static str,
                 &'static str,
@@ -428,12 +435,11 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 &'static str,
             );
             let shell_candidates: &[ShellCandidate] = &[
-                ("/bin/zsh", "Zsh", "builtin-zsh", "bash", &[], "Z Shell"),
+                ("/bin/zsh", "Zsh", "builtin-zsh", &[], "Z Shell"),
                 (
                     "/bin/bash",
                     "Bash",
                     "builtin-bash",
-                    "bash",
                     &[],
                     "Bourne Again Shell",
                 ),
@@ -441,7 +447,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                     "/usr/bin/fish",
                     "Fish",
                     "builtin-fish",
-                    "bash",
                     &[],
                     "Friendly Interactive Shell",
                 ),
@@ -449,21 +454,13 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                     "/usr/local/bin/fish",
                     "Fish",
                     "builtin-fish",
-                    "bash",
                     &[],
                     "Friendly Interactive Shell",
                 ),
-                (
-                    "/bin/sh",
-                    "sh",
-                    "builtin-sh",
-                    "terminal",
-                    &[],
-                    "POSIX Shell",
-                ),
+                ("/bin/sh", "sh", "builtin-sh", &[], "POSIX Shell"),
             ];
             let mut seen_fish = false;
-            for (path, name, id, icon, args, desc) in shell_candidates {
+            for (path, name, id, args, desc) in shell_candidates {
                 if *id == "builtin-fish" {
                     if seen_fish {
                         continue;
@@ -474,7 +471,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                     specs.push(BuiltinProfileSpec {
                         id: id.to_string(),
                         name: name.to_string(),
-                        icon: icon.to_string(),
                         shell: path.to_string(),
                         args: args.iter().map(|s| s.to_string()).collect(),
                         description: desc.to_string(),
@@ -485,7 +481,6 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
                 specs.push(BuiltinProfileSpec {
                     id: "builtin-docker".into(),
                     name: "Docker".into(),
-                    icon: "docker".into(),
                     shell: "docker".into(),
                     args: vec![
                         "run".into(),

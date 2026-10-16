@@ -12,24 +12,14 @@
 
   let { profile, onSave, onCancel, onTest, onDelete }: Props = $props();
 
-  const ICON_OPTIONS = [
-    { value: "terminal", label: "Terminal" },
-    { value: "pwsh", label: "PowerShell" },
-    { value: "bash", label: "Bash / Zsh" },
-  ];
-
   let id = $state(profile?.id ?? crypto.randomUUID().slice(0, 8));
   let name = $state(profile?.name ?? "New Profile");
-  let icon = $state(profile?.icon ?? "terminal");
   let shell = $state(profile?.shell ?? "");
   let argsStr = $state((profile?.args ?? []).join(" "));
   let cwd = $state(profile?.cwd ?? "~");
   let envRows = $state<{ key: string; val: string }[]>(
     Object.entries(profile?.env ?? {}).map(([key, val]) => ({ key, val })),
   );
-  let fontFamily = $state(profile?.font_family ?? "");
-  let fontSize = $state(profile?.font_size?.toString() ?? "");
-  let themeOverride = $state(profile?.theme ?? "");
 
   let saving = $state(false);
   let testing = $state(false);
@@ -46,14 +36,10 @@
     return {
       id,
       name: name.trim(),
-      icon,
       shell: shell.trim(),
       args: argsStr.trim() ? argsStr.trim().split(/\s+/) : [],
       cwd: cwd.trim() || "~",
       env,
-      font_family: fontFamily.trim() || undefined,
-      font_size: fontSize ? parseInt(fontSize, 10) : undefined,
-      theme: themeOverride.trim() || undefined,
     };
   }
 
@@ -96,14 +82,6 @@
       <span class="label">Name</span>
       <input bind:value={name} placeholder="My Shell" />
     </label>
-    <label class="field" style="flex:0 0 140px">
-      <span class="label">Icon</span>
-      <select bind:value={icon}>
-        {#each ICON_OPTIONS as opt}
-          <option value={opt.value}>{opt.label}</option>
-        {/each}
-      </select>
-    </label>
   </div>
 
   <label class="field">
@@ -140,25 +118,6 @@
         {/each}
       </div>
     {/if}
-  </div>
-
-  <!-- Optional overrides -->
-  <div class="overrides">
-    <span class="label overrides-label">Overrides (optional)</span>
-    <div class="field-row">
-      <label class="field" style="flex:2">
-        <span class="label">Font family</span>
-        <input bind:value={fontFamily} placeholder="JetBrains Mono" />
-      </label>
-      <label class="field" style="flex:0 0 80px">
-        <span class="label">Font size</span>
-        <input bind:value={fontSize} type="number" min="6" max="72" placeholder="13" />
-      </label>
-    </div>
-    <label class="field">
-      <span class="label">Theme</span>
-      <input bind:value={themeOverride} placeholder="tokyo-night" />
-    </label>
   </div>
 
   {#if error}
@@ -241,12 +200,6 @@
   .env-remove:hover { color: var(--red, #f85149); }
 
   /* Overrides */
-  .overrides {
-    display: flex; flex-direction: column; gap: 8px;
-    border: 1px solid var(--border, #21262d);
-    border-radius: 5px; padding: 10px;
-  }
-  .overrides-label { display: block; margin-bottom: 2px; }
 
   .error { color: var(--red, #f85149); font-size: 12px; margin: 0; }
 

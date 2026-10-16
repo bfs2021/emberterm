@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { pickProfile } from "./profiles.js";
 import type { Profile } from "../ipc/client.js";
 
-const p = (id: string): Profile => ({ id, name: id, icon: "terminal", shell: id, args: [], cwd: "~", env: {} });
+const p = (id: string): Profile => ({ id, name: id, shell: id, args: [], cwd: "~", env: {} });
 const list = [p("cmd"), p("gitbash"), p("pwsh")];
 
 describe("pickProfile", () => {

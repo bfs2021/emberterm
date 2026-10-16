@@ -11,9 +11,11 @@
   import { getOutputSink } from "./outputSink.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { terminalPadding } from "../theme/paddingStore.js";
-  import { parseOsc7, parseOsc52 } from "../utils/osc.js";
+  import { parseOsc7, parseOsc52, parseOsc133 } from "../utils/osc.js";
+  import { markPaneBusy, forgetPane } from "../stores/paneBusy.js";
   import { isCopyChord } from "./copyKey.js";
   import { shortcutFor } from "../utils/shortcuts.js";
+  import { playBell } from "../utils/bell.js";
 
   // ── Props ────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@
         fontSize: cfg.fontSize,
         lineHeight: cfg.lineHeight,
         cursorBlink: tc.cursorBlink,
+        drawBoldTextInBrightColors: tc.boldInBright,
         cursorStyle: tc.cursorStyle as "block" | "bar" | "underline",
         scrollback: tc.scrollbackLines,
         theme: { ...baseTheme },
@@ -79,7 +82,13 @@
         if (text !== null) navigator.clipboard.writeText(text).catch(console.error);
         return true;
       });
+      t.parser.registerOscHandler(133, (data) => {
+        const busy = parseOsc133(data);
+        if (busy !== null) markPaneBusy(sid, busy);
+        return true;
+      });
       t.onTitleChange((title) => onTitle?.(title));
+      t.onBell(() => { if (get(terminalConfig).bellSound) playBell(); });
       t.attachCustomKeyEventHandler((e) => {
         // App shortcuts must reach the window handler; xterm would otherwise consume Tab
         // (so Ctrl+Tab never switched tabs) by sending it to the shell.
@@ -135,6 +144,7 @@
 
     return () => {
       mounted = false;
+      forgetPane(sid);
       fa = undefined;
       getOutputSink(sid)?.detach();
       unlistenExit?.();
@@ -176,8 +186,9 @@
 
   // Live terminal config: apply cursor style/blink changes without restart.
   $effect(() => {
-    const { cursorStyle, cursorBlink } = $terminalConfig;
+    const { cursorStyle, cursorBlink, boldInBright } = $terminalConfig;
     if (!term) return;
+    term.options.drawBoldTextInBrightColors = boldInBright;
     term.options.cursorStyle = cursorStyle as "block" | "bar" | "underline";
     term.options.cursorBlink = cursorBlink;
     // scrollback can only be set at construction time in xterm.js — new sessions pick it up.
