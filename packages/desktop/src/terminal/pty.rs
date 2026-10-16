@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 
-use super::events::{SessionExitPayload, TerminalOutputPayload};
+use super::events::SessionExitPayload;
 use super::session::{Session, SessionId};
 
 /// Spawns a PTY session using `profile` (or the platform default shell when
@@ -14,6 +15,7 @@ use super::session::{Session, SessionId};
 pub fn spawn_session(
     session_id: SessionId,
     profile: Option<&crate::profile::Profile>,
+    on_output: Channel,
     app: AppHandle,
 ) -> Result<Session> {
     let pty_system = native_pty_system();
@@ -126,13 +128,10 @@ pub fn spawn_session(
                             chunk.to_vec()
                         };
 
-                        let _ = app_clone.emit(
-                            "terminal:output",
-                            TerminalOutputPayload {
-                                session_id: sid.clone(),
-                                data: to_emit,
-                            },
-                        );
+                        if let Err(e) = on_output.send(InvokeResponseBody::Raw(to_emit)) {
+                            tracing::debug!(session_id = %sid, error = %e, "output channel closed; stopping reader");
+                            break;
+                        }
                     }
                     Err(_) => break,
                 }

@@ -3,21 +3,12 @@ import type { StartupWarning } from "./client.js";
 
 // ── Payload types ──────────────────────────────────────────────────────────
 
-export interface TerminalOutputPayload {
-  session_id: string;
-  data: number[];
-}
-
 export interface SessionExitPayload {
   session_id: string;
   code: number;
 }
 
 // ── Subscriptions ──────────────────────────────────────────────────────────
-
-export function onTerminalOutput(cb: (p: TerminalOutputPayload) => void): Promise<UnlistenFn> {
-  return listen<TerminalOutputPayload>("terminal:output", (e) => cb(e.payload));
-}
 
 export function onSessionExit(cb: (p: SessionExitPayload) => void): Promise<UnlistenFn> {
   return listen<SessionExitPayload>("terminal:exit", (e) => cb(e.payload));

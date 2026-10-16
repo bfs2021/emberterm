@@ -1,13 +1,14 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { get } from "svelte/store";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
   import { sessionWrite, sessionResize } from "../ipc/client.js";
-  import { onTerminalOutput, onSessionExit } from "../ipc/events.js";
+  import { onSessionExit } from "../ipc/events.js";
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
-  import { drainOutputBuffer } from "../stores/app.js";
+  import { getOutputSink } from "./outputSink.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { parseOsc7, parseOsc52 } from "../utils/osc.js";
 
@@ -32,28 +33,14 @@
   let fa = $state<FitAddon | undefined>(undefined);
 
   $effect(() => {
+    // Read once, untracked: a tracked read here re-ran this effect (tearing the
+    // terminal down) on every $tabs update, because props resolve through the store.
+    const sid = untrack(() => sessionId);
     let mounted = true;
-    let unlistenOutput: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
     let resizeObserver: ResizeObserver | undefined;
 
     (async () => {
-      // Buffer for the tiny gap between listener registration and terminal open.
-      const earlyBuf: Uint8Array[] = [];
-      let liveTerminal: Terminal | undefined;
-
-      // Register BEFORE creating the terminal so no bytes are missed.
-      // Bytes arriving before liveTerminal is set go into earlyBuf.
-      unlistenOutput = await onTerminalOutput((payload) => {
-        if (payload.session_id !== sessionId) return;
-        const bytes = new Uint8Array(payload.data);
-        if (liveTerminal) {
-          liveTerminal.write(bytes);
-        } else {
-          earlyBuf.push(bytes);
-        }
-      });
-
       const cfg = get(fontConfig);
       const tc = get(terminalConfig);
       const baseTheme = get(activeTheme).xterm;
@@ -90,45 +77,35 @@
 
       t.onData((data) => {
         const bytes = new TextEncoder().encode(data);
-        sessionWrite(sessionId, bytes).catch(console.error);
+        sessionWrite(sid, bytes).catch(console.error);
       });
 
       t.onBinary((data) => {
         const bytes = Uint8Array.from(data, (c) => c.charCodeAt(0));
-        sessionWrite(sessionId, bytes).catch(console.error);
+        sessionWrite(sid, bytes).catch(console.error);
       });
 
-      // Drain App.svelte's pre-mount buffer (bytes emitted before Grid mounted).
-      for (const bytes of drainOutputBuffer(sessionId)) {
-        t.write(bytes);
-      }
-      // Replay the tiny early buffer from the listener-registration gap.
-      for (const bytes of earlyBuf) {
-        t.write(bytes);
-      }
-      earlyBuf.length = 0;
-
-      // Go live — all future terminal:output events write directly.
-      liveTerminal = t;
+      // Replay bytes buffered before this Grid mounted, then stream live.
+      getOutputSink(sid)?.attach((bytes) => t.write(bytes));
 
       unlistenExit = await onSessionExit((payload) => {
-        if (payload.session_id !== sessionId) return;
+        if (payload.session_id !== sid) return;
         t.writeln("\r\n\x1b[2m[process exited with code " + payload.code + "]\x1b[0m");
         onExit?.(payload.code);
       });
 
       resizeObserver = new ResizeObserver(() => {
         fitAddon!.fit();
-        sessionResize(sessionId, t.cols, t.rows).catch(console.error);
+        sessionResize(sid, t.cols, t.rows).catch(console.error);
         onResize?.(t.cols, t.rows);
       });
       resizeObserver.observe(container);
 
-      await sessionResize(sessionId, t.cols, t.rows);
+      await sessionResize(sid, t.cols, t.rows);
       onResize?.(t.cols, t.rows);
 
       if (!mounted) {
-        unlistenOutput?.();
+        getOutputSink(sid)?.detach();
         unlistenExit?.();
         resizeObserver.disconnect();
         t.dispose();
@@ -141,7 +118,7 @@
     return () => {
       mounted = false;
       fa = undefined;
-      unlistenOutput?.();
+      getOutputSink(sid)?.detach();
       unlistenExit?.();
       resizeObserver?.disconnect();
       term?.dispose();

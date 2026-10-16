@@ -1,11 +1,17 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
+import { toBytes } from "../terminal/outputSink.js";
 
 export type SessionId = string;
 
 // ── Session commands ──────────────────────────────────────────────────────────
 
-export async function sessionCreate(profileId?: string): Promise<SessionId> {
-  return invoke("session_create", { profileId: profileId ?? null });
+export async function sessionCreate(opts: {
+  profileId?: string;
+  onOutput: (bytes: Uint8Array) => void;
+}): Promise<SessionId> {
+  const channel = new Channel<ArrayBuffer>();
+  channel.onmessage = (msg) => opts.onOutput(toBytes(msg));
+  return invoke("session_create", { profileId: opts.profileId ?? null, onOutput: channel });
 }
 
 export async function sessionWrite(id: SessionId, data: Uint8Array): Promise<void> {

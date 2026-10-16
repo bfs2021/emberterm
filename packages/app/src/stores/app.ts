@@ -132,26 +132,6 @@ export function clearTabSplit(tabId: string) {
   );
 }
 
-// ── Pre-mount output buffer ──────────────────────────────────────────────────
-// App.svelte creates a buffer for each session right after sessionCreate().
-// Grid.svelte drains it on mount (before the live listener takes over) to
-// recover PTY bytes emitted before xterm.js was ready.
-const _outputBuffers = new Map<string, Uint8Array[]>();
-
-export function createOutputBuffer(sessionId: string) {
-  _outputBuffers.set(sessionId, []);
-}
-
-export function appendOutputBuffer(sessionId: string, bytes: Uint8Array) {
-  _outputBuffers.get(sessionId)?.push(bytes);
-}
-
-export function drainOutputBuffer(sessionId: string): Uint8Array[] {
-  const buf = _outputBuffers.get(sessionId) ?? [];
-  _outputBuffers.delete(sessionId);
-  return buf;
-}
-
 // ── Toasts ────────────────────────────────────────────────────────────────────
 export interface Toast {
   id: number;

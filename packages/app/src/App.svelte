@@ -11,11 +11,12 @@
   import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { onTerminalOutput, onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
+  import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
+  import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
     addTab, removeTab, activateTab, setTabCwd, setTabTitle,
-    setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer, pushToast,
+    setTabSplit, clearTabSplit, pushToast,
   } from "./stores/app.js";
 
   let loading = $state(true);
@@ -65,7 +66,6 @@
     let active = true;
     const cleanup: Array<() => void> = [];
     (async () => {
-      cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
       try {
         showWelcome = await configIsFirstRun();
         await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig()]);
@@ -117,6 +117,13 @@
     if (tab) await closeTab(tab.id, tab.sessionId);
   }
 
+  async function spawnPane(profileId?: string): Promise<string> {
+    const sink = createOutputSink();
+    const sessionId = await sessionCreate({ profileId, onOutput: sink.push });
+    registerOutputSink(sessionId, sink);
+    return sessionId;
+  }
+
   async function openNewTab(profileId?: string) {
     try {
       if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
@@ -127,16 +134,19 @@
         : profileCache[0];
       const label = profile?.name ?? shellBasename(profile?.shell ?? "Shell");
       const shell  = profile ? shellBasename(profile.shell) : "";
-      const sessionId = await sessionCreate(resolvedId || undefined);
-      createOutputBuffer(sessionId);
+      const sessionId = await spawnPane(resolvedId || undefined);
       addTab(sessionId, label || "Shell", shell);
     } catch (e) { error = `Failed to open tab: ${e}`; }
   }
 
   async function closeTab(tabId: string, sessionId: string) {
     const tab = $tabs.find((t) => t.id === tabId);
-    if (tab?.splitSessionId) await sessionClose(tab.splitSessionId).catch(() => {});
+    if (tab?.splitSessionId) {
+      await sessionClose(tab.splitSessionId).catch(() => {});
+      removeOutputSink(tab.splitSessionId);
+    }
     await sessionClose(sessionId).catch(() => {});
+    removeOutputSink(sessionId);
     removeTab(tabId);
     if ($tabs.length === 0) showWelcome = true;
   }
@@ -145,8 +155,7 @@
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
     try {
-      const sessionId = await sessionCreate();
-      createOutputBuffer(sessionId);
+      const sessionId = await spawnPane();
       setTabSplit(tab.id, sessionId, direction);
     } catch (e) { error = `Failed to split pane: ${e}`; }
   }
@@ -155,6 +164,7 @@
     const tab = $tabs.find((t) => t.id === tabId);
     if (!tab?.splitSessionId) return;
     await sessionClose(tab.splitSessionId).catch(() => {});
+    removeOutputSink(tab.splitSessionId);
     clearTabSplit(tabId);
   }
 

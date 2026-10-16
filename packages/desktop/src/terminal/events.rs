@@ -4,12 +4,6 @@ use super::session::SessionId;
 /// All fields use snake_case — Tauri/serde serializes them to camelCase for the frontend.
 
 #[derive(serde::Serialize, Clone)]
-pub struct TerminalOutputPayload {
-    pub session_id: SessionId,
-    pub data: Vec<u8>,
-}
-
-#[derive(serde::Serialize, Clone)]
 pub struct SessionExitPayload {
     pub session_id: SessionId,
     pub code: i32,
