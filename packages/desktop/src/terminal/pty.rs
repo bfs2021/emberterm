@@ -29,7 +29,7 @@ pub fn spawn_session(
 
     let shell = profile
         .map(|p| p.shell.clone())
-        .unwrap_or_else(default_shell);
+        .unwrap_or_else(super::which::default_shell);
 
     let mut cmd = CommandBuilder::new(&shell);
 
@@ -196,32 +196,6 @@ fn is_bash_like(shell: &str) -> bool {
         .to_lowercase();
     let stem = name.trim_end_matches(".exe");
     matches!(stem, "bash" | "zsh" | "sh" | "ash" | "dash")
-}
-
-fn default_shell() -> String {
-    #[cfg(windows)]
-    {
-        if which_shell("pwsh.exe") {
-            "pwsh.exe".to_string()
-        } else if which_shell("powershell.exe") {
-            "powershell.exe".to_string()
-        } else {
-            "cmd.exe".to_string()
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
-    }
-}
-
-#[cfg(windows)]
-fn which_shell(name: &str) -> bool {
-    std::process::Command::new("where")
-        .arg(name)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

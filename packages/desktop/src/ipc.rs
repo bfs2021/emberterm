@@ -273,18 +273,9 @@ pub struct BuiltinProfileSpec {
     pub description: String,
 }
 
-/// Return `true` when `name` is found on PATH (uses `where` on Windows, `which` elsewhere).
+/// Return `true` when `name` is found on PATH (scans PATH directly; no process spawn).
 fn probe(name: &str) -> bool {
-    #[cfg(windows)]
-    let cmd = "where";
-    #[cfg(not(windows))]
-    let cmd = "which";
-
-    std::process::Command::new(cmd)
-        .arg(name)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::terminal::which::on_path(name)
 }
 
 /// Scan the system for well-known shells and return those that are available.

@@ -26,8 +26,8 @@ impl Default for Profile {
             id: "default".into(),
             name: "Default Shell".into(),
             icon: "terminal".into(),
-            shell: default_shell(),
-            args: default_args(),
+            shell: crate::terminal::which::default_shell(),
+            args: crate::terminal::which::default_args(),
             cwd: "~".into(),
             env: std::collections::HashMap::new(),
             theme: None,
@@ -103,36 +103,6 @@ pub fn delete_profile(id: &str) -> Result<()> {
         std::fs::remove_file(path)?;
     }
     Ok(())
-}
-
-fn default_shell() -> String {
-    #[cfg(windows)]
-    {
-        if std::process::Command::new("where")
-            .arg("pwsh.exe")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            return "pwsh.exe".into();
-        }
-        "cmd.exe".into()
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())
-    }
-}
-
-fn default_args() -> Vec<String> {
-    #[cfg(windows)]
-    {
-        vec!["-NoLogo".into()]
-    }
-    #[cfg(not(windows))]
-    {
-        vec![]
-    }
 }
 
 #[cfg(test)]
