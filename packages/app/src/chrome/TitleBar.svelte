@@ -112,7 +112,6 @@
     gap: 6px;
     padding: 0 14px 0 12px;
     flex-shrink: 0;
-    border-right: 1px solid var(--border, #21262d);
   }
 
   .brand-mark {
