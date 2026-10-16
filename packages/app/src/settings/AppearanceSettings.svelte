@@ -1,11 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fontConfig, updateFontConfig } from "../theme/fontStore.js";
-  import { configUpdate, configGet, fontList } from "../ipc/client.js";
+  import { fontList } from "../ipc/client.js";
+  import { terminalPadding, updatePadding } from "../theme/paddingStore.js";
   import { primaryFamily, stackFor, pickableFamilies, type InstalledFont } from "../utils/fontFamily.js";
   import NumberStepper from "./NumberStepper.svelte";
-
-  let windowPadding = $state(8);
 
   // Installed fonts come from the OS via Rust. `null` = still loading, `[]` + loadFailed = fall back to typing.
   let installed = $state<InstalledFont[] | null>(null);
@@ -16,10 +15,6 @@
   const currentInstalled = $derived((installed ?? []).some((f) => f.name === current));
 
   onMount(async () => {
-    try {
-      const cfg = (await configGet()) as { appearance?: { window_padding?: number } };
-      windowPadding = cfg?.appearance?.window_padding ?? 8;
-    } catch { /* keep default */ }
     try {
       installed = await fontList();
     } catch {
@@ -36,10 +31,6 @@
     updateFontConfig({ fontFamily: (e.currentTarget as HTMLInputElement).value }).catch(() => {});
   }
 
-  function savePadding(n: number) {
-    windowPadding = n;
-    configUpdate({ appearance: { window_padding: n } }).catch(() => {});
-  }
 </script>
 
 <div class="appearance-settings">
@@ -115,7 +106,16 @@
 
   <section class="section" aria-labelledby="h-window">
     <h3 id="h-window">Window</h3>
-    <NumberStepper label="Padding" suffix="px" value={windowPadding} min={0} max={64} step={2} onChange={savePadding} />
+    <NumberStepper
+      label="Padding"
+      suffix="px"
+      value={$terminalPadding}
+      min={0}
+      max={64}
+      step={2}
+      onChange={(n) => updatePadding(n).catch(() => {})}
+    />
+    <span class="hint">Space between the text and the edge of the terminal.</span>
   </section>
 </div>
 

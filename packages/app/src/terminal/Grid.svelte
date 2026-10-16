@@ -10,6 +10,7 @@
   import { fontConfig } from "../theme/fontStore.js";
   import { getOutputSink } from "./outputSink.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
+  import { terminalPadding } from "../theme/paddingStore.js";
   import { parseOsc7, parseOsc52 } from "../utils/osc.js";
   import { isCopyChord } from "./copyKey.js";
   import { shortcutFor } from "../utils/shortcuts.js";
@@ -164,6 +165,15 @@
     untrack(() => onResize)?.(term.cols, term.rows);
   });
 
+  // Padding changes the usable grid size: re-fit and tell the PTY.
+  $effect(() => {
+    void $terminalPadding;
+    if (!term || !fa) return;
+    fa.fit();
+    sessionResize(paneSession, term.cols, term.rows).catch(console.error);
+    untrack(() => onResize)?.(term.cols, term.rows);
+  });
+
   // Live terminal config: apply cursor style/blink changes without restart.
   $effect(() => {
     const { cursorStyle, cursorBlink } = $terminalConfig;
@@ -199,7 +209,7 @@
 
   :global(.xterm) {
     height: 100%;
-    padding: 4px 8px;
+    padding: var(--term-pad, 8px);
   }
 
   :global(.xterm-viewport) {

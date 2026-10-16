@@ -4,7 +4,6 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
 
   const REPO = "https://github.com/emberterm/emberterm";
-  const AUTHOR = { name: "Miftahul Arifin", url: "https://github.com/arifintahu" };
 
   let version = $state("");
 
@@ -48,7 +47,6 @@
   <section class="section">
     <h4>Credits</h4>
     <p class="body">
-      Created by <a href={AUTHOR.url} onclick={(e) => open(e, AUTHOR.url)}>{AUTHOR.name}</a>.
       Built with Tauri, Svelte, xterm.js and portable-pty. Released under the MIT license.
     </p>
   </section>
