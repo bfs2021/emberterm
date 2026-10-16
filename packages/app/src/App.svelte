@@ -215,10 +215,10 @@
     if ($tabs.length === 0) await closeWindowWhenEmpty().catch(console.error);
   }
 
-  async function splitActiveTab(direction: "horizontal" | "vertical") {
+  async function splitActiveTab(direction: "horizontal" | "vertical", profileId?: string) {
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
-    await splitTab(tab.id, direction);
+    await splitTab(tab.id, direction, profileId);
   }
 
   async function closeSplitPane(tabId: string) {
@@ -240,7 +240,7 @@
   and always appear fully opaque, regardless of the user's transparency setting.
 -->
 <div class="app">
-  <TitleBar onNewTab={openNewTab} onCloseTab={askCloseTab} onOpenSettings={() => (settingsOpen = true)} />
+  <TitleBar onNewTab={openNewTab} onCloseTab={askCloseTab} onOpenSettings={() => (settingsOpen = true)} profiles={profileCache} {defaultProfileId} />
   <main class="terminal-area">
     {#if loading}
       <div class="splash">Starting shell…</div>
@@ -265,7 +265,7 @@
 </div>
 
 <!-- Modals outside .app — unaffected by window opacity -->
-<CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onOpenSettings={() => (settingsOpen = true)} />
+<CommandPalette open={paletteOpen} profiles={profileCache} {defaultProfileId} onClose={() => (paletteOpen = false)} onNewTab={openNewTab} onSplit={splitActiveTab} onOpenSettings={() => (settingsOpen = true)} />
 <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} onTestProfile={(id) => openNewTab(id)} />
 {#if showWelcome}
   <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />

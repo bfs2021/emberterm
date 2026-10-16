@@ -1,14 +1,17 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import TabStrip from "./TabStrip.svelte";
+  import type { Profile } from "../ipc/client.js";
 
   interface Props {
-    onNewTab: () => void;
+    onNewTab: (profileId?: string) => void;
     onCloseTab: (tabId: string, sessionId: string) => void;
     onOpenSettings: () => void;
+    profiles?: Profile[];
+    defaultProfileId?: string;
   }
 
-  let { onNewTab, onCloseTab, onOpenSettings }: Props = $props();
+  let { onNewTab, onCloseTab, onOpenSettings, profiles = [], defaultProfileId = "" }: Props = $props();
 
   const win = getCurrentWindow();
 
@@ -57,7 +60,7 @@
 
   <!-- Tabs (new-tab button lives inside TabStrip) -->
   <div class="tab-area">
-    <TabStrip {onNewTab} {onCloseTab} />
+    <TabStrip {onNewTab} {onCloseTab} {profiles} {defaultProfileId} />
   </div>
 
   <!-- Spacer -->

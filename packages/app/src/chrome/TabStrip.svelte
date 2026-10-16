@@ -1,13 +1,17 @@
 <script lang="ts">
   import { tabs, activateTab, renameTab, reorderTab, type Tab } from "../stores/app.js";
   import { tabLabels } from "../utils/tabLabel.js";
+  import ProfileMenu from "./ProfileMenu.svelte";
+  import type { Profile } from "../ipc/client.js";
 
   interface Props {
-    onNewTab: () => void;
+    onNewTab: (profileId?: string) => void;
     onCloseTab: (tabId: string, sessionId: string) => void;
+    profiles?: Profile[];
+    defaultProfileId?: string;
   }
 
-  let { onNewTab, onCloseTab }: Props = $props();
+  let { onNewTab, onCloseTab, profiles = [], defaultProfileId = "" }: Props = $props();
 
   // Display text per tab (last folder, or the program's / user's title).
   const labels = $derived(tabLabels($tabs));
@@ -175,6 +179,7 @@
       <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
     </svg>
   </button>
+  <ProfileMenu {profiles} {defaultProfileId} onPick={(id) => onNewTab(id)} />
 </div>
 
 <style>
