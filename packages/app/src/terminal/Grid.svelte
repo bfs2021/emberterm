@@ -128,7 +128,7 @@
       });
 
       // Replay bytes buffered before this Grid mounted, then stream live.
-      getOutputSink(sid)?.attach((bytes) => t.write(bytes));
+      getOutputSink(sid)?.attach((bytes, done) => t.write(bytes, done));
 
       unlistenExit = await onSessionExit((payload) => {
         if (payload.session_id !== sid) return;

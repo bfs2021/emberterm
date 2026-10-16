@@ -118,6 +118,20 @@ pub async fn session_busy(id: SessionId, state: State<'_, AppState>) -> Result<b
     .map_err(|e| e.to_string())
 }
 
+/// The webview parsed `bytes` more of this session's output; lets a waiting sender go on.
+#[tauri::command]
+pub async fn session_ack(
+    id: SessionId,
+    bytes: usize,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // An ack racing a tab close is normal: there is no sender left to release.
+    if let Some(session) = lock_or_recover(&state.sessions).get(&id) {
+        session.flow.ack(bytes);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<(), String> {
     lock_or_recover(&state.sessions).remove(&id);

@@ -9,6 +9,7 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 
 use super::events::SessionExitPayload;
+use super::flow::FlowControl;
 use super::output::OutputPipe;
 use super::session::{Session, SessionId};
 use super::shell_hooks;
@@ -110,6 +111,8 @@ pub fn spawn_session(
 
     // Reading and sending are decoupled: one IPC send per ConPTY chunk is what made floods slow.
     let pipe = Arc::new(OutputPipe::default());
+    let flow = Arc::new(FlowControl::default());
+    let sender_flow = flow.clone();
     let reader_pipe = pipe.clone();
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
@@ -132,7 +135,11 @@ pub fn spawn_session(
                 pipe.close();
                 emit_exit(&app_clone, &sid, 0, &exit_once);
             });
-            while let Some(bytes) = pipe.next_batch() {
+            // Waiting before taking a batch leaves output in the pipe, so a webview that falls
+            // behind stalls the reader (and the shell) instead of growing a queue anywhere.
+            while sender_flow.wait_for_room() {
+                let Some(bytes) = pipe.next_batch() else { break };
+                sender_flow.sent(bytes.len());
                 if let Err(e) = on_output.send(InvokeResponseBody::Raw(bytes)) {
                     tracing::debug!(session_id = %sid, error = %e, "output channel closed; stopping sender");
                     break;
@@ -145,6 +152,7 @@ pub fn spawn_session(
         master: pty_pair.master,
         writer,
         pid,
+        flow,
     })
 }
 
