@@ -1,5 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { toBytes } from "../terminal/outputSink.js";
+import type { SavedSession } from "../stores/sessionSnapshot.js";
 
 export type SessionId = string;
 
@@ -97,6 +98,14 @@ export interface StartupWarning {
   file: string;
   message: string;
   backup?: string | null;
+}
+
+export async function sessionLoad(): Promise<{ session: SavedSession | null; warning: StartupWarning | null }> {
+  return invoke("session_load");
+}
+
+export async function sessionSave(session: SavedSession): Promise<void> {
+  return invoke("session_save", { session });
 }
 
 /** Warnings from loading config/profiles at startup (drained on read). */

@@ -15,7 +15,7 @@
   import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
-    addTab, removeTab, activateTab, setTabCwd, setTabTitle,
+    addTab, removeTab, activateTab, setPaneCwd, setTabTitle,
     setTabSplit, clearTabSplit, pushToast,
   } from "./stores/app.js";
 
@@ -124,18 +124,22 @@
     return sessionId;
   }
 
+  /** Explicit id > config default > first profile. Always returns a real profile when any exist. */
+  function resolveProfile(profileId?: string): Profile | undefined {
+    const id = profileId ?? defaultProfileId;
+    return (id && profileCache.find((p) => p.id === id)) || profileCache[0];
+  }
+
   async function openNewTab(profileId?: string) {
     try {
       if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
-      // Resolve which profile to display: explicit id > config default > first in list
-      const resolvedId = profileId ?? defaultProfileId;
-      const profile = resolvedId
-        ? profileCache.find((p) => p.id === resolvedId) ?? profileCache[0]
-        : profileCache[0];
+      const profile = resolveProfile(profileId);
       const label = profile?.name ?? shellBasename(profile?.shell ?? "Shell");
       const shell  = profile ? shellBasename(profile.shell) : "";
-      const sessionId = await spawnPane(resolvedId || undefined);
-      addTab(sessionId, label || "Shell", shell);
+      // Spawn the resolved profile, not the requested id: a dangling default_profile
+      // must not make Rust pick a different shell than the tab is labelled with.
+      const sessionId = await spawnPane(profile?.id);
+      addTab(sessionId, label || "Shell", shell, profile?.id);
     } catch (e) { error = `Failed to open tab: ${e}`; }
   }
 
@@ -155,8 +159,9 @@
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
     try {
-      const sessionId = await spawnPane();
-      setTabSplit(tab.id, sessionId, direction);
+      const profile = resolveProfile();
+      const sessionId = await spawnPane(profile?.id);
+      setTabSplit(tab.id, sessionId, direction, profile?.id);
     } catch (e) { error = `Failed to split pane: ${e}`; }
   }
 
@@ -194,7 +199,7 @@
           onSplitExit={() => closeSplitPane(tab.id)}
           onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
           onCloseSplit={() => closeSplitPane(tab.id)}
-          onPaneCwd={setTabCwd}
+          onPaneCwd={setPaneCwd}
           onPaneTitle={handlePaneTitle}
         />
       {/each}

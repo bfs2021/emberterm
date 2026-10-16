@@ -5,6 +5,9 @@ export interface Tab {
   sessionId: string;
   title: string;
   shell?: string;
+  profileId?: string;
+  /** True once the user renamed the tab; shell titles no longer apply. */
+  customTitle: boolean;
   cwd?: string;
   isActive: boolean;
   hasUnread: boolean;
@@ -12,6 +15,8 @@ export interface Tab {
   // Split-pane state — present only when the tab is split.
   splitSessionId?: string;
   splitDirection?: "horizontal" | "vertical";
+  splitProfileId?: string;
+  splitCwd?: string;
 }
 
 export const tabs = writable<Tab[]>([]);
@@ -39,13 +44,13 @@ export const activeShell = derived(
 
 let tabCounter = 0;
 
-export function addTab(sessionId: string, title: string, shell?: string): string {
+export function addTab(sessionId: string, title: string, shell?: string, profileId?: string): string {
   const id = `tab-${++tabCounter}`;
   tabs.update((ts) => {
     const updated = ts.map((t) => ({ ...t, isActive: false }));
     return [
       ...updated,
-      { id, sessionId, title, shell, isActive: true, hasUnread: false, isRunning: true },
+      { id, sessionId, title, shell, profileId, customTitle: false, isActive: true, hasUnread: false, isRunning: true },
     ];
   });
   activeTabId.set(id);
@@ -75,22 +80,31 @@ export function activateTab(tabId: string) {
   activeTabId.set(tabId);
 }
 
-export function setTabCwd(sessionId: string, cwd: string) {
+/** OSC 7 from either pane of a tab. */
+export function setPaneCwd(sessionId: string, cwd: string) {
   tabs.update((ts) =>
-    ts.map((t) => (t.sessionId === sessionId ? { ...t, cwd } : t)),
+    ts.map((t) =>
+      t.sessionId === sessionId ? { ...t, cwd }
+      : t.splitSessionId === sessionId ? { ...t, splitCwd: cwd }
+      : t,
+    ),
   );
 }
 
 export function setTabTitle(sessionId: string, title: string) {
   tabs.update((ts) =>
-    ts.map((t) => (t.sessionId === sessionId ? { ...t, title } : t)),
+    ts.map((t) => (t.sessionId === sessionId && !t.customTitle ? { ...t, title } : t)),
   );
 }
 
 export function renameTab(tabId: string, newTitle: string) {
   const trimmed = newTitle.trim();
   if (!trimmed) return;
-  tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)));
+  tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed, customTitle: true } : t)));
+}
+
+export function restoreCustomTitle(tabId: string, title: string) {
+  renameTab(tabId, title);
 }
 
 // ── Split pane helpers ────────────────────────────────────────────────────────
@@ -100,9 +114,12 @@ export function setTabSplit(
   tabId: string,
   splitSessionId: string,
   direction: "horizontal" | "vertical",
+  splitProfileId?: string,
 ) {
   tabs.update((ts) =>
-    ts.map((t) => (t.id === tabId ? { ...t, splitSessionId, splitDirection: direction } : t)),
+    ts.map((t) =>
+      t.id === tabId ? { ...t, splitSessionId, splitDirection: direction, splitProfileId } : t,
+    ),
   );
 }
 
@@ -126,7 +143,7 @@ export function clearTabSplit(tabId: string) {
   tabs.update((ts) =>
     ts.map((t) =>
       t.id === tabId
-        ? { ...t, splitSessionId: undefined, splitDirection: undefined }
+        ? { ...t, splitSessionId: undefined, splitDirection: undefined, splitProfileId: undefined, splitCwd: undefined }
         : t,
     ),
   );

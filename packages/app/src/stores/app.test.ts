@@ -9,7 +9,8 @@ import {
   removeTab,
   activateTab,
   setTabTitle,
-  setTabCwd,
+  setPaneCwd,
+  restoreCustomTitle,
   renameTab,
   setTabSplit,
   clearTabSplit,
@@ -67,9 +68,9 @@ describe("tabs", () => {
     expect(get(tabs)[0].title).toBe("My Process");
   });
 
-  it("setTabCwd updates cwd", () => {
+  it("setPaneCwd updates cwd", () => {
     addTab("s1", "Shell");
-    setTabCwd("s1", "/home/user");
+    setPaneCwd("s1", "/home/user");
     expect(get(tabs)[0].cwd).toBe("/home/user");
   });
 
@@ -98,7 +99,7 @@ describe("derived stores", () => {
 
   it("activeCwd follows the active tab's cwd", () => {
     addTab("s1", "Shell");
-    setTabCwd("s1", "/projects/foo");
+    setPaneCwd("s1", "/projects/foo");
     expect(get(activeCwd)).toBe("/projects/foo");
   });
 });
@@ -182,5 +183,46 @@ describe("toasts", () => {
     const id = pushToast("bye");
     dismissToast(id);
     expect(get(toasts).find((t) => t.id === id)).toBeUndefined();
+  });
+});
+
+describe("pane cwd and custom titles", () => {
+  it("setPaneCwd updates the primary or the split pane", () => {
+    const id = addTab("s1", "bash", "bash", "git-bash");
+    setTabSplit(id, "s2", "vertical", "wsl");
+    setPaneCwd("s1", "/d/a");
+    setPaneCwd("s2", "/home/b");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.cwd).toBe("/d/a");
+    expect(t.splitCwd).toBe("/home/b");
+    expect(t.profileId).toBe("git-bash");
+    expect(t.splitProfileId).toBe("wsl");
+  });
+
+  it("shell titles do not override a renamed tab", () => {
+    const id = addTab("s3", "bash");
+    renameTab(id, "api");
+    setTabTitle("s3", "vim");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.title).toBe("api");
+    expect(t.customTitle).toBe(true);
+  });
+
+  it("restoreCustomTitle sets the title and marks it custom", () => {
+    const id = addTab("s6", "bash");
+    restoreCustomTitle(id, "work");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.title).toBe("work");
+    expect(t.customTitle).toBe(true);
+  });
+
+  it("clearTabSplit forgets split profile and cwd", () => {
+    const id = addTab("s4", "bash");
+    setTabSplit(id, "s5", "horizontal", "pwsh");
+    setPaneCwd("s5", "D:/x");
+    clearTabSplit(id);
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.splitProfileId).toBeUndefined();
+    expect(t.splitCwd).toBeUndefined();
   });
 });
