@@ -7,8 +7,7 @@ use tauri::{AppHandle, Emitter};
 
 use super::blocks::{Block, BlockManager, BlockStore};
 use super::events::{
-    BlockAnnotateIpcPayload, BlockEndIpcPayload, BlockStartIpcPayload, KittyKeyboardPayload,
-    SessionExitPayload, TerminalClipboardWritePayload, TerminalCwdPayload,
+    BlockAnnotateIpcPayload, BlockEndIpcPayload, BlockStartIpcPayload, SessionExitPayload, TerminalClipboardWritePayload, TerminalCwdPayload,
     TerminalHyperlinkPayload, TerminalOutputPayload, TerminalTitlePayload,
 };
 use super::session::{Session, SessionId};
@@ -124,21 +123,6 @@ pub fn spawn_session(
 
                         // Extract OSC events before forwarding raw bytes.
                         let osc_events = crate::terminal::parser::extract_osc_events(chunk);
-
-                        // Detect Kitty keyboard push/pop sequences.
-                        if let Some(flags) = scan_kitty_keyboard(chunk) {
-                            let _ = app_clone.emit("terminal:kitty-keyboard", KittyKeyboardPayload {
-                                session_id: sid.clone(),
-                                flags,
-                            });
-                        }
-
-                        // Kitty graphics: raw bytes are forwarded to xterm.js unchanged;
-                        // the @xterm/addon-image addon handles rendering. Log at debug level
-                        // so developers can confirm graphics sequences are flowing through.
-                        if has_kitty_graphics(chunk) {
-                            tracing::debug!(session_id = %sid, "Kitty graphics APC detected in PTY output");
-                        }
 
                         // DEC 2026: detect begin/end synchronized output markers.
                         // \x1b[?2026h = begin, \x1b[?2026l = end.
@@ -348,49 +332,6 @@ pub(super) fn detect_sync(chunk: &[u8], in_sync: &mut bool, sync_buf: &mut Vec<u
     false
 }
 
-/// Scans a PTY output chunk for Kitty keyboard protocol push/pop sequences.
-///
-/// Returns `Some(flags)` when:
-/// - A push sequence `ESC [ > N u` is found (flags = N, may be 0)
-/// - A pop  sequence `ESC [ < u`   is found (flags = 0 signals "popped")
-///
-/// Returns `None` if no Kitty sequence is present in this chunk.
-///
-/// Limitation: sequences split across chunk boundaries are not detected.
-/// This is acceptable because applications write these as atomic strings
-/// well under the 8 KiB read buffer.
-pub(super) fn scan_kitty_keyboard(bytes: &[u8]) -> Option<u32> {
-    let s = std::str::from_utf8(bytes).ok()?;
-    let mut iter = s.char_indices().peekable();
-    while let Some((i, c)) = iter.next() {
-        if c != '\x1b' {
-            continue;
-        }
-        let rest = &s[i + 1..];
-        // Pop: ESC [ < u
-        if rest.starts_with("[<u") {
-            return Some(0);
-        }
-        // Push: ESC [ > <digits> u
-        if let Some(suffix) = rest.strip_prefix("[>") {
-            let end = suffix.find(|c: char| !c.is_ascii_digit()).unwrap_or(suffix.len());
-            if suffix[end..].starts_with('u') {
-                let flags: u32 = suffix[..end].parse().unwrap_or(0);
-                return Some(flags);
-            }
-        }
-    }
-    None
-}
-
-/// Returns true if the chunk contains the start of a Kitty graphics APC sequence
-/// (`ESC _ G ...`). Used only for capability detection and debug logging; the
-/// raw bytes are forwarded to xterm.js unchanged for rendering via the image addon.
-pub(super) fn has_kitty_graphics(bytes: &[u8]) -> bool {
-    // Kitty graphics: ESC _ G  (APC with 'G' introducer)
-    bytes.windows(3).any(|w| w == b"\x1b_G")
-}
-
 /// Strip the `file://[hostname]` prefix from an OSC 7 cwd URL, returning the
 /// bare path.  Examples:
 ///   `file:///home/user/foo`   →  `/home/user/foo`
@@ -452,67 +393,6 @@ fn which_shell(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::scan_kitty_keyboard;
-
-    #[test]
-    fn kitty_push_flags_1() {
-        // ESC [ > 1 u  →  flags = 1
-        assert_eq!(scan_kitty_keyboard(b"\x1b[>1u"), Some(1));
-    }
-
-    #[test]
-    fn kitty_push_flags_31() {
-        // ESC [ > 31 u  →  flags = 31
-        assert_eq!(scan_kitty_keyboard(b"\x1b[>31u"), Some(31));
-    }
-
-    #[test]
-    fn kitty_push_flags_0() {
-        // ESC [ > 0 u  →  flags = 0 (push with no flags — still a push)
-        assert_eq!(scan_kitty_keyboard(b"\x1b[>0u"), Some(0));
-    }
-
-    #[test]
-    fn kitty_pop() {
-        // ESC [ < u  →  flags = 0 (pop)
-        assert_eq!(scan_kitty_keyboard(b"\x1b[<u"), Some(0));
-    }
-
-    #[test]
-    fn kitty_embedded_in_longer_chunk() {
-        // Sequence embedded inside printable bytes
-        let bytes = b"hello\x1b[>3uworld";
-        assert_eq!(scan_kitty_keyboard(bytes), Some(3));
-    }
-
-    #[test]
-    fn kitty_no_sequence() {
-        // Normal PTY output with no Kitty sequences
-        assert_eq!(scan_kitty_keyboard(b"ls -la\r\n"), None);
-    }
-
-    #[test]
-    fn kitty_csi_arrow_not_matched() {
-        // ESC [ A (cursor up) must not be detected as a Kitty sequence
-        assert_eq!(scan_kitty_keyboard(b"\x1b[A"), None);
-    }
-
-    // ── Kitty graphics ────────────────────────────────────────────────────────
-
-    use super::has_kitty_graphics;
-
-    #[test]
-    fn kitty_graphics_apc_detected() {
-        let data = b"\x1b_Ga=T,f=32,s=1,v=1,m=0,x=0,y=0;AAAA\x1b\\";
-        assert!(has_kitty_graphics(data));
-    }
-
-    #[test]
-    fn kitty_graphics_not_present() {
-        assert!(!has_kitty_graphics(b"ls -la\r\n"));
-        assert!(!has_kitty_graphics(b"\x1b[>1u"));
-    }
-
     // ── DEC 2026 synchronized output ──────────────────────────────────────────
 
     use super::detect_sync;

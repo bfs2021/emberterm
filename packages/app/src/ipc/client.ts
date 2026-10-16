@@ -109,16 +109,6 @@ export async function agentRespond(
   return invoke("agent_respond", { sessionId, verb, payload });
 }
 
-// ── Quake commands ────────────────────────────────────────────────────────────
-
-/**
- * Toggle quake mode: hide the window if visible, or show and reposition it
- * at the top of the screen. Mirrors the OS-level Ctrl+` global shortcut.
- */
-export async function quakeToggle(): Promise<void> {
-  return invoke("quake_toggle");
-}
-
 // ── Utility commands ──────────────────────────────────────────────────────────
 
 export interface GitStatus {

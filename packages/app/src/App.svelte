@@ -7,7 +7,7 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { navigateBlocks } from "./utils/blockNav.js";
-  import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, quakeToggle, queryAgentVersion, type Profile } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, queryAgentVersion, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
   import { loadAgentConfig } from "./stores/app.js";
@@ -167,7 +167,6 @@
     if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
     if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
     if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
-    if (mod && e.key === "`") { e.preventDefault(); quakeToggle().catch(() => {}); return; }
     if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       e.preventDefault();
       navigateBlocks(document.querySelector(".tab-pane:not(.hidden)"), e.key === "ArrowDown" ? 1 : -1);

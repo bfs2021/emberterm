@@ -221,14 +221,6 @@ pub async fn agent_respond(
     Ok(())
 }
 
-/// Toggle quake mode — hide if visible, show/reposition if hidden.
-/// Called by the in-window keyboard shortcut (Ctrl+Backquote) from the frontend.
-/// The OS-level global shortcut is registered separately via `tauri-plugin-global-shortcut`.
-#[tauri::command]
-pub async fn quake_toggle(app: AppHandle) {
-    crate::quake::toggle(&app);
-}
-
 
 /// Richer git status for the status bar: branch, dirty flag, and line diff counts.
 #[derive(serde::Serialize, Clone)]
