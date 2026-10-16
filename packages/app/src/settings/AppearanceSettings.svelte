@@ -10,10 +10,9 @@
   // Installed fonts come from the OS via Rust. `null` = still loading, `[]` + loadFailed = fall back to typing.
   let installed = $state<InstalledFont[] | null>(null);
   let loadFailed = $state(false);
-  let showAll = $state(false);
 
   const current = $derived(primaryFamily($fontConfig.fontFamily));
-  const options = $derived(pickableFamilies(installed ?? [], showAll, current));
+  const options = $derived(pickableFamilies(installed ?? [], current));
   const currentInstalled = $derived((installed ?? []).some((f) => f.name === current));
 
   onMount(async () => {
@@ -73,10 +72,6 @@
             {/each}
           {/if}
         </select>
-        <label class="check">
-          <input type="checkbox" bind:checked={showAll} />
-          <span>Show all fonts, not just fixed-width ones</span>
-        </label>
       {/if}
     </div>
 
@@ -162,9 +157,6 @@
 
   .select:focus, .text:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
   .select:disabled { opacity: 0.6; }
-
-  .check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-muted); cursor: pointer; }
-  .check input { accent-color: var(--accent); color-scheme: dark; margin: 0; }
 
   .preview {
     background: var(--bg);

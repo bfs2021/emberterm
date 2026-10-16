@@ -26,13 +26,10 @@ describe("stackFor", () => {
 });
 
 describe("pickableFamilies", () => {
-  it("lists monospaced fonts only by default", () => {
-    expect(pickableFamilies(all, false, "").map((x) => x.name)).toEqual(["Cascadia Code", "JetBrains Mono"]);
+  it("lists fixed-width fonts only", () => {
+    expect(pickableFamilies(all, "").map((x) => x.name)).toEqual(["Cascadia Code", "JetBrains Mono"]);
   });
-  it("lists everything when asked", () => {
-    expect(pickableFamilies(all, true, "").map((x) => x.name)).toHaveLength(4);
-  });
-  it("keeps the current font visible even if it is not monospaced", () => {
-    expect(pickableFamilies(all, false, "Segoe UI").map((x) => x.name)).toEqual(["Cascadia Code", "JetBrains Mono", "Segoe UI"]);
+  it("keeps the current font visible even if it is not fixed-width", () => {
+    expect(pickableFamilies(all, "Segoe UI").map((x) => x.name)).toEqual(["Cascadia Code", "JetBrains Mono", "Segoe UI"]);
   });
 });

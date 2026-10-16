@@ -15,9 +15,9 @@ export function stackFor(name: string): string {
 }
 
 /**
- * Fonts to offer in the picker: monospaced ones (terminals need fixed-width glyphs) unless
- * `showAll`; the font currently in use is always included so the select can show it.
+ * Fonts to offer in the picker: fixed-width ones only (terminals need them). The font
+ * currently in use is always included so the select can show it.
  */
-export function pickableFamilies(all: InstalledFont[], showAll: boolean, current: string): InstalledFont[] {
-  return all.filter((f) => showAll || f.monospaced || f.name === current);
+export function pickableFamilies(all: InstalledFont[], current: string): InstalledFont[] {
+  return all.filter((f) => f.monospaced || f.name === current);
 }
