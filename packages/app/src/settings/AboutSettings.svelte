@@ -2,10 +2,25 @@
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { Btn } from "@emberterm/ui";
+  import { runUpdate, tauriUpdateDeps, type UpdateState } from "../utils/updater.js";
 
   const REPO = "https://github.com/emberterm/emberterm";
 
   let version = $state("");
+  let update = $state<UpdateState>({ kind: "idle" });
+  const busy = $derived(["checking", "downloading", "installing"].includes(update.kind));
+
+  const status = $derived.by(() => {
+    switch (update.kind) {
+      case "checking": return "Checking for updates…";
+      case "current": return "You're on the latest version.";
+      case "downloading": return `Downloading v${update.version}${update.pct === null ? "…" : ` — ${update.pct}%`}`;
+      case "installing": return `Installing v${update.version}; EmberTerm will restart.`;
+      case "error": return `Update failed: ${update.message}`;
+      default: return "";
+    }
+  });
 
   onMount(async () => {
     try { version = await getVersion(); } catch { /* shown without a version */ }
@@ -35,6 +50,14 @@
     (Git Bash, WSL, PowerShell), split a tab into panes, and get your last session back
     — tabs, shells and folders — when you reopen it. No account, no telemetry.
   </p>
+
+  <section class="section">
+    <h4>Updates</h4>
+    <div class="update-row">
+      <Btn variant="primary" disabled={busy} onclick={() => runUpdate(tauriUpdateDeps, (s) => (update = s))}>Check for updates</Btn>
+      <span class="status" class:error={update.kind === "error"} role="status" aria-live="polite">{status}</span>
+    </div>
+  </section>
 
   <section class="section">
     <h4>Links</h4>
@@ -74,6 +97,10 @@
   }
 
   .body { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg); }
+
+  .update-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .status { font-size: 12px; color: var(--fg-muted); }
+  .status.error { color: var(--red); }
 
   .links { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 

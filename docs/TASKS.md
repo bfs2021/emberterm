@@ -11,3 +11,4 @@
 - [ ] UI/UX polish pass against the current look
 - [ ] Manual smoke checklist before each personal build (spec §8)
 - [ ] Optional: unsigned NSIS installer for personal use
+- [ ] First release: add repo secret `TAURI_SIGNING_PRIVATE_KEY` (file `~/.tauri/emberterm.key`), then push a `v*` tag; until a release exists, "Check for updates" reports "Could not fetch a valid release JSON"
