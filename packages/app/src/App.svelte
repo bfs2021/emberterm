@@ -8,15 +8,18 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { formatWarning } from "./utils/warnings.js";
-  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, type Profile } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
   import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { createAutosave } from "./session/autosave.js";
+  import { toSnapshot, clampActiveTab, type SavedSession } from "./stores/sessionSnapshot.js";
   import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
     addTab, removeTab, activateTab, setPaneCwd, setTabTitle,
-    setTabSplit, clearTabSplit, pushToast,
+    setTabSplit, clearTabSplit, pushToast, restoreCustomTitle,
   } from "./stores/app.js";
 
   let loading = $state(true);
@@ -62,18 +65,58 @@
     }
   });
 
+  async function loadDefaultProfileId() {
+    try {
+      const c = (await configGet()) as { behavior?: { default_profile?: string } };
+      defaultProfileId = c?.behavior?.default_profile ?? "";
+    } catch { /* keep the previous value */ }
+  }
+
+  let autosaveReady = $state(false);
+  let lastSaveErrorAt = 0;
+  const autosave = createAutosave({
+    delayMs: 500,
+    save: sessionSave,
+    onError: (e) => {
+      console.error("session save failed", e);
+      if (Date.now() - lastSaveErrorAt > 60_000) {
+        lastSaveErrorAt = Date.now();
+        pushToast(`Could not save session: ${e}`);
+      }
+    },
+  });
+
+  // Snapshot on every tab change once restore has finished (a partial restore must not be saved).
+  $effect(() => {
+    const snapshot = toSnapshot($tabs);
+    if (autosaveReady) autosave.schedule(snapshot);
+  });
+
+  // The title bar's close button calls win.close(), which lands here too.
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .onCloseRequested(async () => {
+        await autosave.flush();
+        autosave.suspend();
+      })
+      .then((fn) => { unlisten = fn; })
+      .catch(console.error);
+    return () => unlisten?.();
+  });
+
   $effect(() => {
     let active = true;
     const cleanup: Array<() => void> = [];
     (async () => {
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig()]);
-        // Read default profile id from persisted config
-        configGet().then((cfg: unknown) => {
-          const c = cfg as { behavior?: { default_profile?: string } };
-          defaultProfileId = c?.behavior?.default_profile ?? "";
-        }).catch(() => {});
+        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadDefaultProfileId()]);
+        const { session, warning } = await sessionLoad();
+        if (warning) pushToast(formatWarning(warning));
+        const restored = session ? await restoreSession(session) : false;
+        if (!restored) await openNewTab();
+        autosaveReady = true;
       } catch (e) { error = String(e); }
       finally { loading = false; }
       if (!active) return;
@@ -81,12 +124,7 @@
         onTerminalBell(() => playBell()),
         onAppWarning((w) => pushToast(formatWarning(w))),
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
-        onConfigUpdated(() => {
-          configGet().then((cfg: unknown) => {
-            const c = cfg as { behavior?: { default_profile?: string } };
-            defaultProfileId = c?.behavior?.default_profile ?? "";
-          }).catch(() => {});
-        }),
+        onConfigUpdated(() => { loadDefaultProfileId(); }),
       ]);
       if (!active) { fns.forEach((f) => f()); return; }
       cleanup.push(...fns);
@@ -130,7 +168,7 @@
     return (id && profileCache.find((p) => p.id === id)) || profileCache[0];
   }
 
-  async function openNewTab(profileId?: string) {
+  async function openNewTab(profileId?: string, cwd?: string): Promise<string | null> {
     try {
       if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
       const profile = resolveProfile(profileId);
@@ -138,9 +176,38 @@
       const shell  = profile ? shellBasename(profile.shell) : "";
       // Spawn the resolved profile, not the requested id: a dangling default_profile
       // must not make Rust pick a different shell than the tab is labelled with.
-      const sessionId = await spawnPane(profile?.id);
-      addTab(sessionId, label || "Shell", shell, profile?.id);
-    } catch (e) { error = `Failed to open tab: ${e}`; }
+      const sessionId = await spawnPane(profile?.id, cwd);
+      return addTab(sessionId, label || "Shell", shell, profile?.id);
+    } catch (e) {
+      // A toast, not the full-screen error splash: other (restored) tabs must stay usable.
+      pushToast(`Failed to open tab: ${e}`);
+      return null;
+    }
+  }
+
+  async function splitTab(tabId: string, direction: "horizontal" | "vertical", profileId?: string, cwd?: string) {
+    try {
+      const profile = resolveProfile(profileId);
+      const sessionId = await spawnPane(profile?.id, cwd);
+      setTabSplit(tabId, sessionId, direction, profile?.id);
+    } catch (e) { pushToast(`Failed to split pane: ${e}`); }
+  }
+
+  async function restoreSession(saved: SavedSession): Promise<boolean> {
+    const ids: string[] = [];
+    for (const t of saved.tabs) {
+      const id = await openNewTab(t.pane.profile_id, t.pane.cwd);
+      if (!id) continue;
+      ids.push(id);
+      if (t.custom_title && t.title) restoreCustomTitle(id, t.title);
+      if (t.split) {
+        const dir = t.split.direction === "vertical" ? "vertical" : "horizontal";
+        await splitTab(id, dir, t.split.pane.profile_id, t.split.pane.cwd);
+      }
+    }
+    if (!ids.length) return false;
+    activateTab(ids[Math.min(clampActiveTab(saved), ids.length - 1)]);
+    return true;
   }
 
   async function closeTab(tabId: string, sessionId: string) {
@@ -158,11 +225,7 @@
   async function splitActiveTab(direction: "horizontal" | "vertical") {
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
-    try {
-      const profile = resolveProfile();
-      const sessionId = await spawnPane(profile?.id);
-      setTabSplit(tab.id, sessionId, direction, profile?.id);
-    } catch (e) { error = `Failed to split pane: ${e}`; }
+    await splitTab(tab.id, direction);
   }
 
   async function closeSplitPane(tabId: string) {
