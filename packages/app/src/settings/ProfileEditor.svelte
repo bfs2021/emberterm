@@ -16,7 +16,6 @@
     { value: "terminal", label: "Terminal" },
     { value: "pwsh", label: "PowerShell" },
     { value: "bash", label: "Bash / Zsh" },
-    { value: "agent", label: "Agent" },
   ];
 
   let id = $state(profile?.id ?? crypto.randomUUID().slice(0, 8));

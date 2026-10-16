@@ -13,10 +13,9 @@
   let renameValue = $state("");
 
   // Shell icon type
-  type IconKey = "pwsh" | "bash" | "agent" | "default";
+  type IconKey = "pwsh" | "bash" | "default";
 
   function shellIcon(tab: Tab): IconKey {
-    if (tab.agentActive) return "agent";
     const s = (tab.shell ?? "").toLowerCase();
     if (s.includes("pwsh") || s.includes("powershell")) return "pwsh";
     if (s.includes("bash") || s.includes("zsh") || s.includes("sh")) return "bash";
@@ -27,7 +26,6 @@
   const ICONS: Record<IconKey, string> = {
     pwsh: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="4 17 10 11 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="19" x2="20" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
     bash: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    agent: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 C 13 6, 16 7, 16.5 11 C 17 14.5, 14.8 17, 12 17 C 9.2 17, 7 14.5, 7.5 11 C 8 7.5, 12 7, 12 2.5 Z" fill="currentColor" stroke="none"/></svg>`,
     default: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="4 17 10 11 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="19" x2="20" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   };
 
@@ -88,10 +86,9 @@
     dragOverId = null;
   }
 
-  // Dot visibility: agent > unread (inactive) > running (inactive)
-  function showAgentDot(tab: Tab) { return tab.agentActive; }
-  function showUnreadDot(tab: Tab) { return tab.hasUnread && !tab.isActive && !tab.agentActive; }
-  function showRunningDot(tab: Tab) { return tab.isRunning && !tab.isActive && !tab.agentActive && !tab.hasUnread; }
+  // Dot visibility: unread (inactive) > running (inactive)
+  function showUnreadDot(tab: Tab) { return tab.hasUnread && !tab.isActive; }
+  function showRunningDot(tab: Tab) { return tab.isRunning && !tab.isActive && !tab.hasUnread; }
 </script>
 
 <div class="tab-strip">
@@ -144,9 +141,7 @@
       {/if}
 
       <!-- Status dot -->
-      {#if showAgentDot(tab)}
-        <span class="tab-dot agent-dot" aria-hidden="true"></span>
-      {:else if showUnreadDot(tab)}
+      {#if showUnreadDot(tab)}
         <span class="tab-dot unread-dot" aria-hidden="true"></span>
       {:else if showRunningDot(tab)}
         <span class="tab-dot running-dot" aria-hidden="true"></span>
@@ -289,11 +284,6 @@
     height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
-  }
-
-  .agent-dot {
-    background: var(--accent, #FF6B35);
-    box-shadow: 0 0 6px var(--accent-glow, rgba(255, 107, 53, 0.35));
   }
 
   .unread-dot {

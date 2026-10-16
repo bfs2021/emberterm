@@ -34,10 +34,6 @@
     }
   });
 
-  // ── Agent toggle ────────────────────────────────────────────────────────────
-
-  let agentEnabled = $state(true);
-
   // ── Submit ──────────────────────────────────────────────────────────────────
 
   let saving = $state(false);
@@ -65,7 +61,6 @@
       await configUpdate({
         appearance: { theme: selectedTheme },
         behavior: { default_profile: profileId },
-        agent: { osc_7777_enabled: agentEnabled },
       });
       onComplete(profileId);
     } catch {
@@ -79,7 +74,7 @@
     <div class="header">
       <span class="logo" aria-hidden="true">🔥</span>
       <h1>Welcome to EmberTerm</h1>
-      <p class="tagline">Where shells and agents meet.</p>
+      <p class="tagline">A fast, simple terminal.</p>
     </div>
 
     <!-- Theme picker -->
@@ -144,20 +139,6 @@
           {/each}
         </div>
       {/if}
-    </section>
-
-    <!-- Agent integration -->
-    <section class="section agent-section">
-      <label class="toggle-row">
-        <span class="toggle-label">
-          <strong>Enable agent integration</strong>
-          <span class="toggle-hint">OSC 7777 — inline tool cards, diff viewer, approvals</span>
-        </span>
-        <span class="toggle-wrap">
-          <input type="checkbox" class="toggle-input" bind:checked={agentEnabled} id="agent-toggle" />
-          <span class="toggle-track" aria-hidden="true"></span>
-        </span>
-      </label>
     </section>
 
     <!-- CTA -->
@@ -405,73 +386,6 @@
     font-size: 13px;
     flex-shrink: 0;
   }
-
-  /* ── Agent toggle ──────────────────────────────────────── */
-  .agent-section {
-    background: color-mix(in srgb, var(--accent, #FF6B35) 6%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent, #FF6B35) 20%, transparent);
-    border-radius: 8px;
-    padding: 12px 14px;
-  }
-
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
-  }
-
-  .toggle-label {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .toggle-label strong {
-    font-size: 13px;
-    color: var(--fg, #e6edf3);
-  }
-
-  .toggle-hint {
-    font-size: 11px;
-    color: var(--fg-muted, #7d8590);
-  }
-
-  .toggle-wrap { position: relative; flex-shrink: 0; }
-
-  .toggle-input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .toggle-track {
-    display: block;
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
-    background: var(--border, #21262d);
-    cursor: pointer;
-    transition: background 0.2s;
-    position: relative;
-  }
-
-  .toggle-track::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: white;
-    transition: transform 0.2s;
-  }
-
-  .toggle-input:checked + .toggle-track { background: var(--accent, #FF6B35); }
-  .toggle-input:checked + .toggle-track::after { transform: translateX(16px); }
 
   /* ── CTA ───────────────────────────────────────────────── */
   .cta {

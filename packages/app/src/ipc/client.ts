@@ -71,44 +71,6 @@ export async function detectBuiltinProfiles(): Promise<BuiltinProfileSpec[]> {
   return invoke("detect_builtin_profiles");
 }
 
-// ── Block commands ────────────────────────────────────────────────────────────
-
-export interface BlockRecord {
-  id: string;
-  command: string;
-  started_at_ms: number;
-  exit_code: number | null;
-  duration_ms: number | null;
-}
-
-/** Returns all blocks recorded for a session in start order. */
-export async function blockGet(sessionId: SessionId): Promise<BlockRecord[]> {
-  return invoke("block_get", { sessionId });
-}
-
-/**
- * Searches blocks by command text (case-insensitive substring match).
- * An empty query returns all blocks.
- */
-export async function blockSearch(sessionId: SessionId, query: string): Promise<BlockRecord[]> {
-  return invoke("block_search", { sessionId, query });
-}
-
-// ── Agent commands ────────────────────────────────────────────────────────────
-
-/**
- * Write an OSC 7777 sequence back into the agent's PTY stdin.
- * verb: "reply" | "event"
- * payload: JSON string
- */
-export async function agentRespond(
-  sessionId: SessionId,
-  verb: string,
-  payload: string
-): Promise<void> {
-  return invoke("agent_respond", { sessionId, verb, payload });
-}
-
 // ── Utility commands ──────────────────────────────────────────────────────────
 
 export interface GitStatus {
@@ -121,11 +83,6 @@ export interface GitStatus {
 /** Returns git status (branch, dirty flag, line diff counts) for the given directory. */
 export async function gitStatus(cwd: string): Promise<GitStatus> {
   return invoke<GitStatus>("git_status", { cwd });
-}
-
-/** Runs `executable --version` and returns a semver string like "v2.1.128", or null. */
-export async function queryAgentVersion(executable: string): Promise<string | null> {
-  return invoke<string | null>("query_agent_version", { executable });
 }
 
 /** Returns true when no config.toml exists yet (first run). */

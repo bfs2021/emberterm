@@ -6,14 +6,12 @@
     gitDirty?: boolean;
     gitInsertions?: number;
     gitDeletions?: number;
-    agentName?: string;
-    agentVersion?: string;
     termCols?: number;
     termRows?: number;
     onOpenPalette?: () => void;
   }
 
-  let { shell = "", cwd = "", gitBranch = "", gitDirty = false, gitInsertions = 0, gitDeletions = 0, agentName = "", agentVersion = "", termCols = 0, termRows = 0, onOpenPalette }: Props = $props();
+  let { shell = "", cwd = "", gitBranch = "", gitDirty = false, gitInsertions = 0, gitDeletions = 0, termCols = 0, termRows = 0, onOpenPalette }: Props = $props();
 
   function shortenCwd(path: string): string {
     if (!path) return "~";
@@ -46,12 +44,11 @@
   const hasShell = $derived(!!shell);
   const hasCwd = $derived(!!cwd);
   const hasGit = $derived(!!gitBranch);
-  const hasAgent = $derived(!!agentName);
   const hasSize = $derived(termCols > 0 && termRows > 0);
 </script>
 
 <footer class="status-bar">
-  <!-- Left items: shell · cwd · git · agent -->
+  <!-- Left items: shell · cwd · git -->
   {#if hasShell}
     <span class="status-item status-shell">
       <!-- shell/terminal icon -->
@@ -89,13 +86,6 @@
           {#if gitDeletions > 0}<span class="git-del">−{gitDeletions}</span>{/if}
         </span>
       {/if}
-    </span>
-  {/if}
-
-  {#if hasAgent}
-    <span class="status-item status-agent" class:first-item={!hasShell && !hasCwd && !hasGit}>
-      <span class="agent-dot" aria-hidden="true"></span>
-      {agentName}{#if agentVersion}&nbsp;<span class="agent-version">{agentVersion}</span>{/if}
     </span>
   {/if}
 
@@ -185,25 +175,6 @@
 
   .status-icon {
     opacity: 0.7;
-    flex-shrink: 0;
-  }
-
-  /* Agent item */
-  .status-agent {
-    color: var(--accent, #FF6B35);
-  }
-
-  .agent-version {
-    opacity: 0.55;
-    font-size: 10.5px;
-  }
-
-  .agent-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent, #FF6B35);
-    box-shadow: 0 0 6px var(--accent-glow, rgba(255, 107, 53, 0.35));
     flex-shrink: 0;
   }
 

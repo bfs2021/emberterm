@@ -1,5 +1,4 @@
-import { writable, derived, get } from "svelte/store";
-import { configGet, configUpdate } from "../ipc/client.js";
+import { writable, derived } from "svelte/store";
 
 export interface Tab {
   id: string;
@@ -10,50 +9,13 @@ export interface Tab {
   isActive: boolean;
   hasUnread: boolean;
   isRunning: boolean;
-  agentActive: boolean;
-  agentName?: string;
-  agentVersion?: string;
   // Split-pane state — present only when the tab is split.
   splitSessionId?: string;
   splitDirection?: "horizontal" | "vertical";
 }
 
-export interface AgentInfo {
-  name: string;
-  version: string;
-  pid?: number;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  summary: string;
-  icon?: string;
-  status: "pending" | "running" | "ok" | "error" | "cancelled";
-  progressPct?: number;
-  progressMessage?: string;
-  durationMs?: number;
-  args?: Record<string, unknown>;
-}
-
-export interface Block {
-  id: string;
-  command: string;
-  startedAt: number;
-  endedAt?: number;
-  exitCode?: number;
-  durationMs?: number;
-  agentId?: string;
-  tags?: string[];
-  fold?: string;
-}
-
 export const tabs = writable<Tab[]>([]);
 export const activeTabId = writable<string | null>(null);
-// Map sessionId → list of tool calls for that session
-export const toolCalls = writable<Map<string, ToolCall[]>>(new Map());
-// Map sessionId → list of blocks for that session (Phase 2)
-export const blocks = writable<Map<string, Block[]>>(new Map());
 
 export const activeTab = derived(
   [tabs, activeTabId],
@@ -70,16 +32,6 @@ export const activeCwd = derived(
   ($tab) => $tab?.cwd ?? "",
 );
 
-export const activeAgentName = derived(
-  activeTab,
-  ($tab) => $tab?.agentName ?? "",
-);
-
-export const activeAgentVersion = derived(
-  activeTab,
-  ($tab) => $tab?.agentVersion ?? "",
-);
-
 export const activeShell = derived(
   activeTab,
   ($tab) => $tab?.shell ?? "",
@@ -93,7 +45,7 @@ export function addTab(sessionId: string, title: string, shell?: string): string
     const updated = ts.map((t) => ({ ...t, isActive: false }));
     return [
       ...updated,
-      { id, sessionId, title, shell, isActive: true, hasUnread: false, isRunning: true, agentActive: false },
+      { id, sessionId, title, shell, isActive: true, hasUnread: false, isRunning: true },
     ];
   });
   activeTabId.set(id);
@@ -141,26 +93,6 @@ export function renameTab(tabId: string, newTitle: string) {
   tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)));
 }
 
-export function setTabAgent(sessionId: string, agentName: string, agentVersion?: string) {
-  tabs.update((ts) =>
-    ts.map((t) =>
-      t.sessionId === sessionId
-        ? { ...t, agentActive: true, agentName, agentVersion }
-        : t,
-    ),
-  );
-}
-
-export function clearTabAgent(sessionId: string) {
-  tabs.update((ts) =>
-    ts.map((t) =>
-      t.sessionId === sessionId
-        ? { ...t, agentActive: false, agentName: undefined, agentVersion: undefined }
-        : t,
-    ),
-  );
-}
-
 // ── Split pane helpers ────────────────────────────────────────────────────────
 
 /** Record the secondary session on a split tab. */
@@ -198,96 +130,6 @@ export function clearTabSplit(tabId: string) {
         : t,
     ),
   );
-}
-
-export function addToolCall(sessionId: string, call: ToolCall) {
-  toolCalls.update((m) => {
-    const existing = m.get(sessionId) ?? [];
-    m.set(sessionId, [...existing, call]);
-    return new Map(m);
-  });
-}
-
-export function updateToolCall(sessionId: string, id: string, patch: Partial<ToolCall>) {
-  toolCalls.update((m) => {
-    const calls = m.get(sessionId) ?? [];
-    m.set(
-      sessionId,
-      calls.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    );
-    return new Map(m);
-  });
-}
-
-export function addBlock(sessionId: string, block: Block) {
-  blocks.update((m) => {
-    const existing = m.get(sessionId) ?? [];
-    m.set(sessionId, [...existing, block]);
-    return new Map(m);
-  });
-}
-
-export function annotateBlock(
-  sessionId: string,
-  blockId: string,
-  patch: Pick<Block, "agentId" | "tags" | "fold">,
-) {
-  blocks.update((m) => {
-    const list = m.get(sessionId) ?? [];
-    m.set(sessionId, list.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
-    return new Map(m);
-  });
-}
-
-export function closeBlock(sessionId: string, blockId: string, exitCode: number, durationMs: number) {
-  blocks.update((m) => {
-    const list = m.get(sessionId) ?? [];
-    m.set(sessionId, list.map((b) =>
-      b.id === blockId ? { ...b, endedAt: Date.now(), exitCode, durationMs } : b,
-    ));
-    return new Map(m);
-  });
-}
-
-// ── Agent config store ───────────────────────────────────────────────────────
-
-export interface AgentConfigState {
-  oscEnabled: boolean;
-  autoAccept: boolean;
-}
-
-const AGENT_CONFIG_DEFAULTS: AgentConfigState = {
-  oscEnabled: true,
-  autoAccept: false,
-};
-
-export const agentConfigStore = writable<AgentConfigState>({ ...AGENT_CONFIG_DEFAULTS });
-
-/** Pull agent settings from the persisted config and sync into the store. */
-export async function loadAgentConfig(): Promise<void> {
-  try {
-    const cfg = await configGet() as {
-      agent?: { osc_7777_enabled?: boolean; auto_accept_tool_calls?: boolean };
-    };
-    const a = cfg?.agent;
-    agentConfigStore.set({
-      oscEnabled: a?.osc_7777_enabled ?? AGENT_CONFIG_DEFAULTS.oscEnabled,
-      autoAccept: a?.auto_accept_tool_calls ?? AGENT_CONFIG_DEFAULTS.autoAccept,
-    });
-  } catch {
-    // Keep defaults
-  }
-}
-
-export async function updateAgentConfig(patch: Partial<AgentConfigState>): Promise<void> {
-  const updated = { ...get(agentConfigStore), ...patch };
-  agentConfigStore.set(updated);
-  await configUpdate({
-    agent: {
-      osc_7777_enabled: updated.oscEnabled,
-      auto_accept_tool_calls: updated.autoAccept,
-    },
-  });
 }
 
 // ── Pre-mount output buffer ──────────────────────────────────────────────────

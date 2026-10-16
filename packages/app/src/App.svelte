@@ -6,24 +6,13 @@
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
-  import { navigateBlocks } from "./utils/blockNav.js";
-  import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, queryAgentVersion, type Profile } from "./ipc/client.js";
+  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { loadAgentConfig } from "./stores/app.js";
+  import { onTerminalOutput, onTerminalBell, onProfilesUpdated, onConfigUpdated } from "./ipc/events.js";
   import {
-    onTerminalOutput, onTerminalBell,
-    onAgentHello, onToolStart, onToolProgress, onToolEnd,
-    onProfilesUpdated, onConfigUpdated, onAgentDiff, onAgentApproval, onAgentBye,
-    onBlockStart, onBlockEnd, onBlockAnnotate,
-    type AgentDiffPayload, type AgentApprovalPayload,
-  } from "./ipc/events.js";
-  import { get } from "svelte/store";
-  import {
-    tabs, activeCwd, activeAgentName, activeAgentVersion, activeShell, activeSessionId,
+    tabs, activeCwd, activeShell,
     addTab, removeTab, activateTab, setTabCwd, setTabTitle,
-    setTabAgent, clearTabAgent, addToolCall, updateToolCall, toolCalls,
-    addBlock, annotateBlock, closeBlock, blocks,
     setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer,
   } from "./stores/app.js";
 
@@ -46,17 +35,6 @@
   function handlePaneTitle(sessionId: string, title: string) {
     setTabTitle(sessionId, /^[A-Za-z]:[\\/]|^\//.test(title) ? shellBasename(title) : title);
   }
-
-  // Known agents detectable by title change (for agents that don't emit OSC 7777).
-  const AGENT_TITLE_PATTERNS: { pattern: RegExp; name: string; executable: string }[] = [
-    { pattern: /claude[\s-]?code/i, name: "claude-code", executable: "claude" },
-    { pattern: /\baider\b/i, name: "aider", executable: "aider" },
-    { pattern: /\bcodex\b/i, name: "codex", executable: "codex" },
-  ];
-
-  let pendingHellos = $state(new Map<string, { name: string; version: string }>());
-  let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
-  let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
 
 
   $effect(() => {
@@ -88,7 +66,7 @@
       cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
+        await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig()]);
         // Read default profile id from persisted config
         configGet().then((cfg: unknown) => {
           const c = cfg as { behavior?: { default_profile?: string } };
@@ -98,17 +76,7 @@
       finally { loading = false; }
       if (!active) return;
       const fns = await Promise.all([
-        onAgentHello((p) => { setTabAgent(p.session_id, p.name, p.version); pendingHellos = new Map(pendingHellos).set(p.session_id, { name: p.name, version: p.version }); }),
-        onToolStart((p) => addToolCall(p.session_id, { id: p.id, name: p.name, summary: p.summary, icon: p.icon, status: "running", args: p.args })),
-        onToolProgress((p) => updateToolCall(p.session_id, p.id, { progressPct: p.pct, progressMessage: p.message })),
-        onToolEnd((p) => updateToolCall(p.session_id, p.id, { status: p.status as "ok" | "error" | "cancelled", progressPct: undefined, durationMs: p.duration_ms, ...(p.summary ? { summary: p.summary } : {}) })),
         onTerminalBell(() => playBell()),
-        onAgentDiff((p) => { pendingDiffs = new Map(pendingDiffs).set(p.session_id, p); }),
-        onAgentApproval((p) => { pendingApprovals = new Map(pendingApprovals).set(p.session_id, p); }),
-        onAgentBye((p) => { clearTabAgent(p.session_id); pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== p.session_id)); }),
-        onBlockStart((p) => addBlock(p.session_id, { id: p.id, command: p.command, startedAt: p.started_at, agentId: p.agent_id })),
-        onBlockEnd((p) => closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms)),
-        onBlockAnnotate((p) => annotateBlock(p.session_id, p.id, { agentId: p.agent_id, tags: p.tags, fold: p.fold })),
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
         onConfigUpdated(() => {
           configGet().then((cfg: unknown) => {
@@ -123,17 +91,6 @@
     return () => { active = false; cleanup.forEach((f) => f()); };
   });
 
-  function handleDiffAction(sessionId: string, id: string, result: string) {
-    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    setTimeout(() => { pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId)); }, 2000);
-  }
-  function handleApprovalAction(sessionId: string, id: string, result: string) {
-    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    pendingApprovals = new Map([...pendingApprovals].filter(([k]) => k !== sessionId));
-  }
-  function dismissHello(sid: string) { pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== sid)); }
-  function cancelTool(sid: string, id: string) { agentRespond(sid, "event", JSON.stringify({ v: 1, kind: "tool.cancel", id })).catch(() => {}); }
-
   function handleWindowKeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.shiftKey && e.key === "P") { e.preventDefault(); paletteOpen = !paletteOpen; return; }
@@ -144,10 +101,6 @@
     if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
     if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
     if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
-    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      e.preventDefault();
-      navigateBlocks(document.querySelector(".tab-pane:not(.hidden)"), e.key === "ArrowDown" ? 1 : -1);
-    }
   }
 
   function cycleTab(dir: 1 | -1) {
@@ -201,15 +154,6 @@
     clearTabSplit(tabId);
   }
 
-  // ── Testing affordance ───────────────────────────────────────────────────
-  // Expose the active session ID on window so E2E tests can call session_write
-  // directly (e.g. to inject OSC sequences).  Only runs in dev/debug builds.
-  if (import.meta.env.DEV) {
-    $effect(() => {
-      (window as unknown as Record<string, unknown>)["__EMBER_ACTIVE_SESSION__"] =
-        $activeSessionId;
-    });
-  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
@@ -232,19 +176,9 @@
         <TabPane
           {tab}
           isActive={tab.isActive}
-          blocks={$blocks.get(tab.sessionId) ?? []}
-          splitBlocks={tab.splitSessionId ? ($blocks.get(tab.splitSessionId) ?? []) : []}
-          toolCalls={$toolCalls.get(tab.sessionId) ?? []}
-          pendingDiff={pendingDiffs.get(tab.sessionId)}
-          pendingApproval={pendingApprovals.get(tab.sessionId)}
-          pendingHello={pendingHellos.get(tab.sessionId)}
           onExit={() => closeTab(tab.id, tab.sessionId)}
           onSplitExit={() => closeSplitPane(tab.id)}
           onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
-          onCancelTool={(id) => cancelTool(tab.sessionId, id)}
-          onDiffAction={(id, result) => handleDiffAction(tab.sessionId, id, result)}
-          onApprovalAction={(id, result) => handleApprovalAction(tab.sessionId, id, result)}
-          onDismissHello={() => dismissHello(tab.sessionId)}
           onCloseSplit={() => closeSplitPane(tab.id)}
           onPaneCwd={setTabCwd}
           onPaneTitle={handlePaneTitle}
@@ -252,7 +186,7 @@
       {/each}
     {/if}
   </main>
-  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
 </div>
 
 <!-- Modals outside .app — unaffected by window opacity -->
