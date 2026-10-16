@@ -3,31 +3,18 @@
 ## Project Docs
 
 @docs/PLAN.md
-@docs/OSC-777-SPEC.md
 @docs/TASKS.md
 
 ---
 
 ## Overview
 
-EmberTerm is an **agent-native terminal emulator**: Tauri 2 (Rust backend) + Svelte 5 (webview frontend). It uses `wezterm-term`/`termwiz`/`portable-pty` for the terminal engine and defines **OSC 7777**, an open protocol for AI agent integration that lets terminals display tool calls, diffs, and approval prompts inline — without any agent-specific plugins.
-
-**Positioning:** WezTerm engine + Tabby-quality UI + no account + open agent protocol. Target audience: developers who run Claude Code, Aider, or Codex CLI daily and want a polished host terminal.
+EmberTerm is a lightweight personal terminal emulator: Tauri 2 (Rust) + Svelte 5 + xterm.js, built on `portable-pty`. Tabs with different shells, splits, and session restore.
 
 **Stack:**
-- Rust `1.85`: `tauri 2`, `termwiz 0.23`, `portable-pty 0.9`, `serde`, `anyhow`/`thiserror`, `notify`, `tracing`
+- Rust `1.85`: `tauri 2`, `portable-pty 0.9`, `serde`, `anyhow`/`thiserror`, `notify`, `tracing`
 - Frontend: Svelte 5 (runes), TypeScript, Vite 6, xterm.js 5
-- IPC: Tauri events (Rust → frontend) and Tauri commands (frontend → Rust)
-
-**Performance targets:** < 25 MB installer · < 400 ms cold start · < 80 MB idle RAM (1 tab) · < 30 MB per extra tab · > 500 MB/s PTY throughput · < 16 ms input latency
-
----
-
-## UI Design Reference
-
-**`references/design.html`** is the canonical design mockup for EmberTerm's UI. Open it in a browser to inspect the visual target — colors, layout, component shapes, spacing, and interaction patterns. All frontend work must match or align with this mockup. When implementing or reviewing UI components, check them against `references/design.html` first.
-
-See `docs/review-ui-ux.md` for the current gap analysis and prioritised task checklist before starting any frontend work.
+- IPC: Tauri commands (frontend → Rust), a Tauri Channel for PTY output (raw bytes), and Tauri events (Rust → frontend)
 
 ---
 
@@ -35,104 +22,83 @@ See `docs/review-ui-ux.md` for the current gap analysis and prioritised task che
 
 ### Packages
 
-The project is a **pnpm + Cargo workspace** with four packages:
+The project is a **pnpm + Cargo workspace**:
 
 | Package | Path | Purpose |
 |---|---|---|
-| `emberterm` (Rust) | `packages/desktop/` | Tauri 2 Rust backend (PTY, OSC parser, IPC) |
+| `emberterm` (Rust) | `packages/desktop/` | Tauri 2 Rust backend (PTY, shell hooks, config/profile/session files, IPC) |
 | `@emberterm/app` | `packages/app/` | Svelte 5 webview frontend |
 | `@emberterm/ui` | `packages/ui/` | Shared Svelte component library (Btn, etc.) |
-| `@emberterm/sdk` | `packages/sdk/` | Public OSC 7777 TypeScript SDK for agent developers |
 
 ### File Map
 
 ```
 packages/desktop/src/
   main.rs                ← Tauri entry, window setup, AppState registration
-  state.rs               ← AppState: Mutex<HashMap<SessionId, Session>>
+  state.rs               ← AppState (sessions, config, profiles, startup warnings), lock_or_recover
   ipc.rs                 ← all #[tauri::command] handlers
-  profile.rs             ← Profile TOML deserialization + hot-reload watcher
-  config.rs              ← Config TOML deserialization + hot-reload watcher
+  fsutil.rs              ← write_atomic, quarantine, load_user_file, StartupWarning
+  profile.rs             ← Profile TOML + loading (broken files are quarantined)
+  config.rs              ← Config TOML + loading; save_to refuses to overwrite a broken file
+  session_store.rs       ← session.json (tabs, splits, folders) load/save
+  watcher.rs             ← notify watcher: config.toml / profiles hot-reload, app:warning
   terminal/
-    mod.rs
-    session.rs           ← Session struct (PTY master + metadata)
-    pty.rs               ← spawn_session() — PTY reader thread + OSC dispatch
-    parser.rs            ← extract_osc_events() using termwiz
-    blocks.rs            ← Phase 2: OSC 133 → Block model
-  agent/
-    mod.rs
-    protocol.rs          ← OscEvent enum
-    handlers.rs          ← dispatch() routes OscEvent → Tauri emit
-    tools.rs             ← ActiveTools, ToolCallState lifecycle
+    pty.rs               ← spawn_session() — PTY reader thread, DEC 2026 coalescing, Channel send
+    session.rs           ← Session struct (PTY master + writer)
+    shell_hooks.rs       ← per-shell OSC 7 hook injection + folder restore (Bash/WSL/pwsh)
+    which.rs             ← PATH lookup, cached default shell
+    events.rs            ← SessionExitPayload
   platform/
-    windows.rs           ← Mica/Acrylic via window-vibrancy
+    windows.rs           ← Mica via window-vibrancy
     macos.rs             ← NSWindow vibrancy via window-vibrancy
+    linux.rs             ← no-op
 
 packages/app/src/
   main.ts                ← Svelte mount
-  App.svelte             ← root: IPC listeners, tab lifecycle, keyboard shortcuts
+  App.svelte             ← root: startup, tab lifecycle, restore, autosave, keyboard shortcuts
   ipc/
     client.ts            ← typed invoke() wrappers (source of truth for commands)
     events.ts            ← typed listen() wrappers (source of truth for events)
   stores/
-    app.ts               ← tabs, toolCalls, activeCwd, activeAgentName
+    app.ts               ← tabs, activeCwd, toasts, split/rename updaters
+    sessionSnapshot.ts   ← tabs → SavedSession (session.json shape)
+    terminalConfigStore.ts
+  session/
+    autosave.ts          ← debounced save with flush/suspend
   terminal/
-    Grid.svelte          ← xterm.js Terminal instance per session
+    Grid.svelte          ← xterm.js Terminal per session; OSC 7 / title / OSC 52 handlers
+    TabPane.svelte       ← one tab: one Grid or a split of two
+    outputSink.ts        ← per-session byte sink (buffers until Grid attaches)
+  utils/
+    osc.ts               ← parseOsc7, parseOsc52
+    warnings.ts          ← formatWarning
   chrome/
     TitleBar.svelte      ← custom title bar with tab strip + window controls
-    TabStrip.svelte      ← tab list: rename, close, active/agent/running states
-    StatusBar.svelte     ← cwd, git branch, agent name, clock
-  agent/
-    ToolCard.svelte      ← inline OSC 7777 tool call card (Phase 1)
-    DiffView.svelte      ← Phase 2: inline diff viewer
-    ApprovalSheet.svelte ← Phase 2: bottom-anchored approval overlay
-  palette/
-    CommandPalette.svelte← Ctrl+Shift+P overlay with fuzzy search
-  settings/
-    SettingsPanel.svelte ← two-pane overlay (Appearance, Profiles, Keymap, Agent)
-    ThemeEditor.svelte   ← theme browser + VS Code JSON import
-    ProfileEditor.svelte ← profile create/edit form
-  welcome/
-    WelcomeScreen.svelte ← first-launch onboarding
-  theme/
-    tokens.ts            ← CSS variable name constants (match design spec)
-    vscode-import.ts     ← VS Code JSON → CSS vars converter + applyThemeVars()
-    store.ts             ← reactive theme store; applies CSS vars to :root
-    themes/              ← 7 built-in VS Code-format JSON themes
+    TabStrip.svelte      ← tab list: rename, close, drag-reorder
+    StatusBar.svelte     ← shell, cwd, git branch, size, clock
+    Toasts.svelte        ← renders the toasts store
+  palette/CommandPalette.svelte ← Ctrl+Shift+P overlay with fuzzy search
+  settings/              ← SettingsPanel, ThemeEditor, ProfileEditor, Appearance/Terminal settings
+  welcome/WelcomeScreen.svelte  ← first-launch onboarding
+  theme/                 ← tokens.ts, vscode-import.ts, store.ts, themes/ (7 built-in VS Code JSON themes)
 
 packages/ui/src/
-  lib/
-    Btn.svelte           ← button (primary / danger / ghost, sm / md)
-    Badge.svelte         ← status/label pill (ok, error, warning, agent, neutral)
-    Kbd.svelte           ← keyboard shortcut hint element
-    ProgressBar.svelte   ← thin accent progress bar
-    SplitContainer.svelte← resizable horizontal/vertical split pane
-    StatusDot.svelte     ← animated status indicator dot
+  lib/                   ← Btn, Badge, Kbd, SplitContainer
   index.ts               ← barrel export for @emberterm/ui
-
-packages/sdk/src/
-  types.ts               ← TypeScript mirrors of agent/protocol.rs structs
-  emit.ts                ← emitHello/emitToolStart/etc. helpers (writes OSC to stdout)
-  index.ts               ← barrel export for @emberterm/sdk
 ```
 
 ### Data Flow
 
 ```
-Shell/Agent
-    │ bytes
+Shell (Git Bash / WSL / pwsh)
+    │ bytes (incl. OSC 7 from the injected prompt hook)
     ▼
-portable-pty (PTY master)
-    │
-    ├─ raw bytes ──────────► tauri emit "terminal:output" ──► xterm.js (render)
-    │
-    └─ extract_osc_events()
-         │
-         ├─ Title/Cwd/Hyperlink/Clipboard ──► tauri emit typed event
-         ├─ PromptMark ─────────────────────► Phase 2 block model
-         └─ Osc7777 { verb, payload } ───────► handlers::dispatch()
-                                                    │
-                                                    └─► tauri emit agent:* event ──► ToolCard / DiffView / ApprovalSheet
+portable-pty ──► reader thread ──► DEC 2026 coalescing ──► Channel (raw bytes) ──► outputSink ──► xterm.js
+                                                                                         ├─ OSC 7  → pane cwd
+                                                                                         ├─ title  → tab title
+                                                                                         └─ OSC 52 → clipboard
+tabs store ──(500 ms debounce)──► session_save ──► session.json
+startup    ──► session_load ──► session_create(profile, cwd, channel) per pane
 ```
 
 ---
@@ -171,8 +137,8 @@ portable-pty (PTY master)
 
 **Tests**
 - Unit tests live in a **separate `*_test.rs` file** alongside the source file:
-  - Place tests in `src/terminal/blocks_test.rs`, `src/agent/protocol_test.rs`, etc.
-  - Reference it from the source file with `#[cfg(test)] #[path = "blocks_test.rs"] mod tests;`
+  - Place tests in `src/session_store_test.rs`, `src/terminal/shell_hooks_test.rs`, etc.
+  - Reference it from the source file with `#[cfg(test)] #[path = "shell_hooks_test.rs"] mod tests;`
   - The test file starts with `use super::*;` to access the parent module's items
   - This keeps each source file under the 300-line limit and makes tests easy to locate
 - Integration tests in `packages/desktop/tests/`
@@ -229,70 +195,39 @@ portable-pty (PTY master)
 
 | Function | Returns | Notes |
 |---|---|---|
-| `sessionCreate()` | `Promise<string>` | SessionId |
-| `sessionWrite(id, bytes)` | `Promise<void>` | bytes = `number[]` |
+| `sessionCreate({ profileId?, cwd?, onOutput })` | `Promise<string>` | output arrives as raw bytes on a Channel |
+| `sessionWrite(id, bytes)` | `Promise<void>` | |
 | `sessionResize(id, cols, rows)` | `Promise<void>` | |
-| `sessionClose(id)` | `Promise<void>` | kills child, removes from AppState |
-| `agentRespond(id, verb, payload)` | `Promise<void>` | writes OSC 7777 reply to PTY stdin |
-| `profileList()` | `Promise<Profile[]>` | scans `~/.config/ember/profiles/` |
-| `profileUpsert(p)` | `Promise<void>` | writes TOML atomically |
-| `configGet()` | `Promise<Config>` | |
-| `configUpdate(patch)` | `Promise<void>` | merged patch, writes TOML atomically |
-| `configIsFirstRun()` | `Promise<boolean>` | true if config.toml does not yet exist |
-| `gitBranch(cwd)` | `Promise<string \| null>` | shells out `git rev-parse` |
+| `sessionClose(id)` | `Promise<void>` | |
+| `sessionLoad()` | `Promise<{ session, warning }>` | reads `session.json` |
+| `sessionSave(session)` | `Promise<void>` | atomic write |
+| `startupWarnings()` | `Promise<StartupWarning[]>` | drained on read |
+| `profileList()` / `profileUpsert(p)` / `profileDelete(id)` | | |
+| `configGet()` / `configUpdate(patch)` / `configIsFirstRun()` | | `configUpdate` refuses to overwrite a broken file |
+| `gitStatus(cwd)` | `Promise<GitStatus>` | |
+| `detectBuiltinProfiles()` | `Promise<BuiltinProfileSpec[]>` | |
 
 ### Tauri Events (Rust → frontend)
 
-| Event | Payload fields | Trigger |
+| Event | Payload | Trigger |
 |---|---|---|
-| `terminal:output` | `session_id, data: number[]` | raw PTY bytes |
-| `terminal:title` | `session_id, title` | OSC 0/2 |
-| `terminal:cwd` | `session_id, cwd` | OSC 7 |
-| `terminal:bell` | `session_id` | BEL (0x07) |
-| `terminal:hyperlink` | `session_id, url, id?` | OSC 8 |
-| `terminal:clipboard-write` | `session_id, data` | OSC 52 (termwiz decodes base64) |
-| `terminal:exit` | `session_id, code` | shell exit |
-| `agent:hello` | `session_id, name, version, pid?` | OSC 7777 agent.hello |
-| `agent:tool_start` | `session_id, id, name, summary, icon?, parent_id?` | OSC 7777 tool.start |
-| `agent:tool_progress` | `session_id, id, pct?, message?` | OSC 7777 tool.progress |
-| `agent:tool_end` | `session_id, id, status, summary?, duration_ms?` | OSC 7777 tool.end |
-| `profiles:updated` | — | `notify` watcher on profiles dir |
-| `config:updated` | — | `notify` watcher on config.toml |
+| `terminal:exit` | `session_id, code` | reader thread ends (also on panic) |
+| `profiles:updated` | `Profile[]` | profiles dir changed |
+| `config:updated` | `Config` | config.toml changed and parses |
+| `app:warning` | `StartupWarning` | a watched file failed to parse |
 
----
-
-## OSC 7777 Quick Reference
-
-**Wire format:** `ESC ] 7777 ; <verb> ; <json-payload> ESC \`
-
-| Verb | Direction | Purpose |
-|---|---|---|
-| `agent.hello` | agent → terminal | announce name / version / pid |
-| `agent.query` | agent → terminal | query terminal capabilities |
-| `tool.start` | agent → terminal | begin tool call (id, name, summary, args) |
-| `tool.progress` | agent → terminal | progress update (pct, message) |
-| `tool.end` | agent → terminal | finish tool call (status: ok / error / cancelled) |
-| `diff` | agent → terminal | show inline diff viewer (path, patch, actions) |
-| `approval` | agent → terminal | show approval sheet (title, detail, risk, actions) |
-| `block.annotate` | agent → terminal | tag current OSC 133 block |
-| `session.mark` | agent → terminal | insert checkpoint divider |
-| `reply` | terminal → agent | response to query / diff / approval (id + result) |
-| `event` | terminal → agent | terminal-initiated event (e.g. tool.cancel) |
-
-**Response channel:** terminal writes `ESC ] 7777 ; reply ; <json> ESC \` **to PTY stdin** — agent reads it as normal stdin. This is the same pattern as DSR (device status report) replies.
-
-**TERM_OSC_7777=1** is set in the shell environment by `pty.rs` so agents can feature-detect support without a query round-trip.
+Folder, title and clipboard come from xterm.js OSC handlers (`utils/osc.ts`), not from Rust.
 
 ---
 
 ## Key Conventions
 
-- Rust structs are the source of truth for IPC types — TypeScript types are derived
-- OSC 7777 spec is CC-BY-4.0 — keep verbs vendor-neutral (no EmberTerm-only verbs in the public spec)
+- Rust structs are the source of truth for IPC types — TypeScript types mirror them by hand
 - Themes use VS Code-compatible JSON — do not invent a new format
-- Config and profiles live in `~/.config/ember/` on all platforms
-- `SessionId` is a `String` UUID — never expose PTY handles or OS pids to the frontend
-- The `--bg-elev` CSS variable naming convention from `references/design.html` is canonical — not `--bg-elevated`
+- Config, profiles and `session.json` live in `<config_dir>/ember/` (`%APPDATA%\ember` on Windows)
+- `SessionId` is a `String` — never expose PTY handles or OS pids to the frontend
+- The `--bg-elev` CSS variable naming convention is canonical — not `--bg-elevated`
+- A user-editable file that fails to parse is moved aside (`*.broken-<ts>`) at startup and reported as a toast; while the app runs it is left alone and saves are refused
 
 ---
 
@@ -311,11 +246,10 @@ pnpm turbo check
 # Tests
 cargo test --manifest-path packages/desktop/Cargo.toml
 pnpm turbo test
-pnpm --filter @emberterm/sdk test       # SDK tests only
 pnpm --filter @emberterm/app test       # app tests only
 
 # Lint
-cargo clippy --manifest-path packages/desktop/Cargo.toml -- -D warnings
+cargo clippy --manifest-path packages/desktop/Cargo.toml --all-targets -- -D warnings
 cargo fmt --manifest-path packages/desktop/Cargo.toml -- --check
 pnpm turbo check
 
@@ -324,7 +258,8 @@ pnpm turbo build
 cargo build --manifest-path packages/desktop/Cargo.toml
 
 # Dev mode
-pnpm dev   # starts @emberterm/app dev server (Vite)
+pnpm dev      # cargo tauri dev: the desktop app with hot reload
+pnpm dev:ui   # Vite dev server only (no Tauri backend)
 ```
 
 Custom slash commands (defined in `.claude/commands/`):
@@ -333,4 +268,3 @@ Custom slash commands (defined in `.claude/commands/`):
 - `/build` — full frontend + Rust build
 - `/lint` — clippy + fmt check + svelte-check
 - `/task [query]` — look up open tasks in TASKS.md
-- `/ui-review [component]` — compare component against design mockup

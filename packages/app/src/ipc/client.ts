@@ -1,11 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
+import { toBytes } from "../terminal/outputSink.js";
+import type { SavedSession } from "../stores/sessionSnapshot.js";
 
 export type SessionId = string;
 
 // ── Session commands ──────────────────────────────────────────────────────────
 
-export async function sessionCreate(profileId?: string): Promise<SessionId> {
-  return invoke("session_create", { profileId: profileId ?? null });
+export async function sessionCreate(opts: {
+  profileId?: string;
+  /** Last folder this pane reported (OSC 7); the shell restores it if it still exists. */
+  cwd?: string;
+  onOutput: (bytes: Uint8Array) => void;
+}): Promise<SessionId> {
+  const channel = new Channel<ArrayBuffer>();
+  channel.onmessage = (msg) => opts.onOutput(toBytes(msg));
+  return invoke("session_create", { profileId: opts.profileId ?? null, cwd: opts.cwd ?? null, onOutput: channel });
 }
 
 export async function sessionWrite(id: SessionId, data: Uint8Array): Promise<void> {
@@ -71,54 +80,6 @@ export async function detectBuiltinProfiles(): Promise<BuiltinProfileSpec[]> {
   return invoke("detect_builtin_profiles");
 }
 
-// ── Block commands ────────────────────────────────────────────────────────────
-
-export interface BlockRecord {
-  id: string;
-  command: string;
-  started_at_ms: number;
-  exit_code: number | null;
-  duration_ms: number | null;
-}
-
-/** Returns all blocks recorded for a session in start order. */
-export async function blockGet(sessionId: SessionId): Promise<BlockRecord[]> {
-  return invoke("block_get", { sessionId });
-}
-
-/**
- * Searches blocks by command text (case-insensitive substring match).
- * An empty query returns all blocks.
- */
-export async function blockSearch(sessionId: SessionId, query: string): Promise<BlockRecord[]> {
-  return invoke("block_search", { sessionId, query });
-}
-
-// ── Agent commands ────────────────────────────────────────────────────────────
-
-/**
- * Write an OSC 7777 sequence back into the agent's PTY stdin.
- * verb: "reply" | "event"
- * payload: JSON string
- */
-export async function agentRespond(
-  sessionId: SessionId,
-  verb: string,
-  payload: string
-): Promise<void> {
-  return invoke("agent_respond", { sessionId, verb, payload });
-}
-
-// ── Quake commands ────────────────────────────────────────────────────────────
-
-/**
- * Toggle quake mode: hide the window if visible, or show and reposition it
- * at the top of the screen. Mirrors the OS-level Ctrl+` global shortcut.
- */
-export async function quakeToggle(): Promise<void> {
-  return invoke("quake_toggle");
-}
-
 // ── Utility commands ──────────────────────────────────────────────────────────
 
 export interface GitStatus {
@@ -133,9 +94,23 @@ export async function gitStatus(cwd: string): Promise<GitStatus> {
   return invoke<GitStatus>("git_status", { cwd });
 }
 
-/** Runs `executable --version` and returns a semver string like "v2.1.128", or null. */
-export async function queryAgentVersion(executable: string): Promise<string | null> {
-  return invoke<string | null>("query_agent_version", { executable });
+export interface StartupWarning {
+  file: string;
+  message: string;
+  backup?: string | null;
+}
+
+export async function sessionLoad(): Promise<{ session: SavedSession | null; warning: StartupWarning | null }> {
+  return invoke("session_load");
+}
+
+export async function sessionSave(session: SavedSession): Promise<void> {
+  return invoke("session_save", { session });
+}
+
+/** Warnings from loading config/profiles at startup (drained on read). */
+export async function startupWarnings(): Promise<StartupWarning[]> {
+  return invoke("startup_warnings");
 }
 
 /** Returns true when no config.toml exists yet (first run). */

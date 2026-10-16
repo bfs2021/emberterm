@@ -2,12 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use ts_rs::TS;
+
+use crate::fsutil::{load_user_file, write_atomic, StartupWarning};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(TS))]
-#[cfg_attr(test, ts(export, export_to = "../frontend/bindings/Profile.ts"))]
 #[serde(default)]
 pub struct Profile {
     pub id: String,
@@ -28,8 +26,8 @@ impl Default for Profile {
             id: "default".into(),
             name: "Default Shell".into(),
             icon: "terminal".into(),
-            shell: default_shell(),
-            args: default_args(),
+            shell: crate::terminal::which::default_shell(),
+            args: crate::terminal::which::default_args(),
             cwd: "~".into(),
             env: std::collections::HashMap::new(),
             theme: None,
@@ -56,38 +54,37 @@ pub fn profiles_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("ember").join("profiles"))
 }
 
-pub fn load_profiles() -> Vec<Profile> {
-    let dir = match profiles_dir() {
-        Some(d) => d,
-        None => return vec![Profile::default()],
-    };
-
-    if !dir.exists() {
-        return vec![Profile::default()];
+pub fn load_profiles(quarantine_broken: bool) -> (Vec<Profile>, Vec<StartupWarning>) {
+    match profiles_dir() {
+        Some(dir) => load_profiles_from(&dir, quarantine_broken),
+        None => (vec![Profile::default()], Vec::new()),
     }
+}
 
+pub fn load_profiles_from(
+    dir: &Path,
+    quarantine_broken: bool,
+) -> (Vec<Profile>, Vec<StartupWarning>) {
     let mut profiles = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                if let Some(p) = load_profile_file(&path) {
-                    profiles.push(p);
-                }
+    let mut warnings = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for path in entries.flatten().map(|e| e.path()) {
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
             }
+            let (profile, warning) = load_user_file(&path, quarantine_broken, |text| {
+                toml::from_str::<Profile>(text)
+                    .map(Some)
+                    .map_err(|e| e.to_string())
+            });
+            profiles.extend(profile);
+            warnings.extend(warning);
         }
     }
-
     if profiles.is_empty() {
         profiles.push(Profile::default());
     }
-
-    profiles
-}
-
-fn load_profile_file(path: &Path) -> Option<Profile> {
-    let text = std::fs::read_to_string(path).ok()?;
-    toml::from_str(&text).ok()
+    (profiles, warnings)
 }
 
 pub fn save_profile(profile: &Profile) -> Result<()> {
@@ -95,7 +92,7 @@ pub fn save_profile(profile: &Profile) -> Result<()> {
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{}.toml", profile.id));
     let text = toml::to_string_pretty(profile)?;
-    std::fs::write(path, text)?;
+    write_atomic(&path, text.as_bytes())?;
     Ok(())
 }
 
@@ -108,32 +105,6 @@ pub fn delete_profile(id: &str) -> Result<()> {
     Ok(())
 }
 
-fn default_shell() -> String {
-    #[cfg(windows)]
-    {
-        if std::process::Command::new("where")
-            .arg("pwsh.exe")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            return "pwsh.exe".into();
-        }
-        "cmd.exe".into()
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())
-    }
-}
-
-fn default_args() -> Vec<String> {
-    #[cfg(windows)]
-    {
-        vec!["-NoLogo".into()]
-    }
-    #[cfg(not(windows))]
-    {
-        vec![]
-    }
-}
+#[cfg(test)]
+#[path = "profile_test.rs"]
+mod tests;

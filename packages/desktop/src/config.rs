@@ -1,14 +1,15 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use crate::fsutil::{load_user_file, write_atomic, StartupWarning};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub appearance: AppearanceConfig,
     pub behavior: BehaviorConfig,
-    pub agent: AgentConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,23 +35,6 @@ pub struct BehaviorConfig {
     pub default_profile: String,
     pub confirm_close_running: bool,
     pub scrollback_lines: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct AgentConfig {
-    pub osc_7777_enabled: bool,
-    pub auto_accept_tool_calls: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            appearance: AppearanceConfig::default(),
-            behavior: BehaviorConfig::default(),
-            agent: AgentConfig::default(),
-        }
-    }
 }
 
 impl Default for AppearanceConfig {
@@ -80,40 +64,64 @@ impl Default for BehaviorConfig {
     }
 }
 
-impl Default for AgentConfig {
-    fn default() -> Self {
-        Self {
-            osc_7777_enabled: true,
-            auto_accept_tool_calls: false,
+impl Config {
+    pub fn load(quarantine_broken: bool) -> (Self, Option<StartupWarning>) {
+        match config_path() {
+            Some(path) => Self::load_from(&path, quarantine_broken),
+            None => (Self::default(), None),
         }
     }
-}
 
-impl Config {
-    pub fn load() -> Self {
-        match config_path() {
-            Some(path) if path.exists() => {
-                match std::fs::read_to_string(&path) {
-                    Ok(text) => toml::from_str(&text).unwrap_or_default(),
-                    Err(_) => Config::default(),
-                }
-            }
-            _ => Config::default(),
-        }
+    pub fn load_from(path: &Path, quarantine_broken: bool) -> (Self, Option<StartupWarning>) {
+        load_user_file(path, quarantine_broken, |text| {
+            toml::from_str(text).map_err(|e| e.to_string())
+        })
     }
 
     pub fn save(&self) -> Result<()> {
-        if let Some(path) = config_path() {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
+        let path = config_path().ok_or_else(|| anyhow::anyhow!("no config directory"))?;
+        self.save_to(&path)
+    }
+
+    /// Refuses to overwrite a config.toml the user is part-way through editing.
+    pub fn save_to(&self, path: &Path) -> Result<()> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => {
+                if let Err(e) = toml::from_str::<Config>(&text) {
+                    anyhow::bail!("config.toml has an error; fix it before changing settings: {e}");
+                }
             }
-            let text = toml::to_string_pretty(self)?;
-            std::fs::write(path, text)?;
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            // Unreadable or not UTF-8: it may be the user's file in another encoding.
+            Err(e) => anyhow::bail!(
+                "config.toml could not be read ({e}); fix it before changing settings"
+            ),
         }
+        write_atomic(path, toml::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
+}
+
+/// A first run has neither a config.toml nor one set aside as `config.toml.broken-*`;
+/// a broken config must not send the user back through the welcome wizard.
+pub fn is_first_run_in(dir: &Path) -> bool {
+    if dir.join("config.toml").exists() {
+        return false;
+    }
+    let quarantined = std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("config.toml.broken-")
+        })
+    });
+    !quarantined
 }
 
 pub fn config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("ember").join("config.toml"))
 }
+
+#[cfg(test)]
+#[path = "config_test.rs"]
+mod tests;

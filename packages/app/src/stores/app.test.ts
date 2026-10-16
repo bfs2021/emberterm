@@ -1,33 +1,26 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 import {
   tabs,
-  toolCalls,
-  blocks,
+  toasts,
+  pushToast,
+  dismissToast,
   addTab,
   removeTab,
   activateTab,
   setTabTitle,
-  setTabCwd,
-  setTabAgent,
-  clearTabAgent,
+  setPaneCwd,
+  restoreCustomTitle,
   renameTab,
-  addToolCall,
-  updateToolCall,
-  addBlock,
-  closeBlock,
   setTabSplit,
   clearTabSplit,
   reorderTab,
   activeTab,
   activeCwd,
-  activeAgentName,
 } from "./app.js";
 
 beforeEach(() => {
   tabs.set([]);
-  toolCalls.set(new Map());
-  blocks.set(new Map());
 });
 
 // ── Tab management ────────────────────────────────────────────────────────────
@@ -75,18 +68,10 @@ describe("tabs", () => {
     expect(get(tabs)[0].title).toBe("My Process");
   });
 
-  it("setTabCwd updates cwd", () => {
+  it("setPaneCwd updates cwd", () => {
     addTab("s1", "Shell");
-    setTabCwd("s1", "/home/user");
+    setPaneCwd("s1", "/home/user");
     expect(get(tabs)[0].cwd).toBe("/home/user");
-  });
-
-  it("setTabAgent marks agentActive and sets name", () => {
-    addTab("s1", "Shell");
-    setTabAgent("s1", "claude-code");
-    const tab = get(tabs)[0];
-    expect(tab.agentActive).toBe(true);
-    expect(tab.agentName).toBe("claude-code");
   });
 
   it("renameTab updates title by tabId", () => {
@@ -114,155 +99,8 @@ describe("derived stores", () => {
 
   it("activeCwd follows the active tab's cwd", () => {
     addTab("s1", "Shell");
-    setTabCwd("s1", "/projects/foo");
+    setPaneCwd("s1", "/projects/foo");
     expect(get(activeCwd)).toBe("/projects/foo");
-  });
-
-  it("activeAgentName follows the active tab's agent", () => {
-    addTab("s1", "Shell");
-    setTabAgent("s1", "aider");
-    expect(get(activeAgentName)).toBe("aider");
-  });
-});
-
-// ── Tool call state transitions ───────────────────────────────────────────────
-
-describe("tool call state transitions", () => {
-  it("addToolCall inserts a call with running status", () => {
-    addTab("s1", "Shell");
-    addToolCall("s1", { id: "tc1", name: "read_file", summary: "Read foo.rs", status: "running" });
-    const calls = get(toolCalls).get("s1");
-    expect(calls).toHaveLength(1);
-    expect(calls![0].id).toBe("tc1");
-    expect(calls![0].status).toBe("running");
-  });
-
-  it("updateToolCall transitions running → ok with duration", () => {
-    addToolCall("s1", { id: "tc1", name: "edit_file", summary: "Edit main.rs", status: "running" });
-    updateToolCall("s1", "tc1", { status: "ok", durationMs: 1200, summary: "Edited 12 lines" });
-    const call = get(toolCalls).get("s1")![0];
-    expect(call.status).toBe("ok");
-    expect(call.durationMs).toBe(1200);
-    expect(call.summary).toBe("Edited 12 lines");
-  });
-
-  it("updateToolCall transitions running → error", () => {
-    addToolCall("s1", { id: "tc1", name: "build", summary: "Run build", status: "running" });
-    updateToolCall("s1", "tc1", { status: "error" });
-    expect(get(toolCalls).get("s1")![0].status).toBe("error");
-  });
-
-  it("updateToolCall transitions running → cancelled", () => {
-    addToolCall("s1", { id: "tc1", name: "test", summary: "Run tests", status: "running" });
-    updateToolCall("s1", "tc1", { status: "cancelled" });
-    expect(get(toolCalls).get("s1")![0].status).toBe("cancelled");
-  });
-
-  it("updateToolCall sets progress fields", () => {
-    addToolCall("s1", { id: "tc1", name: "upload", summary: "Uploading…", status: "running" });
-    updateToolCall("s1", "tc1", { progressPct: 60, progressMessage: "Applying patch…" });
-    const call = get(toolCalls).get("s1")![0];
-    expect(call.progressPct).toBe(60);
-    expect(call.progressMessage).toBe("Applying patch…");
-  });
-
-  it("updateToolCall clears progress fields when undefined", () => {
-    addToolCall("s1", { id: "tc1", name: "upload", summary: "Done", status: "running", progressPct: 80 });
-    updateToolCall("s1", "tc1", { status: "ok", progressPct: undefined });
-    const call = get(toolCalls).get("s1")![0];
-    expect(call.progressPct).toBeUndefined();
-  });
-
-  it("multiple tool calls are tracked independently", () => {
-    addToolCall("s1", { id: "tc1", name: "read_file", summary: "Reading", status: "running" });
-    addToolCall("s1", { id: "tc2", name: "write_file", summary: "Writing", status: "running" });
-    updateToolCall("s1", "tc1", { status: "ok" });
-    const calls = get(toolCalls).get("s1")!;
-    expect(calls.find((c) => c.id === "tc1")?.status).toBe("ok");
-    expect(calls.find((c) => c.id === "tc2")?.status).toBe("running");
-  });
-
-  it("tool calls are scoped per session", () => {
-    addToolCall("s1", { id: "tc1", name: "tool_a", summary: "Session 1", status: "running" });
-    addToolCall("s2", { id: "tc1", name: "tool_b", summary: "Session 2", status: "running" });
-    updateToolCall("s1", "tc1", { status: "ok" });
-    expect(get(toolCalls).get("s1")![0].status).toBe("ok");
-    expect(get(toolCalls).get("s2")![0].status).toBe("running");
-  });
-});
-
-// ── clearTabAgent ─────────────────────────────────────────────────────────────
-
-describe("clearTabAgent", () => {
-  it("clears agentActive and agentName after agent.bye", () => {
-    addTab("s1", "Shell");
-    setTabAgent("s1", "claude-code");
-    expect(get(tabs)[0].agentActive).toBe(true);
-    expect(get(tabs)[0].agentName).toBe("claude-code");
-
-    clearTabAgent("s1");
-    expect(get(tabs)[0].agentActive).toBe(false);
-    expect(get(tabs)[0].agentName).toBeUndefined();
-  });
-
-  it("does not affect other sessions", () => {
-    addTab("s1", "Shell 1");
-    addTab("s2", "Shell 2");
-    setTabAgent("s1", "aider");
-    setTabAgent("s2", "codex");
-
-    clearTabAgent("s1");
-    expect(get(tabs).find((t) => t.sessionId === "s2")?.agentName).toBe("codex");
-  });
-});
-
-// ── Block store ───────────────────────────────────────────────────────────────
-
-describe("block store", () => {
-  it("addBlock inserts a block for the session", () => {
-    addBlock("s1", { id: "blk-1", command: "npm test", startedAt: 1000 });
-    const list = get(blocks).get("s1");
-    expect(list).toHaveLength(1);
-    expect(list![0].id).toBe("blk-1");
-    expect(list![0].command).toBe("npm test");
-  });
-
-  it("closeBlock sets exitCode and durationMs", () => {
-    addBlock("s1", { id: "blk-1", command: "ls", startedAt: 1000 });
-    closeBlock("s1", "blk-1", 0, 42);
-    const b = get(blocks).get("s1")![0];
-    expect(b.exitCode).toBe(0);
-    expect(b.durationMs).toBe(42);
-  });
-
-  it("closeBlock with non-zero exit code", () => {
-    addBlock("s1", { id: "blk-1", command: "false", startedAt: 1000 });
-    closeBlock("s1", "blk-1", 1, 10);
-    expect(get(blocks).get("s1")![0].exitCode).toBe(1);
-  });
-
-  it("blocks are scoped per session", () => {
-    addBlock("s1", { id: "blk-1", command: "a", startedAt: 1 });
-    addBlock("s2", { id: "blk-2", command: "b", startedAt: 2 });
-    expect(get(blocks).get("s1")).toHaveLength(1);
-    expect(get(blocks).get("s2")).toHaveLength(1);
-  });
-
-  it("multiple blocks per session are ordered by insertion", () => {
-    addBlock("s1", { id: "blk-1", command: "first", startedAt: 100 });
-    addBlock("s1", { id: "blk-2", command: "second", startedAt: 200 });
-    const list = get(blocks).get("s1")!;
-    expect(list[0].id).toBe("blk-1");
-    expect(list[1].id).toBe("blk-2");
-  });
-
-  it("closeBlock only updates the target block", () => {
-    addBlock("s1", { id: "blk-1", command: "a", startedAt: 1 });
-    addBlock("s1", { id: "blk-2", command: "b", startedAt: 2 });
-    closeBlock("s1", "blk-1", 0, 100);
-    const list = get(blocks).get("s1")!;
-    expect(list[0].exitCode).toBe(0);
-    expect(list[1].exitCode).toBeUndefined();
   });
 });
 
@@ -329,5 +167,78 @@ describe("reorderTab", () => {
     reorderTab("nonexistent", t1);
     const ids = get(tabs).map((t) => t.id);
     expect(ids).toEqual([t1]);
+  });
+});
+
+describe("toasts", () => {
+  it("pushToast adds and auto-dismisses", () => {
+    vi.useFakeTimers();
+    pushToast("hello", 1000);
+    expect(get(toasts).map((t) => t.message)).toEqual(["hello"]);
+    vi.advanceTimersByTime(1000);
+    expect(get(toasts)).toEqual([]);
+    vi.useRealTimers();
+  });
+  it("dismissToast removes by id", () => {
+    const id = pushToast("bye");
+    dismissToast(id);
+    expect(get(toasts).find((t) => t.id === id)).toBeUndefined();
+  });
+});
+
+describe("pane cwd and custom titles", () => {
+  it("setPaneCwd updates the primary or the split pane", () => {
+    const id = addTab("s1", "bash", "bash", "git-bash");
+    setTabSplit(id, "s2", "vertical", "wsl");
+    setPaneCwd("s1", "/d/a");
+    setPaneCwd("s2", "/home/b");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.cwd).toBe("/d/a");
+    expect(t.splitCwd).toBe("/home/b");
+    expect(t.profileId).toBe("git-bash");
+    expect(t.splitProfileId).toBe("wsl");
+  });
+
+  it("shell titles do not override a renamed tab", () => {
+    const id = addTab("s3", "bash");
+    renameTab(id, "api");
+    setTabTitle("s3", "vim");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.title).toBe("api");
+    expect(t.customTitle).toBe(true);
+  });
+
+  it("restoreCustomTitle sets the title and marks it custom", () => {
+    const id = addTab("s6", "bash");
+    restoreCustomTitle(id, "work");
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.title).toBe("work");
+    expect(t.customTitle).toBe(true);
+  });
+
+  it("clearTabSplit forgets split profile and cwd", () => {
+    const id = addTab("s4", "bash");
+    setTabSplit(id, "s5", "horizontal", "pwsh");
+    setPaneCwd("s5", "D:/x");
+    clearTabSplit(id);
+    const t = get(tabs).find((x) => x.id === id)!;
+    expect(t.splitProfileId).toBeUndefined();
+    expect(t.splitCwd).toBeUndefined();
+  });
+});
+
+describe("no-op updates keep tab identity", () => {
+  it("setTabTitle with an unchanged title keeps the tab object", () => {
+    addTab("s9", "bash");
+    const before = get(tabs)[0];
+    setTabTitle("s9", "bash");
+    expect(get(tabs)[0]).toBe(before);
+  });
+  it("setPaneCwd with an unchanged cwd keeps the tab object", () => {
+    addTab("s10", "bash");
+    setPaneCwd("s10", "/d/x");
+    const before = get(tabs)[0];
+    setPaneCwd("s10", "/d/x");
+    expect(get(tabs)[0]).toBe(before);
   });
 });

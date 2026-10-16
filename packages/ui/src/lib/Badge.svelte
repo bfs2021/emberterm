@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  export type BadgeVariant = "ok" | "error" | "warning" | "agent" | "neutral";
+  export type BadgeVariant = "ok" | "error" | "warning" | "neutral";
 
   interface Props {
     variant?: BadgeVariant;
@@ -61,12 +61,6 @@
     background: rgba(210, 153, 34, 0.12);
     color: var(--yellow, #d29922);
     border: 1px solid rgba(210, 153, 34, 0.3);
-  }
-
-  .badge[data-variant="agent"] {
-    background: color-mix(in srgb, var(--accent, #FF6B35) 15%, transparent);
-    color: var(--accent, #FF6B35);
-    border: 1px solid color-mix(in srgb, var(--accent, #FF6B35) 30%, transparent);
   }
 
   .badge[data-variant="neutral"] {

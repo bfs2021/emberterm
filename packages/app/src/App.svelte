@@ -2,29 +2,25 @@
   import TabPane from "./terminal/TabPane.svelte";
   import TitleBar from "./chrome/TitleBar.svelte";
   import StatusBar from "./chrome/StatusBar.svelte";
+  import Toasts from "./chrome/Toasts.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import SettingsPanel from "./settings/SettingsPanel.svelte";
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
-  import { navigateBlocks } from "./utils/blockNav.js";
-  import { sessionCreate, sessionClose, agentRespond, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, quakeToggle, queryAgentVersion, type Profile } from "./ipc/client.js";
+  import { formatWarning } from "./utils/warnings.js";
+  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { loadAgentConfig } from "./stores/app.js";
+  import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { createAutosave } from "./session/autosave.js";
+  import { pickProfile } from "./session/profiles.js";
+  import { toSnapshot, clampActiveTab, type SavedSession } from "./stores/sessionSnapshot.js";
+  import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
-    onTerminalOutput, onTerminalTitle, onTerminalCwd, onTerminalBell,
-    onAgentHello, onToolStart, onToolProgress, onToolEnd, onClipboardWrite,
-    onProfilesUpdated, onConfigUpdated, onAgentDiff, onAgentApproval, onAgentBye,
-    onBlockStart, onBlockEnd, onBlockAnnotate,
-    type AgentDiffPayload, type AgentApprovalPayload,
-  } from "./ipc/events.js";
-  import { get } from "svelte/store";
-  import {
-    tabs, activeCwd, activeAgentName, activeAgentVersion, activeShell, activeSessionId,
-    addTab, removeTab, activateTab, setTabCwd, setTabTitle,
-    setTabAgent, clearTabAgent, addToolCall, updateToolCall, toolCalls,
-    addBlock, annotateBlock, closeBlock, blocks,
-    setTabSplit, clearTabSplit, createOutputBuffer, appendOutputBuffer,
+    tabs, activeCwd, activeShell,
+    addTab, removeTab, activateTab, setPaneCwd, setTabTitle,
+    setTabSplit, clearTabSplit, pushToast, restoreCustomTitle,
   } from "./stores/app.js";
 
   let loading = $state(true);
@@ -43,16 +39,9 @@
 
   function shellBasename(p: string) { return (p.split(/[\\/]/).pop() ?? p).replace(/\.exe$/i, ""); }
 
-  // Known agents detectable by title change (for agents that don't emit OSC 7777).
-  const AGENT_TITLE_PATTERNS: { pattern: RegExp; name: string; executable: string }[] = [
-    { pattern: /claude[\s-]?code/i, name: "claude-code", executable: "claude" },
-    { pattern: /\baider\b/i, name: "aider", executable: "aider" },
-    { pattern: /\bcodex\b/i, name: "codex", executable: "codex" },
-  ];
-
-  let pendingHellos = $state(new Map<string, { name: string; version: string }>());
-  let pendingDiffs = $state(new Map<string, AgentDiffPayload>());
-  let pendingApprovals = $state(new Map<string, AgentApprovalPayload>());
+  function handlePaneTitle(sessionId: string, title: string) {
+    setTabTitle(sessionId, /^[A-Za-z]:[\\/]|^\//.test(title) ? shellBasename(title) : title);
+  }
 
 
   $effect(() => {
@@ -77,85 +66,73 @@
     }
   });
 
+  async function loadDefaultProfileId() {
+    try {
+      const c = (await configGet()) as { behavior?: { default_profile?: string } };
+      defaultProfileId = c?.behavior?.default_profile ?? "";
+    } catch { /* keep the previous value */ }
+  }
+
+  let autosaveReady = $state(false);
+  let lastSaveErrorAt = 0;
+  const autosave = createAutosave({
+    delayMs: 500,
+    save: sessionSave,
+    onError: (e) => {
+      console.error("session save failed", e);
+      if (Date.now() - lastSaveErrorAt > 60_000) {
+        lastSaveErrorAt = Date.now();
+        pushToast(`Could not save session: ${e}`);
+      }
+    },
+  });
+
+  // Snapshot on every tab change once restore has finished (a partial restore must not be saved).
+  $effect(() => {
+    const snapshot = toSnapshot($tabs);
+    if (autosaveReady) autosave.schedule(snapshot);
+  });
+
+  // The title bar's close button calls win.close(), which lands here too.
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .onCloseRequested(async () => {
+        await autosave.flush();
+        autosave.suspend();
+      })
+      .then((fn) => { unlisten = fn; })
+      .catch(console.error);
+    return () => unlisten?.();
+  });
+
   $effect(() => {
     let active = true;
     const cleanup: Array<() => void> = [];
     (async () => {
-      cleanup.push(await onTerminalOutput((p) => appendOutputBuffer(p.session_id, new Uint8Array(p.data))));
       try {
         showWelcome = await configIsFirstRun();
-        await Promise.all([openNewTab(), loadFontConfig(), loadTerminalConfig(), loadAgentConfig()]);
-        // Read default profile id from persisted config
-        configGet().then((cfg: unknown) => {
-          const c = cfg as { behavior?: { default_profile?: string } };
-          defaultProfileId = c?.behavior?.default_profile ?? "";
-        }).catch(() => {});
+        await Promise.all([loadFontConfig(), loadTerminalConfig(), loadDefaultProfileId()]);
+        const { session, warning } = await sessionLoad();
+        if (warning) pushToast(formatWarning(warning));
+        const restored = session ? await restoreSession(session) : false;
+        if (!restored) await openNewTab();
+        autosaveReady = true;
       } catch (e) { error = String(e); }
       finally { loading = false; }
       if (!active) return;
       const fns = await Promise.all([
-        onTerminalTitle((p) => {
-          const t = p.title;
-          setTabTitle(p.session_id, /^[A-Za-z]:[\\\/]|^\//.test(t) ? shellBasename(t) : (t || p.title));
-          // Title-based agent detection for agents that don't emit OSC 7777.
-          const tab = get(tabs).find((tb) => tb.sessionId === p.session_id);
-          if (!tab?.agentActive) {
-            const clean = t.replace(/^\*\s*/, "").trim();
-            const match = AGENT_TITLE_PATTERNS.find(({ pattern }) => pattern.test(clean));
-            if (match) {
-              const { name, executable } = match;
-              queryAgentVersion(executable)
-                .then((ver) => setTabAgent(p.session_id, name, ver ?? undefined))
-                .catch(() => setTabAgent(p.session_id, name));
-            }
-          } else {
-            // If the tab has a title-detected agent and the title no longer matches, clear it.
-            // Keep agent info when it was set via OSC 7777 (pendingHellos tracks those).
-            if (!pendingHellos.has(p.session_id)) {
-              const clean = t.replace(/^\*\s*/, "").trim();
-              if (!AGENT_TITLE_PATTERNS.some(({ pattern }) => pattern.test(clean))) {
-                clearTabAgent(p.session_id);
-              }
-            }
-          }
-        }),
-        onTerminalCwd((p) => setTabCwd(p.session_id, p.cwd)),
-        onAgentHello((p) => { setTabAgent(p.session_id, p.name, p.version); pendingHellos = new Map(pendingHellos).set(p.session_id, { name: p.name, version: p.version }); }),
-        onToolStart((p) => addToolCall(p.session_id, { id: p.id, name: p.name, summary: p.summary, icon: p.icon, status: "running", args: p.args })),
-        onToolProgress((p) => updateToolCall(p.session_id, p.id, { progressPct: p.pct, progressMessage: p.message })),
-        onToolEnd((p) => updateToolCall(p.session_id, p.id, { status: p.status as "ok" | "error" | "cancelled", progressPct: undefined, durationMs: p.duration_ms, ...(p.summary ? { summary: p.summary } : {}) })),
-        onClipboardWrite((p) => navigator.clipboard.writeText(p.data).catch(() => {})),
         onTerminalBell(() => playBell()),
-        onAgentDiff((p) => { pendingDiffs = new Map(pendingDiffs).set(p.session_id, p); }),
-        onAgentApproval((p) => { pendingApprovals = new Map(pendingApprovals).set(p.session_id, p); }),
-        onAgentBye((p) => { clearTabAgent(p.session_id); pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== p.session_id)); }),
-        onBlockStart((p) => addBlock(p.session_id, { id: p.id, command: p.command, startedAt: p.started_at, agentId: p.agent_id })),
-        onBlockEnd((p) => closeBlock(p.session_id, p.id, p.exit_code, p.duration_ms)),
-        onBlockAnnotate((p) => annotateBlock(p.session_id, p.id, { agentId: p.agent_id, tags: p.tags, fold: p.fold })),
+        onAppWarning((w) => pushToast(formatWarning(w))),
         onProfilesUpdated(() => { profileList().then((p) => { profileCache = p; }).catch(() => { profileCache = []; }); }),
-        onConfigUpdated(() => {
-          configGet().then((cfg: unknown) => {
-            const c = cfg as { behavior?: { default_profile?: string } };
-            defaultProfileId = c?.behavior?.default_profile ?? "";
-          }).catch(() => {});
-        }),
+        onConfigUpdated(() => { loadDefaultProfileId(); }),
       ]);
       if (!active) { fns.forEach((f) => f()); return; }
       cleanup.push(...fns);
+      startupWarnings().then((ws) => ws.forEach((w) => pushToast(formatWarning(w)))).catch(console.error);
     })();
     return () => { active = false; cleanup.forEach((f) => f()); };
   });
-
-  function handleDiffAction(sessionId: string, id: string, result: string) {
-    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    setTimeout(() => { pendingDiffs = new Map([...pendingDiffs].filter(([k]) => k !== sessionId)); }, 2000);
-  }
-  function handleApprovalAction(sessionId: string, id: string, result: string) {
-    agentRespond(sessionId, "reply", JSON.stringify({ v: 1, id, result })).catch(() => {});
-    pendingApprovals = new Map([...pendingApprovals].filter(([k]) => k !== sessionId));
-  }
-  function dismissHello(sid: string) { pendingHellos = new Map([...pendingHellos].filter(([k]) => k !== sid)); }
-  function cancelTool(sid: string, id: string) { agentRespond(sid, "event", JSON.stringify({ v: 1, kind: "tool.cancel", id })).catch(() => {}); }
 
   function handleWindowKeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
@@ -167,11 +144,6 @@
     if (mod && e.shiftKey && e.key === "Tab") { e.preventDefault(); cycleTab(-1); return; }
     if (mod && e.shiftKey && e.key === "\\") { e.preventDefault(); splitActiveTab("horizontal"); return; }
     if (mod && e.shiftKey && e.key === "-") { e.preventDefault(); splitActiveTab("vertical"); return; }
-    if (mod && e.key === "`") { e.preventDefault(); quakeToggle().catch(() => {}); return; }
-    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      e.preventDefault();
-      navigateBlocks(document.querySelector(".tab-pane:not(.hidden)"), e.key === "ArrowDown" ? 1 : -1);
-    }
   }
 
   function cycleTab(dir: 1 | -1) {
@@ -184,26 +156,68 @@
     if (tab) await closeTab(tab.id, tab.sessionId);
   }
 
-  async function openNewTab(profileId?: string) {
+  async function spawnPane(profileId?: string, cwd?: string): Promise<string> {
+    const sink = createOutputSink();
+    const sessionId = await sessionCreate({ profileId, cwd, onOutput: sink.push });
+    registerOutputSink(sessionId, sink);
+    return sessionId;
+  }
+
+  /** Requested id, else the configured default, else the first profile (see pickProfile). */
+  function resolveProfile(profileId?: string): Profile | undefined {
+    return pickProfile(profileCache, profileId, defaultProfileId);
+  }
+
+  async function openNewTab(profileId?: string, cwd?: string): Promise<string | null> {
     try {
       if (!profileCache.length) { try { profileCache = await profileList(); } catch { /* ignore */ } }
-      // Resolve which profile to display: explicit id > config default > first in list
-      const resolvedId = profileId ?? defaultProfileId;
-      const profile = resolvedId
-        ? profileCache.find((p) => p.id === resolvedId) ?? profileCache[0]
-        : profileCache[0];
+      const profile = resolveProfile(profileId);
       const label = profile?.name ?? shellBasename(profile?.shell ?? "Shell");
       const shell  = profile ? shellBasename(profile.shell) : "";
-      const sessionId = await sessionCreate(resolvedId || undefined);
-      createOutputBuffer(sessionId);
-      addTab(sessionId, label || "Shell", shell);
-    } catch (e) { error = `Failed to open tab: ${e}`; }
+      // Spawn the resolved profile, not the requested id: a dangling default_profile
+      // must not make Rust pick a different shell than the tab is labelled with.
+      const sessionId = await spawnPane(profile?.id, cwd);
+      return addTab(sessionId, label || "Shell", shell, profile?.id);
+    } catch (e) {
+      // A toast, not the full-screen error splash: other (restored) tabs must stay usable.
+      pushToast(`Failed to open tab: ${e}`);
+      return null;
+    }
+  }
+
+  async function splitTab(tabId: string, direction: "horizontal" | "vertical", profileId?: string, cwd?: string) {
+    try {
+      const profile = resolveProfile(profileId);
+      const sessionId = await spawnPane(profile?.id, cwd);
+      setTabSplit(tabId, sessionId, direction, profile?.id);
+    } catch (e) { pushToast(`Failed to split pane: ${e}`); }
+  }
+
+  async function restoreSession(saved: SavedSession): Promise<boolean> {
+    const ids: string[] = [];
+    for (const t of saved.tabs) {
+      const id = await openNewTab(t.pane.profile_id, t.pane.cwd);
+      if (!id) continue;
+      ids.push(id);
+      if (t.custom_title && t.title) restoreCustomTitle(id, t.title);
+      if (t.split) {
+        const dir = t.split.direction === "vertical" ? "vertical" : "horizontal";
+        await splitTab(id, dir, t.split.pane.profile_id, t.split.pane.cwd);
+      }
+    }
+    if (!ids.length) return false;
+    activateTab(ids[Math.min(clampActiveTab(saved), ids.length - 1)]);
+    return true;
   }
 
   async function closeTab(tabId: string, sessionId: string) {
     const tab = $tabs.find((t) => t.id === tabId);
-    if (tab?.splitSessionId) await sessionClose(tab.splitSessionId).catch(() => {});
+    if (tab?.splitSessionId) {
+      await sessionClose(tab.splitSessionId).catch(() => {});
+      removeOutputSink(tab.splitSessionId);
+    }
     await sessionClose(sessionId).catch(() => {});
+    removeOutputSink(sessionId);
     removeTab(tabId);
     if ($tabs.length === 0) showWelcome = true;
   }
@@ -211,29 +225,17 @@
   async function splitActiveTab(direction: "horizontal" | "vertical") {
     const tab = $tabs.find((t) => t.isActive);
     if (!tab || tab.splitSessionId) return;
-    try {
-      const sessionId = await sessionCreate();
-      createOutputBuffer(sessionId);
-      setTabSplit(tab.id, sessionId, direction);
-    } catch (e) { error = `Failed to split pane: ${e}`; }
+    await splitTab(tab.id, direction);
   }
 
   async function closeSplitPane(tabId: string) {
     const tab = $tabs.find((t) => t.id === tabId);
     if (!tab?.splitSessionId) return;
     await sessionClose(tab.splitSessionId).catch(() => {});
+    removeOutputSink(tab.splitSessionId);
     clearTabSplit(tabId);
   }
 
-  // ── Testing affordance ───────────────────────────────────────────────────
-  // Expose the active session ID on window so E2E tests can call session_write
-  // directly (e.g. to inject OSC sequences).  Only runs in dev/debug builds.
-  if (import.meta.env.DEV) {
-    $effect(() => {
-      (window as unknown as Record<string, unknown>)["__EMBER_ACTIVE_SESSION__"] =
-        $activeSessionId;
-    });
-  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
@@ -256,25 +258,17 @@
         <TabPane
           {tab}
           isActive={tab.isActive}
-          blocks={$blocks.get(tab.sessionId) ?? []}
-          splitBlocks={tab.splitSessionId ? ($blocks.get(tab.splitSessionId) ?? []) : []}
-          toolCalls={$toolCalls.get(tab.sessionId) ?? []}
-          pendingDiff={pendingDiffs.get(tab.sessionId)}
-          pendingApproval={pendingApprovals.get(tab.sessionId)}
-          pendingHello={pendingHellos.get(tab.sessionId)}
           onExit={() => closeTab(tab.id, tab.sessionId)}
           onSplitExit={() => closeSplitPane(tab.id)}
           onResize={tab.isActive ? (c, r) => { termCols = c; termRows = r; } : undefined}
-          onCancelTool={(id) => cancelTool(tab.sessionId, id)}
-          onDiffAction={(id, result) => handleDiffAction(tab.sessionId, id, result)}
-          onApprovalAction={(id, result) => handleApprovalAction(tab.sessionId, id, result)}
-          onDismissHello={() => dismissHello(tab.sessionId)}
           onCloseSplit={() => closeSplitPane(tab.id)}
+          onPaneCwd={setPaneCwd}
+          onPaneTitle={handlePaneTitle}
         />
       {/each}
     {/if}
   </main>
-  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} agentName={$activeAgentName} agentVersion={$activeAgentVersion} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
+  <StatusBar shell={$activeShell} cwd={$activeCwd} gitBranch={currentGitBranch} {gitDirty} {gitInsertions} {gitDeletions} {termCols} {termRows} onOpenPalette={() => (paletteOpen = true)} />
 </div>
 
 <!-- Modals outside .app — unaffected by window opacity -->
@@ -283,6 +277,7 @@
 {#if showWelcome}
   <WelcomeScreen onComplete={async (profileId) => { showWelcome = false; if ($tabs.length === 0) await openNewTab(profileId); }} />
 {/if}
+<Toasts />
 
 <style>
   .app {

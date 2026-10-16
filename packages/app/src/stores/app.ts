@@ -1,59 +1,26 @@
 import { writable, derived, get } from "svelte/store";
-import { configGet, configUpdate } from "../ipc/client.js";
 
 export interface Tab {
   id: string;
   sessionId: string;
   title: string;
   shell?: string;
+  profileId?: string;
+  /** True once the user renamed the tab; shell titles no longer apply. */
+  customTitle: boolean;
   cwd?: string;
   isActive: boolean;
   hasUnread: boolean;
   isRunning: boolean;
-  agentActive: boolean;
-  agentName?: string;
-  agentVersion?: string;
   // Split-pane state — present only when the tab is split.
   splitSessionId?: string;
   splitDirection?: "horizontal" | "vertical";
-}
-
-export interface AgentInfo {
-  name: string;
-  version: string;
-  pid?: number;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  summary: string;
-  icon?: string;
-  status: "pending" | "running" | "ok" | "error" | "cancelled";
-  progressPct?: number;
-  progressMessage?: string;
-  durationMs?: number;
-  args?: Record<string, unknown>;
-}
-
-export interface Block {
-  id: string;
-  command: string;
-  startedAt: number;
-  endedAt?: number;
-  exitCode?: number;
-  durationMs?: number;
-  agentId?: string;
-  tags?: string[];
-  fold?: string;
+  splitProfileId?: string;
+  splitCwd?: string;
 }
 
 export const tabs = writable<Tab[]>([]);
 export const activeTabId = writable<string | null>(null);
-// Map sessionId → list of tool calls for that session
-export const toolCalls = writable<Map<string, ToolCall[]>>(new Map());
-// Map sessionId → list of blocks for that session (Phase 2)
-export const blocks = writable<Map<string, Block[]>>(new Map());
 
 export const activeTab = derived(
   [tabs, activeTabId],
@@ -70,16 +37,6 @@ export const activeCwd = derived(
   ($tab) => $tab?.cwd ?? "",
 );
 
-export const activeAgentName = derived(
-  activeTab,
-  ($tab) => $tab?.agentName ?? "",
-);
-
-export const activeAgentVersion = derived(
-  activeTab,
-  ($tab) => $tab?.agentVersion ?? "",
-);
-
 export const activeShell = derived(
   activeTab,
   ($tab) => $tab?.shell ?? "",
@@ -87,13 +44,13 @@ export const activeShell = derived(
 
 let tabCounter = 0;
 
-export function addTab(sessionId: string, title: string, shell?: string): string {
+export function addTab(sessionId: string, title: string, shell?: string, profileId?: string): string {
   const id = `tab-${++tabCounter}`;
   tabs.update((ts) => {
     const updated = ts.map((t) => ({ ...t, isActive: false }));
     return [
       ...updated,
-      { id, sessionId, title, shell, isActive: true, hasUnread: false, isRunning: true, agentActive: false },
+      { id, sessionId, title, shell, profileId, customTitle: false, isActive: true, hasUnread: false, isRunning: true },
     ];
   });
   activeTabId.set(id);
@@ -123,42 +80,46 @@ export function activateTab(tabId: string) {
   activeTabId.set(tabId);
 }
 
-export function setTabCwd(sessionId: string, cwd: string) {
-  tabs.update((ts) =>
-    ts.map((t) => (t.sessionId === sessionId ? { ...t, cwd } : t)),
-  );
+/** Applies `fn` to the tab list and notifies subscribers only if it returned a new list. */
+function updateTabsIfChanged(fn: (ts: Tab[]) => Tab[] | null) {
+  const next = fn(get(tabs));
+  if (next) tabs.set(next);
 }
 
+/** OSC 7 from either pane of a tab. */
+export function setPaneCwd(sessionId: string, cwd: string) {
+  updateTabsIfChanged((ts) => {
+    let changed = false;
+    const next = ts.map((t) => {
+      if (t.sessionId === sessionId && t.cwd !== cwd) { changed = true; return { ...t, cwd }; }
+      if (t.splitSessionId === sessionId && t.splitCwd !== cwd) { changed = true; return { ...t, splitCwd: cwd }; }
+      return t;
+    });
+    return changed ? next : null;
+  });
+}
+
+// Shells re-send the title on every prompt; an unchanged title must not touch the store.
 export function setTabTitle(sessionId: string, title: string) {
-  tabs.update((ts) =>
-    ts.map((t) => (t.sessionId === sessionId ? { ...t, title } : t)),
-  );
+  updateTabsIfChanged((ts) => {
+    let changed = false;
+    const next = ts.map((t) => {
+      if (t.sessionId !== sessionId || t.customTitle || t.title === title) return t;
+      changed = true;
+      return { ...t, title };
+    });
+    return changed ? next : null;
+  });
 }
 
 export function renameTab(tabId: string, newTitle: string) {
   const trimmed = newTitle.trim();
   if (!trimmed) return;
-  tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)));
+  tabs.update((ts) => ts.map((t) => (t.id === tabId ? { ...t, title: trimmed, customTitle: true } : t)));
 }
 
-export function setTabAgent(sessionId: string, agentName: string, agentVersion?: string) {
-  tabs.update((ts) =>
-    ts.map((t) =>
-      t.sessionId === sessionId
-        ? { ...t, agentActive: true, agentName, agentVersion }
-        : t,
-    ),
-  );
-}
-
-export function clearTabAgent(sessionId: string) {
-  tabs.update((ts) =>
-    ts.map((t) =>
-      t.sessionId === sessionId
-        ? { ...t, agentActive: false, agentName: undefined, agentVersion: undefined }
-        : t,
-    ),
-  );
+export function restoreCustomTitle(tabId: string, title: string) {
+  renameTab(tabId, title);
 }
 
 // ── Split pane helpers ────────────────────────────────────────────────────────
@@ -168,9 +129,12 @@ export function setTabSplit(
   tabId: string,
   splitSessionId: string,
   direction: "horizontal" | "vertical",
+  splitProfileId?: string,
 ) {
   tabs.update((ts) =>
-    ts.map((t) => (t.id === tabId ? { ...t, splitSessionId, splitDirection: direction } : t)),
+    ts.map((t) =>
+      t.id === tabId ? { ...t, splitSessionId, splitDirection: direction, splitProfileId } : t,
+    ),
   );
 }
 
@@ -194,118 +158,28 @@ export function clearTabSplit(tabId: string) {
   tabs.update((ts) =>
     ts.map((t) =>
       t.id === tabId
-        ? { ...t, splitSessionId: undefined, splitDirection: undefined }
+        ? { ...t, splitSessionId: undefined, splitDirection: undefined, splitProfileId: undefined, splitCwd: undefined }
         : t,
     ),
   );
 }
 
-export function addToolCall(sessionId: string, call: ToolCall) {
-  toolCalls.update((m) => {
-    const existing = m.get(sessionId) ?? [];
-    m.set(sessionId, [...existing, call]);
-    return new Map(m);
-  });
+// ── Toasts ────────────────────────────────────────────────────────────────────
+export interface Toast {
+  id: number;
+  message: string;
 }
 
-export function updateToolCall(sessionId: string, id: string, patch: Partial<ToolCall>) {
-  toolCalls.update((m) => {
-    const calls = m.get(sessionId) ?? [];
-    m.set(
-      sessionId,
-      calls.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    );
-    return new Map(m);
-  });
+export const toasts = writable<Toast[]>([]);
+let toastCounter = 0;
+
+export function pushToast(message: string, ttlMs = 8000): number {
+  const id = ++toastCounter;
+  toasts.update((ts) => [...ts, { id, message }]);
+  setTimeout(() => dismissToast(id), ttlMs);
+  return id;
 }
 
-export function addBlock(sessionId: string, block: Block) {
-  blocks.update((m) => {
-    const existing = m.get(sessionId) ?? [];
-    m.set(sessionId, [...existing, block]);
-    return new Map(m);
-  });
-}
-
-export function annotateBlock(
-  sessionId: string,
-  blockId: string,
-  patch: Pick<Block, "agentId" | "tags" | "fold">,
-) {
-  blocks.update((m) => {
-    const list = m.get(sessionId) ?? [];
-    m.set(sessionId, list.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
-    return new Map(m);
-  });
-}
-
-export function closeBlock(sessionId: string, blockId: string, exitCode: number, durationMs: number) {
-  blocks.update((m) => {
-    const list = m.get(sessionId) ?? [];
-    m.set(sessionId, list.map((b) =>
-      b.id === blockId ? { ...b, endedAt: Date.now(), exitCode, durationMs } : b,
-    ));
-    return new Map(m);
-  });
-}
-
-// ── Agent config store ───────────────────────────────────────────────────────
-
-export interface AgentConfigState {
-  oscEnabled: boolean;
-  autoAccept: boolean;
-}
-
-const AGENT_CONFIG_DEFAULTS: AgentConfigState = {
-  oscEnabled: true,
-  autoAccept: false,
-};
-
-export const agentConfigStore = writable<AgentConfigState>({ ...AGENT_CONFIG_DEFAULTS });
-
-/** Pull agent settings from the persisted config and sync into the store. */
-export async function loadAgentConfig(): Promise<void> {
-  try {
-    const cfg = await configGet() as {
-      agent?: { osc_7777_enabled?: boolean; auto_accept_tool_calls?: boolean };
-    };
-    const a = cfg?.agent;
-    agentConfigStore.set({
-      oscEnabled: a?.osc_7777_enabled ?? AGENT_CONFIG_DEFAULTS.oscEnabled,
-      autoAccept: a?.auto_accept_tool_calls ?? AGENT_CONFIG_DEFAULTS.autoAccept,
-    });
-  } catch {
-    // Keep defaults
-  }
-}
-
-export async function updateAgentConfig(patch: Partial<AgentConfigState>): Promise<void> {
-  const updated = { ...get(agentConfigStore), ...patch };
-  agentConfigStore.set(updated);
-  await configUpdate({
-    agent: {
-      osc_7777_enabled: updated.oscEnabled,
-      auto_accept_tool_calls: updated.autoAccept,
-    },
-  });
-}
-
-// ── Pre-mount output buffer ──────────────────────────────────────────────────
-// App.svelte creates a buffer for each session right after sessionCreate().
-// Grid.svelte drains it on mount (before the live listener takes over) to
-// recover PTY bytes emitted before xterm.js was ready.
-const _outputBuffers = new Map<string, Uint8Array[]>();
-
-export function createOutputBuffer(sessionId: string) {
-  _outputBuffers.set(sessionId, []);
-}
-
-export function appendOutputBuffer(sessionId: string, bytes: Uint8Array) {
-  _outputBuffers.get(sessionId)?.push(bytes);
-}
-
-export function drainOutputBuffer(sessionId: string): Uint8Array[] {
-  const buf = _outputBuffers.get(sessionId) ?? [];
-  _outputBuffers.delete(sessionId);
-  return buf;
+export function dismissToast(id: number) {
+  toasts.update((ts) => ts.filter((t) => t.id !== id));
 }

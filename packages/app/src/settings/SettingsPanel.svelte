@@ -2,7 +2,6 @@
   import AppearanceSettings from "./AppearanceSettings.svelte";
   import TerminalSettings from "./TerminalSettings.svelte";
   import ThemeEditor from "./ThemeEditor.svelte";
-  import AgentSettings from "./AgentSettings.svelte";
   import ProfileEditor from "./ProfileEditor.svelte";
   import { Btn, Kbd } from "@emberterm/ui";
   import { profileList, profileUpsert, configGet, configUpdate, detectBuiltinProfiles, type Profile, type BuiltinProfileSpec } from "../ipc/client.js";
@@ -16,7 +15,7 @@
 
   let { open, onClose, onTestProfile }: Props = $props();
 
-  type Category = "appearance" | "profiles" | "terminal" | "colorscheme" | "keymap" | "agent";
+  type Category = "appearance" | "profiles" | "terminal" | "colorscheme" | "keymap";
 
   let activeCategory = $state<Category>("appearance");
   let profiles = $state<Profile[]>([]);
@@ -52,11 +51,6 @@
       id: "keymap", label: "Keymap",
       keywords: ["key", "shortcut", "hotkey", "ctrl", "cmd", "binding"],
       icon: "M1 3h10v6H1zM3 3v6M5 3v6M7 3v6M9 3v6M1 6h10",
-    },
-    {
-      id: "agent", label: "Agent",
-      keywords: ["agent", "osc", "tool", "claude", "ai", "7777", "auto", "accept"],
-      icon: "M6 1l1.5 3 3.5.5-2.5 2.5.5 3.5L6 9l-3 1.5.5-3.5L1 4.5 4.5 4z",
     },
   ];
 
@@ -291,10 +285,6 @@
               <p class="keymap-empty">No shortcuts match "{keymapSearch}"</p>
             {/if}
           </div>
-
-        {:else if activeCategory === "agent"}
-          <h2 class="section-title">Agent</h2>
-          <AgentSettings />
         {/if}
       </div>
     </div>
