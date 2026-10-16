@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tabs, activateTab, renameTab, reorderTab, type Tab } from "../stores/app.js";
+  import { tabLabels } from "../utils/tabLabel.js";
 
   interface Props {
     onNewTab: () => void;
@@ -7,6 +8,10 @@
   }
 
   let { onNewTab, onCloseTab }: Props = $props();
+
+  // Display text per tab (last folder, or the program's / user's title).
+  const labels = $derived(tabLabels($tabs));
+  const labelOf = (tab: Tab) => labels.get(tab.id) ?? tab.title;
 
   // Inline rename state
   let renamingTabId = $state<string | null>(null);
@@ -32,7 +37,7 @@
   function startRename(tab: Tab, e: MouseEvent) {
     e.stopPropagation();
     renamingTabId = tab.id;
-    renameValue = tab.title;
+    renameValue = labelOf(tab);
   }
 
   function commitRename() {
@@ -138,7 +143,7 @@
           autofocus
         />
       {:else}
-        <span class="tab-title">{tab.title}</span>
+        <span class="tab-title" title={tab.cwd ? `${tab.title} — ${tab.cwd}` : tab.title}>{labelOf(tab)}</span>
       {/if}
 
       <!-- Status dot -->
