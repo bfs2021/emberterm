@@ -110,7 +110,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 14px 0 12px;
+    /* The tab strip starts 6px down, so tab text centres in the lower 30px; match it. */
+    padding: 6px 14px 0 12px;
     flex-shrink: 0;
   }
 
