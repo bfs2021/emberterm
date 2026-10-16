@@ -8,10 +8,11 @@
   import WelcomeScreen from "./welcome/WelcomeScreen.svelte";
   import { playBell } from "./utils/bell.js";
   import { formatWarning } from "./utils/warnings.js";
-  import { sessionCreate, sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
+  import { sessionClose, gitStatus as gitStatusIpc, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
-  import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
+  import { removeOutputSink } from "./terminal/outputSink.js";
+  import { spawnPane } from "./session/spawnPane.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { createAutosave } from "./session/autosave.js";
   import { pickProfile } from "./session/profiles.js";
@@ -154,13 +155,6 @@
   async function closeActiveTab() {
     const tab = $tabs.find((t) => t.isActive);
     if (tab) await closeTab(tab.id, tab.sessionId);
-  }
-
-  async function spawnPane(profileId?: string, cwd?: string): Promise<string> {
-    const sink = createOutputSink();
-    const sessionId = await sessionCreate({ profileId, cwd, onOutput: sink.push });
-    registerOutputSink(sessionId, sink);
-    return sessionId;
   }
 
   /** Requested id, else the configured default, else the first profile (see pickProfile). */

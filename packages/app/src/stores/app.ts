@@ -10,8 +10,10 @@ export interface Tab {
   customTitle: boolean;
   cwd?: string;
   isActive: boolean;
+  /** Output arrived while this tab was in the background and has not been viewed yet. */
   hasUnread: boolean;
-  isRunning: boolean;
+  /** Output arrived in the last BUSY_MS (background tabs only). */
+  isBusy: boolean;
   // Split-pane state — present only when the tab is split.
   splitSessionId?: string;
   splitDirection?: "horizontal" | "vertical";
@@ -50,11 +52,47 @@ export function addTab(sessionId: string, title: string, shell?: string, profile
     const updated = ts.map((t) => ({ ...t, isActive: false }));
     return [
       ...updated,
-      { id, sessionId, title, shell, profileId, customTitle: false, isActive: true, hasUnread: false, isRunning: true },
+      { id, sessionId, title, shell, profileId, customTitle: false, isActive: true, hasUnread: false, isBusy: false },
     ];
   });
   activeTabId.set(id);
   return id;
+}
+
+const BUSY_MS = 1500;
+const busyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function patchTab(tabId: string, patch: Partial<Pick<Tab, "isBusy" | "hasUnread">>) {
+  updateTabsIfChanged((ts) => {
+    let changed = false;
+    const next = ts.map((t) => {
+      if (t.id !== tabId) return t;
+      const differs = (Object.keys(patch) as (keyof typeof patch)[]).some((k) => t[k] !== patch[k]);
+      if (!differs) return t;
+      changed = true;
+      return { ...t, ...patch };
+    });
+    return changed ? next : null;
+  });
+}
+
+/**
+ * PTY output reached `sessionId`. For a background tab: show it as busy until the output
+ * goes quiet, and (unless it is the shell's startup banner) flag it unread until viewed.
+ * A stream of chunks touches the store only on the first one.
+ */
+export function noteOutput(sessionId: string, countsAsUnread: boolean) {
+  const owner = get(tabs).find((t) => t.sessionId === sessionId || t.splitSessionId === sessionId);
+  if (!owner || owner.isActive) return;
+  patchTab(owner.id, countsAsUnread ? { isBusy: true, hasUnread: true } : { isBusy: true });
+  clearTimeout(busyTimers.get(owner.id));
+  busyTimers.set(
+    owner.id,
+    setTimeout(() => {
+      busyTimers.delete(owner.id);
+      patchTab(owner.id, { isBusy: false });
+    }, BUSY_MS),
+  );
 }
 
 export function removeTab(tabId: string) {

@@ -4,7 +4,7 @@ import type { Tab } from "./app.js";
 
 const tab = (over: Partial<Tab>): Tab => ({
   id: "t", sessionId: "s", title: "bash", customTitle: false,
-  isActive: false, hasUnread: false, isRunning: true, ...over,
+  isActive: false, hasUnread: false, isBusy: false, ...over,
 });
 
 describe("toSnapshot", () => {

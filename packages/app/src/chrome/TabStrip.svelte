@@ -86,9 +86,10 @@
     dragOverId = null;
   }
 
-  // Dot visibility: unread (inactive) > running (inactive)
+  // Background tabs only: green pulse while output is flowing, blue once it has gone quiet
+  // but has not been looked at yet.
+  function showBusyDot(tab: Tab) { return tab.isBusy && !tab.isActive; }
   function showUnreadDot(tab: Tab) { return tab.hasUnread && !tab.isActive; }
-  function showRunningDot(tab: Tab) { return tab.isRunning && !tab.isActive && !tab.hasUnread; }
 </script>
 
 <div class="tab-strip">
@@ -141,10 +142,10 @@
       {/if}
 
       <!-- Status dot -->
-      {#if showUnreadDot(tab)}
+      {#if showBusyDot(tab)}
+        <span class="tab-dot busy-dot" aria-hidden="true"></span>
+      {:else if showUnreadDot(tab)}
         <span class="tab-dot unread-dot" aria-hidden="true"></span>
-      {:else if showRunningDot(tab)}
-        <span class="tab-dot running-dot" aria-hidden="true"></span>
       {/if}
 
       <!-- Close button -->
@@ -290,12 +291,12 @@
     background: var(--blue, #58a6ff);
   }
 
-  .running-dot {
+  .busy-dot {
     background: var(--green, #7ee787);
-    animation: running-pulse 1.4s ease-in-out infinite;
+    animation: busy-pulse 1.4s ease-in-out infinite;
   }
 
-  @keyframes running-pulse {
+  @keyframes busy-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.8); }
   }
