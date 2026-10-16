@@ -25,6 +25,22 @@ impl portable_pty::MasterPty for MockMasterPty {
     fn take_writer(&self) -> anyhow::Result<Box<dyn std::io::Write + Send>> {
         Ok(Box::new(std::io::sink()))
     }
+
+    // Unix-only trait items; a mock has no process group, fd or tty.
+    #[cfg(unix)]
+    fn process_group_leader(&self) -> Option<i32> {
+        None
+    }
+
+    #[cfg(unix)]
+    fn as_raw_fd(&self) -> Option<i32> {
+        None
+    }
+
+    #[cfg(unix)]
+    fn tty_name(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

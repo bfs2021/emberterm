@@ -418,7 +418,16 @@ pub async fn detect_builtin_profiles() -> Vec<BuiltinProfileSpec> {
 
         #[cfg(not(windows))]
         {
-            let shell_candidates: &[(&str, &str, &str, &str, &[&str], &str)] = &[
+            // (path, name, id, icon, args, description)
+            type ShellCandidate = (
+                &'static str,
+                &'static str,
+                &'static str,
+                &'static str,
+                &'static [&'static str],
+                &'static str,
+            );
+            let shell_candidates: &[ShellCandidate] = &[
                 ("/bin/zsh", "Zsh", "builtin-zsh", "bash", &[], "Z Shell"),
                 (
                     "/bin/bash",
