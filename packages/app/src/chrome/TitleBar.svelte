@@ -16,6 +16,11 @@
   async function toggleMaximize() { await win.toggleMaximize(); }
   async function close() { await win.close(); }
 
+  // Anything the user can click, type in or drag-reorder must not start a window drag: on
+  // Windows startDragging() enters the native move loop on mousedown and swallows the
+  // mouseup, so a tab press would never become a click.
+  const INTERACTIVE = "button, input, [role='tab'], [role='button']";
+
   /**
    * Initiate window drag on left-button press over non-interactive areas.
    * Using startDragging() instead of data-tauri-drag-region because
@@ -24,13 +29,13 @@
    */
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    if ((e.target as Element).closest("button")) return;
+    if ((e.target as Element).closest(INTERACTIVE)) return;
     win.startDragging().catch(() => {});
   }
 
   /** Maximize/restore on double-click outside buttons. */
   function handleDblClick(e: MouseEvent) {
-    if ((e.target as Element).closest("button")) return;
+    if ((e.target as Element).closest(INTERACTIVE)) return;
     toggleMaximize();
   }
 </script>
