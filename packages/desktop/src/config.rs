@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::fsutil::write_atomic;
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -75,11 +77,8 @@ impl Config {
 
     pub fn save(&self) -> Result<()> {
         if let Some(path) = config_path() {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
             let text = toml::to_string_pretty(self)?;
-            std::fs::write(path, text)?;
+            write_atomic(&path, text.as_bytes())?;
         }
         Ok(())
     }

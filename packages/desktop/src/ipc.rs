@@ -2,7 +2,7 @@ use tauri::{AppHandle, State};
 
 use crate::config::Config;
 use crate::profile::Profile;
-use crate::state::AppState;
+use crate::state::{lock_or_recover, AppState};
 use crate::terminal::pty;
 use crate::terminal::session::SessionId;
 
@@ -22,8 +22,8 @@ pub async fn session_create(
     //   3. The first profile in the list.
     //   4. An inline default (no-clone fallback).
     let profile: Option<crate::profile::Profile> = {
-        let profiles = state.profiles.lock().unwrap();
-        let cfg = state.config.lock().unwrap();
+        let profiles = lock_or_recover(&state.profiles);
+        let cfg = lock_or_recover(&state.config);
         if let Some(ref id) = profile_id {
             profiles.iter().find(|p| p.id == *id).cloned()
         } else {
@@ -38,11 +38,7 @@ pub async fn session_create(
 
     let session =
         pty::spawn_session(session_id.clone(), profile.as_ref(), app).map_err(|e| e.to_string())?;
-    state
-        .sessions
-        .lock()
-        .unwrap()
-        .insert(session_id.clone(), session);
+    lock_or_recover(&state.sessions).insert(session_id.clone(), session);
     tracing::info!(
         session_id = %session_id,
         profile = profile.as_ref().map(|p| p.id.as_str()).unwrap_or("default"),
@@ -59,14 +55,14 @@ pub async fn session_write(
 ) -> Result<(), String> {
     // Clone Arc while holding sessions lock, then release before locking writer.
     let writer_arc = {
-        let sessions = state.sessions.lock().unwrap();
+        let sessions = lock_or_recover(&state.sessions);
         sessions
             .get(&id)
             .ok_or_else(|| format!("session {id} not found"))?
             .writer
             .clone()
     };
-    let mut writer = writer_arc.lock().unwrap();
+    let mut writer = lock_or_recover(&writer_arc);
     use std::io::Write;
     writer.write_all(&data).map_err(|e| e.to_string())?;
     writer.flush().map_err(|e| e.to_string())?;
@@ -80,7 +76,7 @@ pub async fn session_resize(
     rows: u16,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
+    let sessions = lock_or_recover(&state.sessions);
     let session = sessions
         .get(&id)
         .ok_or_else(|| format!("session {id} not found"))?;
@@ -98,7 +94,7 @@ pub async fn session_resize(
 
 #[tauri::command]
 pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<(), String> {
-    state.sessions.lock().unwrap().remove(&id);
+    lock_or_recover(&state.sessions).remove(&id);
     tracing::info!(session_id = %id, "session closed");
     Ok(())
 }
@@ -107,7 +103,7 @@ pub async fn session_close(id: SessionId, state: State<'_, AppState>) -> Result<
 
 #[tauri::command]
 pub async fn config_get(state: State<'_, AppState>) -> Result<Config, String> {
-    Ok(state.config.lock().unwrap().clone())
+    Ok(lock_or_recover(&state.config).clone())
 }
 
 #[tauri::command]
@@ -115,7 +111,7 @@ pub async fn config_update(
     patch: serde_json::Value,
     state: State<'_, AppState>,
 ) -> Result<Config, String> {
-    let mut cfg = state.config.lock().unwrap();
+    let mut cfg = lock_or_recover(&state.config);
     let mut current = serde_json::to_value(cfg.clone()).map_err(|e| e.to_string())?;
     json_merge(&mut current, patch);
     *cfg = serde_json::from_value(current).map_err(|e| e.to_string())?;
@@ -127,13 +123,13 @@ pub async fn config_update(
 
 #[tauri::command]
 pub async fn profile_list(state: State<'_, AppState>) -> Result<Vec<Profile>, String> {
-    Ok(state.profiles.lock().unwrap().clone())
+    Ok(lock_or_recover(&state.profiles).clone())
 }
 
 #[tauri::command]
 pub async fn profile_upsert(profile: Profile, state: State<'_, AppState>) -> Result<(), String> {
     crate::profile::save_profile(&profile).map_err(|e| e.to_string())?;
-    let mut profiles = state.profiles.lock().unwrap();
+    let mut profiles = lock_or_recover(&state.profiles);
     match profiles.iter_mut().find(|p| p.id == profile.id) {
         Some(existing) => *existing = profile,
         None => profiles.push(profile),
@@ -144,7 +140,7 @@ pub async fn profile_upsert(profile: Profile, state: State<'_, AppState>) -> Res
 #[tauri::command]
 pub async fn profile_delete(id: String, state: State<'_, AppState>) -> Result<(), String> {
     crate::profile::delete_profile(&id).map_err(|e| e.to_string())?;
-    let mut profiles = state.profiles.lock().unwrap();
+    let mut profiles = lock_or_recover(&state.profiles);
     profiles.retain(|p| p.id != id);
     Ok(())
 }

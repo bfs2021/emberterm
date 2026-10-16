@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use crate::config::Config;
 use crate::profile::Profile;
@@ -32,9 +32,15 @@ impl AppState {
     }
 
     pub fn next_session_id(&self) -> SessionId {
-        let mut n = self.next_id.lock().unwrap();
+        let mut n = lock_or_recover(&self.next_id);
         let id = format!("session-{}", *n);
         *n += 1;
         id
     }
+}
+
+/// Locks `m`, recovering the data if another thread panicked while holding it.
+/// A poisoned lock must not take down every tab.
+pub fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }

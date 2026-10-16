@@ -1,6 +1,8 @@
 use notify::{recommended_watcher, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{App, Emitter, Manager};
 
+use crate::state::lock_or_recover;
+
 pub fn setup(app: &mut App) -> anyhow::Result<()> {
     let app_handle = app.handle().clone();
 
@@ -21,11 +23,11 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
             for path in &event.paths {
                 if path.file_name().is_some_and(|n| n == "config.toml") {
                     let new_cfg = crate::config::Config::load();
-                    *state.config.lock().unwrap() = new_cfg.clone();
+                    *lock_or_recover(&state.config) = new_cfg.clone();
                     let _ = app_handle.emit("config:updated", new_cfg);
                 } else if path.extension().is_some_and(|e| e == "toml") {
                     let new_profiles = crate::profile::load_profiles();
-                    *state.profiles.lock().unwrap() = new_profiles.clone();
+                    *lock_or_recover(&state.profiles) = new_profiles.clone();
                     let _ = app_handle.emit("profiles:updated", new_profiles);
                 }
             }
@@ -45,10 +47,8 @@ pub fn setup(app: &mut App) -> anyhow::Result<()> {
         let _ = watcher.watch(&profiles_dir, RecursiveMode::NonRecursive);
     }
 
-    *app.state::<crate::state::AppState>()
-        .watcher
-        .lock()
-        .unwrap() = Some(watcher);
+    let state = app.state::<crate::state::AppState>();
+    *lock_or_recover(&state.watcher) = Some(watcher);
 
     Ok(())
 }

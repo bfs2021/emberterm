@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::fsutil::write_atomic;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Profile {
@@ -91,7 +93,7 @@ pub fn save_profile(profile: &Profile) -> Result<()> {
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{}.toml", profile.id));
     let text = toml::to_string_pretty(profile)?;
-    std::fs::write(path, text)?;
+    write_atomic(&path, text.as_bytes())?;
     Ok(())
 }
 

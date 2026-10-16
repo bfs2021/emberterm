@@ -88,6 +88,17 @@ pub fn spawn_session(
     std::thread::Builder::new()
         .name(format!("pty-reader-{sid}"))
         .spawn(move || {
+            let exit_app = app_clone.clone();
+            let exit_sid = sid.clone();
+            let _exit_guard = OnDrop(move || {
+                let _ = exit_app.emit(
+                    "terminal:exit",
+                    SessionExitPayload {
+                        session_id: exit_sid.clone(),
+                        code: 0,
+                    },
+                );
+            });
             let mut buf = vec![0u8; 8192];
             // DEC 2026 synchronized output: buffer chunks between begin/end markers.
             let mut sync_buf: Vec<u8> = Vec::new();
@@ -126,13 +137,6 @@ pub fn spawn_session(
                     Err(_) => break,
                 }
             }
-            let _ = app_clone.emit(
-                "terminal:exit",
-                SessionExitPayload {
-                    session_id: sid,
-                    code: 0,
-                },
-            );
         })
         .context("failed to spawn PTY reader thread")?;
 
@@ -140,6 +144,16 @@ pub fn spawn_session(
         master: pty_pair.master,
         writer,
     })
+}
+
+/// Runs a closure on drop — including during a panic unwind — so the
+/// frontend always learns that a pane's reader thread has stopped.
+pub(crate) struct OnDrop<F: FnMut()>(pub F);
+
+impl<F: FnMut()> Drop for OnDrop<F> {
+    fn drop(&mut self) {
+        (self.0)();
+    }
 }
 
 /// DEC 2026 synchronized output — update sync state based on `chunk`.
@@ -213,6 +227,20 @@ fn which_shell(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     // ── DEC 2026 synchronized output ──────────────────────────────────────────
+
+    #[test]
+    fn on_drop_runs_during_panic() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        let ran = Arc::new(AtomicBool::new(false));
+        let flag = ran.clone();
+        let result = std::panic::catch_unwind(move || {
+            let _g = super::OnDrop(move || flag.store(true, Ordering::SeqCst));
+            panic!("boom");
+        });
+        assert!(result.is_err());
+        assert!(ran.load(Ordering::SeqCst));
+    }
 
     use super::detect_sync;
 
