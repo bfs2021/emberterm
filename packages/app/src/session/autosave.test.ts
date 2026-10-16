@@ -49,4 +49,34 @@ describe("createAutosave", () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(onError).toHaveBeenCalledTimes(1);
   });
+
+  it("skips a snapshot identical to the last one scheduled", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const a = createAutosave({ delayMs: 500, save, onError: vi.fn() });
+    a.schedule(snap(1));
+    await vi.advanceTimersByTimeAsync(500);
+    a.schedule(snap(1));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("an identical snapshot does not restart the timer", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const a = createAutosave({ delayMs: 500, save, onError: vi.fn() });
+    a.schedule(snap(2));
+    await vi.advanceTimersByTimeAsync(300);
+    a.schedule(snap(2));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves the same content again after a failed save", async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+    const a = createAutosave({ delayMs: 10, save, onError: vi.fn() });
+    a.schedule(snap(1));
+    await vi.advanceTimersByTimeAsync(10);
+    a.schedule(snap(1));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(save).toHaveBeenCalledTimes(2);
+  });
 });

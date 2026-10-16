@@ -290,8 +290,8 @@ fn parse_shortstat(s: &str) -> (u32, u32) {
 /// Returns true when no `config.toml` exists yet — used to show the welcome screen.
 #[tauri::command]
 pub async fn config_is_first_run() -> bool {
-    match crate::config::config_path() {
-        Some(path) => !path.exists(),
+    match crate::config::config_path().and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
+        Some(dir) => crate::config::is_first_run_in(&dir),
         None => false,
     }
 }

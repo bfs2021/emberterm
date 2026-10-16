@@ -155,6 +155,42 @@ fn other_shells_get_nothing() {
     assert_eq!(plan.cwd, PathBuf::from("C:/Users/me"));
 }
 
+#[test]
+fn bash_hook_escapes_percent_and_control_chars_and_keeps_status() {
+    let yes = |_: &Path| true;
+    let plan = prepare(&input(ShellKind::Bash, &[], None, &yes));
+    let pc = env(&plan, "PROMPT_COMMAND").unwrap();
+    // `%` must be encoded so a folder literally named "a%20b" round-trips,
+    // ESC/BEL must not be able to end the OSC early, and `$?` must survive
+    // for whatever the user appends after the hook.
+    assert!(pc.contains("${PWD//%/%25}"), "{pc}");
+    assert!(pc.contains("%1B") && pc.contains("%07"), "{pc}");
+    assert!(
+        pc.contains("local s=$?") && pc.contains("return $s"),
+        "{pc}"
+    );
+}
+
+#[test]
+fn pwsh_hook_percent_encodes_the_path_as_ascii() {
+    let yes = |_: &Path| true;
+    let plan = prepare(&input(ShellKind::Pwsh, &[], None, &yes));
+    let decoded = decode_utf16le_base64(&plan.args[2]);
+    assert!(decoded.contains("EscapeDataString"), "{decoded}");
+}
+
+#[test]
+fn pwsh_hook_runs_the_original_prompt_before_touching_status() {
+    let yes = |_: &Path| true;
+    let plan = prepare(&input(ShellKind::Pwsh, &[], None, &yes));
+    let decoded = decode_utf16le_base64(&plan.args[2]);
+    let original = decoded
+        .find("$o = & $global:__ember_prompt")
+        .expect("calls original first");
+    let write = decoded.find("[Console]::Write").unwrap();
+    assert!(original < write, "{decoded}");
+}
+
 fn decode_utf16le_base64(s: &str) -> String {
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD.decode(s).unwrap();

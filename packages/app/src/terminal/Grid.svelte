@@ -28,6 +28,10 @@
   // ── Terminal instance ────────────────────────────────────────────────────
 
   let container: HTMLDivElement;
+  // Props resolve through the $tabs each-item, so reading them directly in an effect re-runs it on
+  // every tab update. $derived memoises primitives: effects below re-run only on a real change.
+  const paneActive = $derived(active);
+  const paneSession = $derived(sessionId);
   let term = $state<Terminal | undefined>(undefined);
   /** Exposed so the font-change effect can call fitAddon.fit() after resize. */
   let fa = $state<FitAddon | undefined>(undefined);
@@ -143,8 +147,8 @@
     term.options.lineHeight = lineHeight;
     fa.fit();
     // Font changes affect cell dimensions, so update the PTY size.
-    sessionResize(sessionId, term.cols, term.rows).catch(console.error);
-    onResize?.(term.cols, term.rows);
+    sessionResize(paneSession, term.cols, term.rows).catch(console.error);
+    untrack(() => onResize)?.(term.cols, term.rows);
   });
 
   // Live terminal config: apply cursor style/blink changes without restart.
@@ -159,7 +163,7 @@
   // Focus the terminal when this tab becomes active.
   // Also call fit() in case the window was resized while this tab was hidden.
   $effect(() => {
-    if (active && term) {
+    if (paneActive && term) {
       term.focus();
       fa?.fit();
     }

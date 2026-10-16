@@ -14,6 +14,7 @@
   import { createOutputSink, registerOutputSink, removeOutputSink } from "./terminal/outputSink.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { createAutosave } from "./session/autosave.js";
+  import { pickProfile } from "./session/profiles.js";
   import { toSnapshot, clampActiveTab, type SavedSession } from "./stores/sessionSnapshot.js";
   import { onTerminalBell, onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
@@ -162,10 +163,9 @@
     return sessionId;
   }
 
-  /** Explicit id > config default > first profile. Always returns a real profile when any exist. */
+  /** Requested id, else the configured default, else the first profile (see pickProfile). */
   function resolveProfile(profileId?: string): Profile | undefined {
-    const id = profileId ?? defaultProfileId;
-    return (id && profileCache.find((p) => p.id === id)) || profileCache[0];
+    return pickProfile(profileCache, profileId, defaultProfileId);
   }
 
   async function openNewTab(profileId?: string, cwd?: string): Promise<string | null> {

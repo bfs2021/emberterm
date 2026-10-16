@@ -41,18 +41,24 @@ pub struct SpawnPlan {
     pub cwd: PathBuf,
 }
 
-/// Emits OSC 7 with the raw `$PWD`; avoids `pwd -W`, whose fork is slow under MSYS.
-const BASH_OSC7: &str = r#"printf '\033]7;file://localhost%s\033\\' "$PWD""#;
+/// Emits OSC 7 for `$PWD`; avoids `pwd -W`, whose fork is slow under MSYS. `%`, ESC and
+/// BEL are percent-encoded so a folder name cannot end the sequence early or be
+/// mis-decoded, and `$?` is preserved for anything the user appends to PROMPT_COMMAND.
+const BASH_OSC7: &str = r#"__ember_osc7() { local s=$? p=${PWD//%/%25}; p=${p//$'\e'/%1B}; p=${p//$'\a'/%07}; printf '\033]7;file://localhost%s\033\\' "$p"; return $s; }; __ember_osc7"#;
 /// Runs once before the first WSL prompt; a missing folder is a silent no-op.
 const WSL_RESTORE: &str =
     r#"[ -n "$EMBER_CWD" ] && { cd -- "$EMBER_CWD" 2>/dev/null; unset EMBER_CWD; }"#;
 /// Runs after $PROFILE so prompt themes (oh-my-posh, starship) are wrapped, not replaced.
-/// `[char]27` instead of `` `e `` keeps Windows PowerShell 5.1 working.
+/// `[char]27` instead of `` `e `` keeps Windows PowerShell 5.1 working. The original prompt runs
+/// first so `$?` is still the user's last command status, and the path is percent-encoded so the
+/// OSC stays ASCII whatever the console code page is.
 const PWSH_HOOK: &str = r#"$global:__ember_prompt = $function:prompt
 function global:prompt {
+  $o = & $global:__ember_prompt
   $p = $executionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath
-  [Console]::Write("$([char]27)]7;file://localhost/$($p -replace '\\','/')$([char]27)\")
-  & $global:__ember_prompt
+  $e = ($p -split '\\' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+  [Console]::Write("$([char]27)]7;file://localhost/$e$([char]27)\")
+  $o
 }"#;
 
 pub fn prepare(input: &HookInput) -> SpawnPlan {

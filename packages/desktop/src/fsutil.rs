@@ -68,9 +68,14 @@ pub fn load_user_file<T: Default>(
     quarantine_broken: bool,
     parse: impl FnOnce(&str) -> Result<T, String>,
 ) -> (T, Option<StartupWarning>) {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
+    let parsed = match std::fs::read_to_string(path) {
+        Ok(text) => parse(&text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (T::default(), None),
+        // Not valid UTF-8 (e.g. UTF-16 from PowerShell 5.1 `>`): treat it like a
+        // parse failure so it is set aside instead of overwritten by the next save.
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+            Err("file is not valid UTF-8; save it as UTF-8".to_string())
+        }
         Err(e) => {
             return (
                 T::default(),
@@ -78,7 +83,7 @@ pub fn load_user_file<T: Default>(
             )
         }
     };
-    match parse(&text) {
+    match parsed {
         Ok(value) => (value, None),
         Err(message) => {
             tracing::warn!(file = %path.display(), %message, "user file failed to parse");

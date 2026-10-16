@@ -85,14 +85,37 @@ impl Config {
 
     /// Refuses to overwrite a config.toml the user is part-way through editing.
     pub fn save_to(&self, path: &Path) -> Result<()> {
-        if let Ok(text) = std::fs::read_to_string(path) {
-            if let Err(e) = toml::from_str::<Config>(&text) {
-                anyhow::bail!("config.toml has an error; fix it before changing settings: {e}");
+        match std::fs::read_to_string(path) {
+            Ok(text) => {
+                if let Err(e) = toml::from_str::<Config>(&text) {
+                    anyhow::bail!("config.toml has an error; fix it before changing settings: {e}");
+                }
             }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            // Unreadable or not UTF-8: it may be the user's file in another encoding.
+            Err(e) => anyhow::bail!(
+                "config.toml could not be read ({e}); fix it before changing settings"
+            ),
         }
         write_atomic(path, toml::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
+}
+
+/// A first run has neither a config.toml nor one set aside as `config.toml.broken-*`;
+/// a broken config must not send the user back through the welcome wizard.
+pub fn is_first_run_in(dir: &Path) -> bool {
+    if dir.join("config.toml").exists() {
+        return false;
+    }
+    let quarantined = std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("config.toml.broken-")
+        })
+    });
+    !quarantined
 }
 
 pub fn config_path() -> Option<PathBuf> {

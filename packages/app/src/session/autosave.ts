@@ -15,6 +15,9 @@ export function createAutosave(opts: {
   let pending: SavedSession | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let suspended = false;
+  // Last snapshot scheduled. Title/prompt churn re-publishes identical snapshots; letting those
+  // reset the debounce timer would starve the save, and rewrite the file for nothing.
+  let lastKey: string | null = null;
 
   async function run() {
     timer = undefined;
@@ -24,6 +27,7 @@ export function createAutosave(opts: {
     try {
       await opts.save(snapshot);
     } catch (e) {
+      lastKey = null; // let the same content be retried
       opts.onError(e);
     }
   }
@@ -31,6 +35,9 @@ export function createAutosave(opts: {
   return {
     schedule(snapshot) {
       if (suspended) return;
+      const key = JSON.stringify(snapshot);
+      if (key === lastKey) return;
+      lastKey = key;
       pending = snapshot;
       clearTimeout(timer);
       timer = setTimeout(run, opts.delayMs);

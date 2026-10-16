@@ -226,3 +226,19 @@ describe("pane cwd and custom titles", () => {
     expect(t.splitCwd).toBeUndefined();
   });
 });
+
+describe("no-op updates keep tab identity", () => {
+  it("setTabTitle with an unchanged title keeps the tab object", () => {
+    addTab("s9", "bash");
+    const before = get(tabs)[0];
+    setTabTitle("s9", "bash");
+    expect(get(tabs)[0]).toBe(before);
+  });
+  it("setPaneCwd with an unchanged cwd keeps the tab object", () => {
+    addTab("s10", "bash");
+    setPaneCwd("s10", "/d/x");
+    const before = get(tabs)[0];
+    setPaneCwd("s10", "/d/x");
+    expect(get(tabs)[0]).toBe(before);
+  });
+});

@@ -85,3 +85,16 @@ fn load_user_file_broken_without_quarantine_keeps_file() {
     assert!(w.unwrap().backup.is_none());
     assert!(path.exists());
 }
+
+#[test]
+fn load_user_file_non_utf8_is_quarantined_not_overwritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("x.toml");
+    std::fs::write(&path, [0xFF, 0xFE, b'a', 0]).unwrap();
+    let (v, w): (u32, _) = load_user_file(&path, true, |_| Ok(7));
+    assert_eq!(v, 0);
+    let w = w.unwrap();
+    assert!(w.message.contains("UTF-8"), "{}", w.message);
+    assert!(w.backup.is_some());
+    assert!(!path.exists());
+}

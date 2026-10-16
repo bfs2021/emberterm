@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
 
 export interface Tab {
   id: string;
@@ -80,21 +80,36 @@ export function activateTab(tabId: string) {
   activeTabId.set(tabId);
 }
 
-/** OSC 7 from either pane of a tab. */
-export function setPaneCwd(sessionId: string, cwd: string) {
-  tabs.update((ts) =>
-    ts.map((t) =>
-      t.sessionId === sessionId ? { ...t, cwd }
-      : t.splitSessionId === sessionId ? { ...t, splitCwd: cwd }
-      : t,
-    ),
-  );
+/** Applies `fn` to the tab list and notifies subscribers only if it returned a new list. */
+function updateTabsIfChanged(fn: (ts: Tab[]) => Tab[] | null) {
+  const next = fn(get(tabs));
+  if (next) tabs.set(next);
 }
 
+/** OSC 7 from either pane of a tab. */
+export function setPaneCwd(sessionId: string, cwd: string) {
+  updateTabsIfChanged((ts) => {
+    let changed = false;
+    const next = ts.map((t) => {
+      if (t.sessionId === sessionId && t.cwd !== cwd) { changed = true; return { ...t, cwd }; }
+      if (t.splitSessionId === sessionId && t.splitCwd !== cwd) { changed = true; return { ...t, splitCwd: cwd }; }
+      return t;
+    });
+    return changed ? next : null;
+  });
+}
+
+// Shells re-send the title on every prompt; an unchanged title must not touch the store.
 export function setTabTitle(sessionId: string, title: string) {
-  tabs.update((ts) =>
-    ts.map((t) => (t.sessionId === sessionId && !t.customTitle ? { ...t, title } : t)),
-  );
+  updateTabsIfChanged((ts) => {
+    let changed = false;
+    const next = ts.map((t) => {
+      if (t.sessionId !== sessionId || t.customTitle || t.title === title) return t;
+      changed = true;
+      return { ...t, title };
+    });
+    return changed ? next : null;
+  });
 }
 
 export function renameTab(tabId: string, newTitle: string) {
