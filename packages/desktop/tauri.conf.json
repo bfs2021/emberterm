@@ -60,7 +60,7 @@
     "macOS": {
       "minimumSystemVersion": "12.0",
       "providerShortName": null,
-      "signingIdentity": null
+      "signingIdentity": "-"
     }
   }
 }

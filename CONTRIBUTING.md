@@ -73,8 +73,9 @@ git checkout main && git pull
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The Release workflow refuses a tag that disagrees with the files, builds the Windows installer, signs
-the update with the `TAURI_SIGNING_PRIVATE_KEY` repo secret and publishes `latest.json`. That file is
+The Release workflow refuses a tag that disagrees with the files, builds the Windows installer and a
+universal macOS app (ad-hoc signed, not notarized, so Gatekeeper asks on first launch), signs the
+updates with the `TAURI_SIGNING_PRIVATE_KEY` repo secret and publishes `latest.json`. That file is
 what **Settings → About → Check for updates** reads. Keep the private key (`~/.tauri/emberterm.key`) safe:
 without it installed copies cannot verify any later update.
 
