@@ -29,6 +29,7 @@ tauri-plugin-window-state = "2"
 # archive updates are unavailable; Windows installers (.exe) and macOS .app.tar.gz do not need it.
 tauri-plugin-updater = { version = "2.14", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 
 [dev-dependencies]

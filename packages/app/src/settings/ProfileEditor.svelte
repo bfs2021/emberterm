@@ -1,6 +1,7 @@
 <script lang="ts">
   import { profileUpsert, profileDelete, type Profile } from "../ipc/client.js";
   import { Btn } from "@emberterm/ui";
+  import { open } from "@tauri-apps/plugin-dialog";
 
   interface Props {
     profile?: Profile;
@@ -69,6 +70,15 @@
     catch (e) { error = String(e); deleting = false; confirmDelete = false; }
   }
 
+  async function browseCwd() {
+    // `~` paths mean nothing to the OS dialog; let it open at its own default instead.
+    const current = cwd.trim();
+    try {
+      const picked = await open({ directory: true, defaultPath: current && !current.startsWith("~") ? current : undefined });
+      if (picked) cwd = picked;
+    } catch (e) { error = String(e); }
+  }
+
   function addEnvRow() { envRows = [...envRows, { key: "", val: "" }]; }
   function removeEnvRow(i: number) { envRows = envRows.filter((_, idx) => idx !== i); }
 </script>
@@ -94,10 +104,17 @@
       <span class="label">Arguments</span>
       <input bind:value={argsStr} placeholder="-NoLogo" />
     </label>
-    <label class="field" style="flex:1">
-      <span class="label">Working directory</span>
-      <input bind:value={cwd} placeholder="~" />
-    </label>
+    <div class="field" style="flex:1">
+      <label class="label" for="profile-cwd">Working directory</label>
+      <div class="input-with-btn">
+        <input id="profile-cwd" bind:value={cwd} placeholder="~" />
+        <button class="browse-btn" onclick={browseCwd} type="button" aria-label="Browse for folder" title="Browse for folder">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Environment variables -->
@@ -175,6 +192,20 @@
 
   input:focus, select:focus { border-color: var(--accent, #FF6B35); }
   input[type="number"] { padding: 6px 8px; }
+
+  .input-with-btn { display: flex; gap: 4px; }
+  .browse-btn {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    width: 30px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--fg-muted);
+    cursor: pointer;
+  }
+  .browse-btn:hover { color: var(--fg); border-color: var(--accent); }
+  .browse-btn:focus-visible { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
 
   /* Env vars */
   .env-header { display: flex; align-items: center; justify-content: space-between; }
