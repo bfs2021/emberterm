@@ -31,6 +31,11 @@ export async function sessionBusy(id: SessionId): Promise<boolean> {
   return invoke("session_busy", { id });
 }
 
+/** xterm has parsed `bytes` more of this session's output; Rust waits for this under a flood. */
+export async function sessionAck(id: SessionId, bytes: number): Promise<void> {
+  return invoke("session_ack", { id, bytes });
+}
+
 export async function sessionClose(id: SessionId): Promise<void> {
   return invoke("session_close", { id });
 }

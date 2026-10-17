@@ -50,6 +50,7 @@ fn make_session() -> Session {
         master: Box::new(MockMasterPty),
         writer: Arc::new(Mutex::new(Box::new(std::io::sink()))),
         pid: None,
+        flow: Arc::new(FlowControl::default()),
     }
 }
 

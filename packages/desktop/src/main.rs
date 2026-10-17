@@ -46,6 +46,7 @@ fn main() {
             ipc::session_resize,
             ipc::session_close,
             ipc::session_busy,
+            ipc::session_ack,
             fonts::font_list,
             ipc::startup_warnings,
             ipc::session_load,

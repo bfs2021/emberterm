@@ -1,25 +1,65 @@
+/** Hands bytes to xterm; `done` runs once xterm has parsed them. */
+export type SinkWriter = (bytes: Uint8Array, done: () => void) => void;
+
 /** Holds a session's PTY bytes until its Grid attaches, then streams live. */
 export interface OutputSink {
   push(bytes: Uint8Array): void;
-  attach(write: (bytes: Uint8Array) => void): void;
+  attach(write: SinkWriter): void;
   detach(): void;
 }
 
-export function createOutputSink(): OutputSink {
+/**
+ * Parsed bytes are acked in steps this size, so typing echo does not cost an IPC call per
+ * key. It must stay well under Rust's `HIGH_WATERMARK`, since the remainder is never acked.
+ */
+export const ACK_EVERY = 32 * 1024;
+
+/**
+ * `ack` tells Rust how many bytes xterm has parsed; Rust stops sending while too many are
+ * unacked. Buffered bytes are acked only once a Grid parses them, so output for a pane
+ * without a Grid stalls the shell instead of growing this buffer.
+ */
+export function createOutputSink(ack: (bytes: number) => void): OutputSink {
   let buffered: Uint8Array[] = [];
-  let writer: ((bytes: Uint8Array) => void) | null = null;
+  let writer: SinkWriter | null = null;
+  // Bumped on detach so a late callback from a torn-down xterm is not counted twice.
+  let generation = 0;
+  let inFlight = 0;
+  let parsed = 0;
+
+  function settle(bytes: number) {
+    parsed += bytes;
+    if (parsed < ACK_EVERY) return;
+    ack(parsed);
+    parsed = 0;
+  }
+
+  function write(w: SinkWriter, bytes: Uint8Array) {
+    const gen = generation;
+    inFlight += bytes.length;
+    w(bytes, () => {
+      if (gen !== generation) return;
+      inFlight -= bytes.length;
+      settle(bytes.length);
+    });
+  }
+
   return {
     push(bytes) {
-      if (writer) writer(bytes);
+      if (writer) write(writer, bytes);
       else buffered.push(bytes);
     },
-    attach(write) {
-      for (const bytes of buffered) write(bytes);
+    attach(w) {
+      for (const bytes of buffered) write(w, bytes);
       buffered = [];
-      writer = write;
+      writer = w;
     },
     detach() {
+      // A disposed xterm never calls back; ack what it dropped so the sender is not stuck.
+      generation++;
       writer = null;
+      settle(inFlight);
+      inFlight = 0;
     },
   };
 }
