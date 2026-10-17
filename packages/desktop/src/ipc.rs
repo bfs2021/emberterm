@@ -249,9 +249,8 @@ pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
         }
 
         // Any uncommitted changes (staged or unstaged)?
-        let dirty = std::process::Command::new("git")
+        let dirty = git_command(&cwd)
             .args(["status", "--porcelain"])
-            .current_dir(&cwd)
             .output()
             .map(|o| o.status.success() && !o.stdout.is_empty())
             .unwrap_or(false);
@@ -292,12 +291,22 @@ fn normalise_cwd(cwd: &str) -> String {
     cwd.to_string()
 }
 
+/// The release build has no console, so Windows would open (and flash) a new console
+/// window for every git call unless it is told not to.
+fn git_command(cwd: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.current_dir(cwd);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 fn git_run(cwd: &str, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .ok()?;
+    let out = git_command(cwd).args(args).output().ok()?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
