@@ -238,11 +238,13 @@ Folder, busy state, title, bell and clipboard come from xterm.js handlers (`util
 
 ## Versioning and Releases
 
-One version everywhere: `packages/desktop/Cargo.toml` is the source (`tauri.conf.json` has no `version`), and the package.json files must match. `pnpm version:set X.Y.Z` writes them all and refreshes `Cargo.lock`; `pnpm version:check` verifies (CI runs it). To release: bump in a PR, merge, push tag `vX.Y.Z`. `.github/workflows/release.yml` checks the tag against the files, builds the signed Windows installer and publishes `latest.json` for the in-app updater. The signing key is the repo secret `TAURI_SIGNING_PRIVATE_KEY` (local copy `~/.tauri/emberterm.key`; the public key is in `tauri.conf.json`). See CONTRIBUTING.md.
+One version everywhere: `packages/desktop/Cargo.toml` is the source (`tauri.conf.json` has no `version`), and the package.json files must match. `pnpm version:set X.Y.Z` writes them all and refreshes `Cargo.lock`; `pnpm version:check` verifies (CI runs it). To release: bump in a PR, merge, push tag `vX.Y.Z`. `.github/workflows/release.yml` checks the tag against the files, builds the signed Windows installer and a universal macOS app (ad-hoc signed, not notarized; one job at a time so `latest.json` keeps both platforms) and publishes `latest.json` for the in-app updater. The signing key is the repo secret `TAURI_SIGNING_PRIVATE_KEY` (local copy `~/.tauri/emberterm.key`; the public key is in `tauri.conf.json`). See CONTRIBUTING.md.
 
 ---
 
 ## Dev Commands
+
+CI (`ci.yml`) runs only on pushes to `main`. Before opening a PR, or marking a draft ready for review, run `/ci` (the checks in CONTRIBUTING.md, "Before you open a PR") and list them in the PR.
 
 Quick bash reference:
 
@@ -282,3 +284,4 @@ Custom slash commands (defined in `.claude/commands/`):
 - `/test [filter]` — run Rust + Vitest test suites
 - `/build` — full frontend + Rust build
 - `/lint` — clippy + fmt check + svelte-check
+- `/ci` — everything CI runs (fmt, clippy, tests, build, version check); required before a PR or marking a draft ready

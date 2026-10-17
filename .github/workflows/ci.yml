@@ -1,9 +1,9 @@
 name: CI
 
+# Only after a merge: PRs are checked locally before they are opened or marked ready for review
+# (CONTRIBUTING.md, "Before you open a PR").
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 
 env:

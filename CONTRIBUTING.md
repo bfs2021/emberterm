@@ -16,7 +16,8 @@ pnpm dev:ui     # Vite only, no Tauri backend
 
 ## Before you open a PR
 
-Run what CI runs; all of it must pass.
+CI runs only on pushes to `main`, so a PR is checked locally: run these before you open a PR, or
+before you mark a draft ready for review. All of them must pass; say in the PR that you ran them.
 
 ```sh
 cargo fmt --manifest-path packages/desktop/Cargo.toml -- --check
@@ -25,6 +26,8 @@ cargo test --manifest-path packages/desktop/Cargo.toml
 pnpm turbo check test build
 pnpm version:check
 ```
+
+CI also builds and tests on macOS after the merge; a local run covers only your own platform.
 
 ## Code style
 
@@ -70,8 +73,9 @@ git checkout main && git pull
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The Release workflow refuses a tag that disagrees with the files, builds the Windows installer, signs
-the update with the `TAURI_SIGNING_PRIVATE_KEY` repo secret and publishes `latest.json`. That file is
+The Release workflow refuses a tag that disagrees with the files, builds the Windows installer and a
+universal macOS app (ad-hoc signed, not notarized, so Gatekeeper asks on first launch), signs the
+updates with the `TAURI_SIGNING_PRIVATE_KEY` repo secret and publishes `latest.json`. That file is
 what **Settings → About → Check for updates** reads. Keep the private key (`~/.tauri/emberterm.key`) safe:
 without it installed copies cannot verify any later update.
 
