@@ -16,7 +16,8 @@ pnpm dev:ui     # Vite only, no Tauri backend
 
 ## Before you open a PR
 
-Run what CI runs; all of it must pass.
+CI runs only on pushes to `main`, so a PR is checked locally: run these before you open a PR, or
+before you mark a draft ready for review. All of them must pass; say in the PR that you ran them.
 
 ```sh
 cargo fmt --manifest-path packages/desktop/Cargo.toml -- --check
@@ -25,6 +26,8 @@ cargo test --manifest-path packages/desktop/Cargo.toml
 pnpm turbo check test build
 pnpm version:check
 ```
+
+CI also builds and tests on macOS after the merge; a local run covers only your own platform.
 
 ## Code style
 

@@ -244,6 +244,8 @@ One version everywhere: `packages/desktop/Cargo.toml` is the source (`tauri.conf
 
 ## Dev Commands
 
+CI (`ci.yml`) runs only on pushes to `main`. Before opening a PR, or marking a draft ready for review, run `/ci` (the checks in CONTRIBUTING.md, "Before you open a PR") and list them in the PR.
+
 Quick bash reference:
 
 ```bash
@@ -282,3 +284,4 @@ Custom slash commands (defined in `.claude/commands/`):
 - `/test [filter]` — run Rust + Vitest test suites
 - `/build` — full frontend + Rust build
 - `/lint` — clippy + fmt check + svelte-check
+- `/ci` — everything CI runs (fmt, clippy, tests, build, version check); required before a PR or marking a draft ready

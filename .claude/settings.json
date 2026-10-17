@@ -26,6 +26,8 @@
       "Bash(npm run build*)",
       "Bash(npm run lint*)",
       "Bash(npm install*)",
+      "Bash(pnpm turbo*)",
+      "Bash(pnpm version:check*)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
