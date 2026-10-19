@@ -9,7 +9,7 @@
   import { formatWarning } from "./utils/warnings.js";
   import { shortcutFor } from "./utils/shortcuts.js";
   import { closeWindowWhenEmpty } from "./session/closeWindow.js";
-  import { isPaneBusy } from "./stores/paneBusy.js";
+  import { isPaneBusy, onPaneIdle } from "./stores/paneBusy.js";
   import { sessionClose, sessionBusy, configIsFirstRun, configGet, profileList, startupWarnings, sessionLoad, sessionSave, type Profile } from "./ipc/client.js";
   import { loadFontConfig } from "./theme/fontStore.js";
   import { loadTerminalConfig } from "./stores/terminalConfigStore.js";
@@ -49,7 +49,8 @@
   }
 
 
-  $effect(() => { refreshGit($activeCwd); });
+  // Also refresh when a command ends: git checkout/commit change branch and dirty state, not the folder.
+  $effect(() => { const cwd = $activeCwd; refreshGit(cwd); return onPaneIdle(() => refreshGit(cwd)); });
 
   async function loadDefaultProfileId() {
     try {

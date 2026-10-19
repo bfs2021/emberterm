@@ -2,8 +2,17 @@
 // it is only read at the moment the user closes a tab.
 const marks = new Map<string, boolean>();
 
+const idleListeners = new Set<() => void>();
+
+/** Runs `fn` whenever a shell reports it is back at a prompt; returns the unsubscribe. */
+export function onPaneIdle(fn: () => void): () => void {
+  idleListeners.add(fn);
+  return () => idleListeners.delete(fn);
+}
+
 export function markPaneBusy(sessionId: string, busy: boolean) {
   marks.set(sessionId, busy);
+  if (!busy) idleListeners.forEach((fn) => fn());
 }
 
 export function forgetPane(sessionId: string) {
