@@ -28,7 +28,7 @@
   import { onProfilesUpdated, onConfigUpdated, onAppWarning } from "./ipc/events.js";
   import {
     tabs, activeCwd, activeShell,
-    addTab, removeTab, activateTab, setPaneCwd, setTabTitle,
+    addTab, removeTab, activateTab, moveTab, setPaneCwd, setTabTitle,
     setTabSplit, clearTabSplit, pushToast, restoreCustomTitle,
   } from "./stores/app.js";
 
@@ -128,6 +128,8 @@
       case "settings": settingsOpen = true; break;
       case "nextTab": cycleTab(1); break;
       case "prevTab": cycleTab(-1); break;
+      case "moveTabLeft": shiftActiveTab(-1); break;
+      case "moveTabRight": shiftActiveTab(1); break;
       case "splitHorizontal": splitActiveTab("horizontal"); break;
       case "splitVertical": splitActiveTab("vertical"); break;
     }
@@ -137,6 +139,10 @@
     const ts = $tabs;
     if (ts.length < 2) return;
     activateTab(ts[(ts.findIndex((t) => t.isActive) + dir + ts.length) % ts.length].id);
+  }
+  function shiftActiveTab(dir: 1 | -1) {
+    const i = $tabs.findIndex((t) => t.isActive);
+    if (i >= 0) moveTab($tabs[i].id, i + dir);
   }
   async function closeActiveTab() {
     const tab = $tabs.find((t) => t.isActive);

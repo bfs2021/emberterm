@@ -4,6 +4,8 @@ export type ShortcutAction =
   | "closeTab"
   | "nextTab"
   | "prevTab"
+  | "moveTabLeft"
+  | "moveTabRight"
   | "palette"
   | "settings"
   | "splitHorizontal"
@@ -33,6 +35,8 @@ export const SHORTCUTS: Shortcut[] = [
   { action: "closeTab", label: "Close tab", keys: "Ctrl+Shift+W", matches: (e, m) => m && e.shiftKey && e.key.toLowerCase() === "w" },
   { action: "nextTab", label: "Next tab", keys: "Ctrl+Tab", matches: (e, m) => m && !e.shiftKey && e.key === "Tab" },
   { action: "prevTab", label: "Previous tab", keys: "Ctrl+Shift+Tab", matches: (e, m) => m && e.shiftKey && e.key === "Tab" },
+  { action: "moveTabLeft", label: "Move tab left", keys: "Ctrl+Shift+PageUp", matches: (e, m) => m && e.shiftKey && e.key === "PageUp" },
+  { action: "moveTabRight", label: "Move tab right", keys: "Ctrl+Shift+PageDown", matches: (e, m) => m && e.shiftKey && e.key === "PageDown" },
   { action: "splitHorizontal", label: "Split pane (side by side)", keys: "Ctrl+Shift+\\", matches: (e, m) => m && e.shiftKey && e.code === "Backslash" },
   { action: "splitVertical", label: "Split pane (stacked)", keys: "Ctrl+Shift+-", matches: (e, m) => m && e.shiftKey && e.code === "Minus" },
   { action: "palette", label: "Command palette", keys: "Ctrl+Shift+P", matches: (e, m) => m && e.shiftKey && e.key.toLowerCase() === "p" },

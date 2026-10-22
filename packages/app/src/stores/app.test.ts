@@ -15,7 +15,7 @@ import {
   renameTab,
   setTabSplit,
   clearTabSplit,
-  reorderTab,
+  moveTab,
   activeTab,
   activeCwd,
 } from "./app.js";
@@ -136,38 +136,50 @@ describe("split pane", () => {
 
 // ── Drag to reorder ───────────────────────────────────────────────────────────
 
-describe("reorderTab", () => {
-  it("moves tab forward in the list", () => {
+describe("moveTab", () => {
+  it("moves a tab to the end of the list", () => {
     const t1 = addTab("s1", "A");
     const t2 = addTab("s2", "B");
     const t3 = addTab("s3", "C");
-    reorderTab(t1, t3);
-    const ids = get(tabs).map((t) => t.id);
-    expect(ids).toEqual([t2, t1, t3]);
+    moveTab(t1, 2);
+    expect(get(tabs).map((t) => t.id)).toEqual([t2, t3, t1]);
   });
 
-  it("moves tab backward in the list", () => {
+  it("moves a tab to the start of the list", () => {
     const t1 = addTab("s1", "A");
     const t2 = addTab("s2", "B");
     const t3 = addTab("s3", "C");
-    reorderTab(t3, t1);
-    const ids = get(tabs).map((t) => t.id);
-    expect(ids).toEqual([t3, t1, t2]);
+    moveTab(t3, 0);
+    expect(get(tabs).map((t) => t.id)).toEqual([t3, t1, t2]);
   });
 
-  it("noop when source equals target", () => {
+  it("clamps an out-of-range index to the ends", () => {
     const t1 = addTab("s1", "A");
     const t2 = addTab("s2", "B");
-    reorderTab(t1, t1);
-    const ids = get(tabs).map((t) => t.id);
-    expect(ids).toEqual([t1, t2]);
+    moveTab(t1, 99);
+    expect(get(tabs).map((t) => t.id)).toEqual([t2, t1]);
+    moveTab(t1, -5);
+    expect(get(tabs).map((t) => t.id)).toEqual([t1, t2]);
+  });
+
+  it("keeps the active tab active", () => {
+    const t1 = addTab("s1", "A");
+    addTab("s2", "B");
+    moveTab(t1, 1);
+    expect(get(tabs).filter((t) => t.isActive).map((t) => t.id)).toHaveLength(1);
+  });
+
+  it("noop when the tab is already there", () => {
+    const t1 = addTab("s1", "A");
+    const t2 = addTab("s2", "B");
+    moveTab(t1, 0);
+    expect(get(tabs).map((t) => t.id)).toEqual([t1, t2]);
   });
 
   it("noop when tabId not found", () => {
     const t1 = addTab("s1", "A");
-    reorderTab("nonexistent", t1);
-    const ids = get(tabs).map((t) => t.id);
-    expect(ids).toEqual([t1]);
+    moveTab("nonexistent", 0);
+    expect(get(tabs).map((t) => t.id)).toEqual([t1]);
   });
 });
 
