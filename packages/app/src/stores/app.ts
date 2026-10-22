@@ -168,16 +168,16 @@ export function setTabSplit(
 }
 
 /** Move a tab to a new position in the tab strip by reordering around a target tab. */
-export function reorderTab(tabId: string, targetTabId: string) {
+/** Move a tab so it ends up at `toIndex` in the resulting list (clamped to the ends). */
+export function moveTab(tabId: string, toIndex: number) {
   tabs.update((ts) => {
     const fromIdx = ts.findIndex((t) => t.id === tabId);
-    const toIdx = ts.findIndex((t) => t.id === targetTabId);
-    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return ts;
+    if (fromIdx < 0) return ts;
+    const target = Math.max(0, Math.min(toIndex, ts.length - 1));
+    if (target === fromIdx) return ts;
     const result = [...ts];
     const [moved] = result.splice(fromIdx, 1);
-    // After removing the element, indices after fromIdx shift left by 1.
-    const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
-    result.splice(insertAt, 0, moved);
+    result.splice(target, 0, moved);
     return result;
   });
 }

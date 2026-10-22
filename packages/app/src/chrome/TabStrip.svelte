@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { tabs, activateTab, renameTab, reorderTab, type Tab } from "../stores/app.js";
+  import { tabs, activateTab, renameTab, moveTab, type Tab } from "../stores/app.js";
   import { tabLabels } from "../utils/tabLabel.js";
+  import { dropSide, dropIndex, type DropSide } from "./tabDrop.js";
   import ProfileMenu from "./ProfileMenu.svelte";
+  import TabMenu from "./TabMenu.svelte";
   import type { Profile } from "../ipc/client.js";
 
   interface Props {
@@ -77,22 +79,40 @@
 
   // ── Drag-to-reorder ────────────────────────────────────────────────────────
   let dragTabId = $state<string | null>(null);
-  let dragOverId = $state<string | null>(null);
+  let dropTarget = $state<{ id: string; side: DropSide } | null>(null);
 
   function onDragStart(e: DragEvent, tabId: string) {
     dragTabId = tabId;
     e.dataTransfer!.effectAllowed = "move";
+    // Firefox-family engines refuse to start a drag without data; WebView2 does not care.
+    e.dataTransfer!.setData("text/plain", tabId);
   }
   function onDragOver(e: DragEvent, tabId: string) {
+    if (!dragTabId) return;
     e.preventDefault();
-    if (dragTabId && dragTabId !== tabId) dragOverId = tabId;
+    const side = dropSide(e.clientX, (e.currentTarget as HTMLElement).getBoundingClientRect());
+    if (dropTarget?.id !== tabId || dropTarget.side !== side) dropTarget = { id: tabId, side };
   }
-  function onDragEnd() { dragTabId = null; dragOverId = null; }
-  function onDrop(e: DragEvent, targetId: string) {
+  function onDragEnd() { dragTabId = null; dropTarget = null; }
+  function onDrop(e: DragEvent) {
     e.preventDefault();
-    if (dragTabId && dragTabId !== targetId) reorderTab(dragTabId, targetId);
-    dragTabId = null;
-    dragOverId = null;
+    const list = $tabs;
+    const from = list.findIndex((t) => t.id === dragTabId);
+    const over = list.findIndex((t) => t.id === dropTarget?.id);
+    if (dragTabId && dropTarget && from >= 0 && over >= 0) moveTab(dragTabId, dropIndex(from, over, dropTarget.side));
+    onDragEnd();
+  }
+
+  // ── Move via right-click menu ──────────────────────────────────────────────
+  let menu = $state<{ tabId: string; x: number; y: number } | null>(null);
+  const menuIdx = $derived(menu ? $tabs.findIndex((t) => t.id === menu!.tabId) : -1);
+
+  function openMenu(e: MouseEvent, tabId: string) {
+    e.preventDefault();
+    menu = { tabId, x: e.clientX, y: e.clientY };
+  }
+  function moveMenuTab(to: (i: number) => number) {
+    if (menu && menuIdx >= 0) moveTab(menu.tabId, to(menuIdx));
   }
 
   // Background tabs only: green pulse while output is flowing, blue once it has gone quiet
@@ -107,7 +127,9 @@
     <div
       class="tab"
       class:active={tab.isActive}
-      class:drag-over={dragOverId === tab.id}
+      class:dragging={dragTabId === tab.id}
+      class:drop-before={dragTabId !== tab.id && dropTarget?.id === tab.id && dropTarget.side === "before"}
+      class:drop-after={dragTabId !== tab.id && dropTarget?.id === tab.id && dropTarget.side === "after"}
       role="tab"
       tabindex="0"
       aria-selected={tab.isActive}
@@ -118,8 +140,9 @@
       ondblclick={(e) => startRename(tab, e)}
       ondragstart={(e) => onDragStart(e, tab.id)}
       ondragover={(e) => onDragOver(e, tab.id)}
-      ondrop={(e) => onDrop(e, tab.id)}
+      ondrop={onDrop}
       ondragend={onDragEnd}
+      oncontextmenu={(e) => openMenu(e, tab.id)}
     >
       <!-- Top accent bar for active tab (rendered via ::after in CSS) -->
 
@@ -182,6 +205,20 @@
   <ProfileMenu {profiles} {defaultProfileId} onPick={(id) => onNewTab(id)} />
 </div>
 
+{#if menu}
+  <TabMenu
+    x={menu.x}
+    y={menu.y}
+    atStart={menuIdx <= 0}
+    atEnd={menuIdx >= $tabs.length - 1}
+    onMoveLeft={() => moveMenuTab((i) => i - 1)}
+    onMoveRight={() => moveMenuTab((i) => i + 1)}
+    onMoveStart={() => moveMenuTab(() => 0)}
+    onMoveEnd={() => moveMenuTab(() => $tabs.length - 1)}
+    onClose={() => (menu = null)}
+  />
+{/if}
+
 <style>
   .tab-strip {
     display: flex;
@@ -233,8 +270,17 @@
       inset -1px 0 0 var(--border, #21262d);
   }
 
-  .tab.drag-over {
+  .tab.dragging {
+    opacity: 0.45;
+  }
+
+  /* Drop marker on the edge the dragged tab will land beside. */
+  .tab.drop-before {
     box-shadow: inset 2px 0 0 var(--accent, #FF6B35);
+  }
+
+  .tab.drop-after {
+    box-shadow: inset -2px 0 0 var(--accent, #FF6B35);
   }
 
   /* ── Shell icon ───────────────────────────── */

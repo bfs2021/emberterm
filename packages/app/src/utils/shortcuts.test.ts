@@ -22,6 +22,12 @@ describe("shortcutFor", () => {
     expect(shortcutFor(ev({ ctrlKey: true, shiftKey: true, key: "Tab", code: "Tab" }))).toBe("prevTab");
   });
 
+  it("Ctrl+Shift+PageUp/PageDown move the tab", () => {
+    expect(shortcutFor(ev({ ctrlKey: true, shiftKey: true, key: "PageUp", code: "PageUp" }))).toBe("moveTabLeft");
+    expect(shortcutFor(ev({ ctrlKey: true, shiftKey: true, key: "PageDown", code: "PageDown" }))).toBe("moveTabRight");
+    expect(shortcutFor(ev({ ctrlKey: true, key: "PageUp", code: "PageUp" }))).toBeNull(); // needs Shift
+  });
+
   it("splits work on a US layout, where Shift changes the key value", () => {
     expect(shortcutFor(ev({ ctrlKey: true, shiftKey: true, key: "|", code: "Backslash" }))).toBe("splitHorizontal");
     expect(shortcutFor(ev({ ctrlKey: true, shiftKey: true, key: "_", code: "Minus" }))).toBe("splitVertical");
