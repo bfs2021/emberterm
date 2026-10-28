@@ -54,7 +54,7 @@ jobs:
       # A tag that disagrees with the files would publish an installer labelled with the wrong version.
       - run: node scripts/version.mjs check ${{ github.ref_name }}
 
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -64,7 +64,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: EmberTerm ${{ github.ref_name }}
           releaseDraft: false
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
           # Point the Windows updater at the NSIS installer instead of the MSI.
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
