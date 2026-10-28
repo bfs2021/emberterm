@@ -10,6 +10,8 @@ export interface TerminalConfig {
   scrollbackLines: number;
   confirmCloseRunning: boolean;
   bellSound: boolean;
+  /** Let a program set the clipboard with OSC 52 */
+  osc52Clipboard: boolean;
 }
 
 /** Defaults mirror config.rs defaults. */
@@ -20,6 +22,7 @@ const DEFAULTS: TerminalConfig = {
   scrollbackLines: 10000,
   confirmCloseRunning: true,
   bellSound: true,
+  osc52Clipboard: false,
 };
 
 export const terminalConfig = writable<TerminalConfig>({ ...DEFAULTS });
@@ -37,6 +40,7 @@ export async function loadTerminalConfig(): Promise<void> {
         scrollback_lines?: number;
         confirm_close_running?: boolean;
         bell_sound?: boolean;
+        osc52_clipboard?: boolean;
       };
     };
     const a = cfg?.appearance;
@@ -48,6 +52,7 @@ export async function loadTerminalConfig(): Promise<void> {
       scrollbackLines: b?.scrollback_lines ?? DEFAULTS.scrollbackLines,
       confirmCloseRunning: b?.confirm_close_running ?? DEFAULTS.confirmCloseRunning,
       bellSound: b?.bell_sound ?? DEFAULTS.bellSound,
+      osc52Clipboard: b?.osc52_clipboard ?? DEFAULTS.osc52Clipboard,
     });
   } catch {
     // Keep defaults if config isn't available yet
@@ -72,6 +77,7 @@ export async function updateTerminalConfig(patch: Partial<TerminalConfig>): Prom
       scrollback_lines: updated.scrollbackLines,
       confirm_close_running: updated.confirmCloseRunning,
       bell_sound: updated.bellSound,
+      osc52_clipboard: updated.osc52Clipboard,
     },
   });
 }

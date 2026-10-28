@@ -4,6 +4,15 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Security
+
+- The status bar no longer runs `git` in a network path or a missing folder, and runs it with `core.fsmonitor` off and without repository locks. The folder comes from terminal output, which a program can forge.
+- Programs can no longer set the clipboard with OSC 52 unless you turn on **Settings → Terminal → Let programs set the clipboard** (off by default; tmux or vim clipboard sync over ssh needs it). Payloads over 100,000 bytes are refused.
+- Profile ids are limited to letters, digits, `-` and `_`; an id such as `../x` can no longer write or delete files outside the profiles folder.
+- A Content Security Policy is set for the app window.
+- Updated `rustls-webpki` and `webpki-root-certs` (RUSTSEC-2026-0382, -0383).
+- Release workflow actions are pinned to commit SHAs and Dependabot keeps them current.
+
 ## [0.4.0] - 2026-10-22
 
 ### Added

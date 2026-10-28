@@ -147,3 +147,18 @@ scrollback_lines = 500
     assert!(cfg.behavior.bell_sound, "missing key must default to on");
     assert_eq!(cfg.behavior.scrollback_lines, 500);
 }
+
+#[test]
+fn osc52_clipboard_defaults_off_and_survives_old_configs() {
+    assert!(!Config::default().behavior.osc52_clipboard);
+    let cfg: Config = toml::from_str(
+        "[behavior]
+bell_sound = true
+",
+    )
+    .unwrap();
+    assert!(
+        !cfg.behavior.osc52_clipboard,
+        "missing key must default to off"
+    );
+}

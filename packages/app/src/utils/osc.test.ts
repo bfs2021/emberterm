@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseOsc7, parseOsc52, parseOsc133 } from "./osc.js";
+import { OSC52_MAX_CHARS, parseOsc7, parseOsc52, parseOsc133 } from "./osc.js";
 
 describe("parseOsc7", () => {
   it("reads a Git Bash MSYS path", () => {
@@ -38,6 +38,10 @@ describe("parseOsc52", () => {
   });
   it("ignores clipboard read requests", () => {
     expect(parseOsc52("c;?")).toBeNull();
+  });
+  it("refuses payloads over the size cap", () => {
+    expect(parseOsc52("c;" + btoa("a".repeat(OSC52_MAX_CHARS)))).toBe("a".repeat(OSC52_MAX_CHARS));
+    expect(parseOsc52("c;" + btoa("a".repeat(OSC52_MAX_CHARS + 1)))).toBeNull();
   });
   it("ignores malformed payloads", () => {
     expect(parseOsc52("c")).toBeNull();

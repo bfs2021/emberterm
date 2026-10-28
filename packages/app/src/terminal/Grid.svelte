@@ -18,6 +18,7 @@
   import { terminalPadding } from "../theme/paddingStore.js";
   import { parseOsc7, parseOsc52, parseOsc133 } from "../utils/osc.js";
   import { markPaneBusy, forgetPane } from "../stores/paneBusy.js";
+  import { pushToast } from "../stores/app.js";
   import { isCopyChord, isPasteChord, isFindChord } from "./termKeys.js";
   import { shortcutFor } from "../utils/shortcuts.js";
   import { playBell } from "../utils/bell.js";
@@ -46,6 +47,8 @@
   /** Exposed so the font-change effect can call fitAddon.fit() after resize. */
   let fa = $state<FitAddon | undefined>(undefined);
   let searchAddon = $state<SearchAddon | undefined>(undefined);
+  // One notice per pane, so a program that keeps asking cannot flood the toasts.
+  let osc52Warned = false;
   let findOpen = $state(false);
   let menu = $state<{ x: number; y: number } | null>(null);
 
@@ -90,7 +93,14 @@
       });
       t.parser.registerOscHandler(52, (data) => {
         const text = parseOsc52(data);
-        if (text !== null) navigator.clipboard.writeText(text).catch(console.error);
+        if (text === null) return true;
+        if (!get(terminalConfig).osc52Clipboard) {
+          if (!osc52Warned) pushToast("A program tried to set the clipboard. Allow it in Settings → Terminal.");
+          osc52Warned = true;
+          return true;
+        }
+        navigator.clipboard.writeText(text).catch(console.error);
+        pushToast(`A program copied ${text.length} characters to the clipboard`);
         return true;
       });
       t.parser.registerOscHandler(133, (data) => {

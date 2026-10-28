@@ -19,14 +19,19 @@ export function parseOsc7(data: string): string | null {
   return path;
 }
 
-/** Decodes an OSC 52 clipboard *write* (`<target>;<base64>`). Reads (`?`) are refused. */
+/** Largest OSC 52 payload accepted, in bytes after decoding: a program should not fill the clipboard. */
+export const OSC52_MAX_CHARS = 100_000;
+
+/** Decodes an OSC 52 clipboard *write* (`<target>;<base64>`). Reads (`?`) and oversize payloads are refused. */
 export function parseOsc52(data: string): string | null {
   const sep = data.indexOf(";");
   if (sep < 0) return null;
   const b64 = data.slice(sep + 1);
   if (!b64 || b64 === "?") return null;
+  if (b64.length > Math.ceil(OSC52_MAX_CHARS / 3) * 4) return null;
   try {
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    if (bytes.length > OSC52_MAX_CHARS) return null;
     return new TextDecoder().decode(bytes);
   } catch {
     return null;
