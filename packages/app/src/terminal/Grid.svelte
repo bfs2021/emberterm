@@ -4,6 +4,7 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
+  import { openExternalLink } from "./links.js";
   import { SearchAddon } from "@xterm/addon-search";
   import { readText } from "@tauri-apps/plugin-clipboard-manager";
   import FindBar from "./FindBar.svelte";
@@ -80,7 +81,7 @@
       const fitAddon = new FitAddon();
       fa = fitAddon;
       t.loadAddon(fitAddon);
-      t.loadAddon(new WebLinksAddon());
+      t.loadAddon(new WebLinksAddon(openExternalLink));
       const search = new SearchAddon();
       t.loadAddon(search);
       searchAddon = search;
