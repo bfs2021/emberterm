@@ -38,3 +38,6 @@ design-extract/
 
 # Local scratch
 tmp/
+
+# Superpowers scratch
+.superpowers/

@@ -1,0 +1,60 @@
+name: Bug report
+description: Something does not work as the README or docs say
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets or private paths. For security problems, use private reporting instead of this form.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: EmberTerm version
+      description: Shown in Settings → About.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Shell in the affected tab
+      options:
+        - Git Bash
+        - WSL
+        - PowerShell
+        - cmd
+        - Other
+        - Not shell related
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshot
+      description: Remove anything private.
+      render: text
