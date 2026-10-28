@@ -64,7 +64,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: EmberTerm ${{ github.ref_name }}
           releaseDraft: false
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
           # Point the Windows updater at the NSIS installer instead of the MSI.
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
