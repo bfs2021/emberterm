@@ -8,14 +8,25 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 First stable release.
 
+### Highlights
+
+- **Your session comes back:** closing and reopening restores every tab, split, title and folder, and a broken config, profile or session file is set aside with a toast instead of blocking startup.
+- **A shell per tab:** Git Bash, WSL, PowerShell and cmd, side by side or stacked in splits, with busy and unread marks on background tabs and a prompt before closing a running one.
+- **Fast under load:** WebGL rendering, batched and acknowledged PTY output, and a status bar with the folder, git branch and changes.
+- **Security review before 1.0:** the status bar's git calls, programs setting the clipboard, profile ids, the app's Content Security Policy, the updater's TLS dependency and the release pipeline were hardened. (#17, #18, #19, #20, #21, #22)
+- **Update in one click:** Settings → About → Check for updates, verified against the project's signing key.
+
+### Changed
+
+- **Programs can no longer set the clipboard by default:** OSC 52 writes are ignored until you turn on Settings → Terminal → Let programs set the clipboard, because text from a malicious file or host could otherwise replace what you copied. tmux and vim clipboard sync over ssh needs the setting. Payloads over 100,000 bytes are always refused. (#18, #28)
+
 ### Security
 
-- The status bar no longer runs `git` in a network path or a missing folder, and runs it with `core.fsmonitor` off and without repository locks. The folder comes from terminal output, which a program can forge.
-- Programs can no longer set the clipboard with OSC 52 unless you turn on **Settings → Terminal → Let programs set the clipboard** (off by default; tmux or vim clipboard sync over ssh needs it). Payloads over 100,000 bytes are refused.
-- Profile ids are limited to letters, digits, `-` and `_`; an id such as `../x` can no longer write or delete files outside the profiles folder.
-- A Content Security Policy is set for the app window.
-- Updated `rustls-webpki` and `webpki-root-certs` (RUSTSEC-2026-0382, -0383).
-- Release workflow actions are pinned to commit SHAs and Dependabot keeps them current.
+- **Status bar git calls:** `git` no longer runs in a network path or a missing folder and runs with `core.fsmonitor` off and without repository locks. The folder comes from terminal output, which a program can forge. (#17, #24)
+- **Profile ids:** limited to letters, digits, `-` and `_`, so an id such as `../x` can no longer write or delete files outside the profiles folder. (#19, #23)
+- **Content Security Policy:** the app window now has one. (#20, #25)
+- **Updater TLS:** updated `rustls-webpki` and `webpki-root-certs` (RUSTSEC-2026-0382, RUSTSEC-2026-0383). (#21, #26)
+- **Release pipeline:** workflow actions are pinned to commit SHAs and Dependabot keeps them current. (#22, #27)
 
 ## [0.4.0] - 2026-10-22
 
