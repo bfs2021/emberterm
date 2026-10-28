@@ -24,6 +24,10 @@
     updateTerminalConfig({ bellSound: !$terminalConfig.bellSound }).catch(() => {});
   }
 
+  function toggleOsc52() {
+    updateTerminalConfig({ osc52Clipboard: !$terminalConfig.osc52Clipboard }).catch(() => {});
+  }
+
   function toggleConfirmClose() {
     updateTerminalConfig({ confirmCloseRunning: !$terminalConfig.confirmCloseRunning }).catch(() => {});
   }
@@ -124,6 +128,19 @@
       </span>
       <span class="toggle-wrap">
         <input type="checkbox" class="toggle-input" checked={$terminalConfig.confirmCloseRunning} readonly />
+        <span class="toggle-track" aria-hidden="true"></span>
+      </span>
+    </div>
+    <div class="toggle-row" role="button" tabindex="0"
+      onclick={toggleOsc52}
+      onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleOsc52(); } }}
+    >
+      <span class="toggle-label">
+        <span class="toggle-title">Let programs set the clipboard</span>
+        <span class="toggle-hint">Allow OSC 52, used by tmux and vim over ssh. Off by default: text from a malicious file or host could replace what you copied</span>
+      </span>
+      <span class="toggle-wrap">
+        <input type="checkbox" class="toggle-input" checked={$terminalConfig.osc52Clipboard} readonly />
         <span class="toggle-track" aria-hidden="true"></span>
       </span>
     </div>

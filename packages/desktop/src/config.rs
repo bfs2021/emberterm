@@ -36,6 +36,9 @@ pub struct BehaviorConfig {
     pub confirm_close_running: bool,
     /// Play a sound when a program rings the terminal bell (BEL).
     pub bell_sound: bool,
+    /// Let a program set the clipboard with OSC 52. Off by default: any terminal output,
+    /// including a file shown with `cat`, could otherwise swap in a command to be pasted.
+    pub osc52_clipboard: bool,
     pub scrollback_lines: usize,
 }
 
@@ -61,6 +64,7 @@ impl Default for BehaviorConfig {
             default_profile: "default".into(),
             confirm_close_running: true,
             bell_sound: true,
+            osc52_clipboard: false,
             scrollback_lines: 10000,
         }
     }
