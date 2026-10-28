@@ -69,7 +69,13 @@ pnpm version:set 0.2.0     # writes Cargo.toml, package.json files and Cargo.loc
 pnpm version:check         # verifies they agree
 ```
 
-To release: bump the version in a PR, merge it, then push the tag.
+To release: bump the version in a PR and move the `[Unreleased]` entries of `CHANGELOG.md` under a
+`## [X.Y.Z] - date` heading, with a `### Highlights` list on top, merge it, then push the tag. The GitHub
+release body is built from that section (Highlights; Changes from Added, Changed and Removed; Fixes from
+Fixed and Security) plus the pull requests and contributors since the previous release. The Release
+workflow fails for a stable tag without Highlights. Preview it before tagging with
+`GITHUB_TOKEN=$(gh auth token) GITHUB_REPOSITORY=emberterm/emberterm node scripts/release-notes.mjs vX.Y.Z main`. A tag with a suffix (`v1.1.0-rc.1`) is published as
+a pre-release, which the updater ignores.
 
 ```sh
 git checkout main && git pull
