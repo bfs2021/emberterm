@@ -54,6 +54,17 @@ jobs:
       # A tag that disagrees with the files would publish an installer labelled with the wrong version.
       - run: node scripts/version.mjs check ${{ github.ref_name }}
 
+      # The release body is this tag's CHANGELOG.md section; a stable tag without one fails here.
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            node scripts/release-notes.mjs "$GITHUB_REF_NAME"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +74,10 @@ jobs:
           projectPath: packages/desktop
           tagName: ${{ github.ref_name }}
           releaseName: EmberTerm ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
+          # A pre-release is never GitHub's "latest", so the updater endpoint (releases/latest) ignores it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           uploadUpdaterJson: true
           # Point the Windows updater at the NSIS installer instead of the MSI.
           updaterJsonPreferNsis: true

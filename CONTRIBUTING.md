@@ -69,7 +69,10 @@ pnpm version:set 0.2.0     # writes Cargo.toml, package.json files and Cargo.loc
 pnpm version:check         # verifies they agree
 ```
 
-To release: bump the version in a PR, merge it, then push the tag.
+To release: bump the version in a PR and move the `[Unreleased]` entries of `CHANGELOG.md` under a
+`## [X.Y.Z] - date` heading, merge it, then push the tag. The GitHub release body is that section, and the
+Release workflow fails for a stable tag that has none. A tag with a suffix (`v1.1.0-rc.1`) is published as
+a pre-release, which the updater ignores.
 
 ```sh
 git checkout main && git pull
