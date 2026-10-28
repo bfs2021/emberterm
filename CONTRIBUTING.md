@@ -53,7 +53,10 @@ See [`CLAUDE.md`](CLAUDE.md) for the architecture and file map.
   Explain *why* in the body when it is not obvious.
 - Branch off `main`; do not commit to `main` directly.
 - A PR title in the same style, a short what and why, and how you verified it (commands run, or what
-  you tried in the app).
+  you tried in the app). The PR template has the checklist.
+- Do not commit secrets, personal paths or machine names. Update `CHANGELOG.md` under `[Unreleased]`
+  when behavior changes.
+- Report security problems privately, see [SECURITY.md](SECURITY.md).
 
 ## Versioning and releases
 

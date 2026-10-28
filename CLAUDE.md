@@ -242,6 +242,18 @@ One version everywhere: `packages/desktop/Cargo.toml` is the source (`tauri.conf
 
 ---
 
+## Contributing
+
+The full rules are in CONTRIBUTING.md; the ones agents trip over:
+
+- Commits and PR titles use Conventional Commits (`type(scope): imperative subject`). Branch off `main`, never commit to it directly.
+- Open the PR with `.github/PULL_REQUEST_TEMPLATE.md` filled in: what and why, and the checks you ran.
+- Add a line under `[Unreleased]` in `CHANGELOG.md` when behavior changes. The release commit moves it under the new version.
+- No secrets, personal paths or machine names in commits, docs or issues. Security reports go through GitHub private reporting (SECURITY.md), never a public issue.
+- `AGENTS.md` points here; keep this file the single source of project context.
+
+---
+
 ## Dev Commands
 
 CI (`ci.yml`) runs only on pushes to `main`. Before opening a PR, or marking a draft ready for review, run `/ci` (the checks in CONTRIBUTING.md, "Before you open a PR") and list them in the PR.

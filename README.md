@@ -1,8 +1,15 @@
-# EmberTerm
+<h1 align="center">EmberTerm</h1>
 
-> A fast, simple terminal.
+<p align="center"><b>A fast, simple terminal for Windows.</b></p>
 
-A lightweight terminal for Windows, built on Tauri 2 (Rust) + Svelte 5 + xterm.js with `portable-pty`.
+<p align="center">
+  <a href="https://github.com/emberterm/emberterm/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/emberterm/emberterm/ci.yml?branch=main&style=flat-square&label=ci" alt="CI status"></a>
+  <a href="https://github.com/emberterm/emberterm/releases"><img src="https://img.shields.io/github/v/release/emberterm/emberterm?style=flat-square&label=release" alt="Latest release"></a>
+  <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Built with Tauri 2"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
+</p>
+
+EmberTerm is a lightweight terminal built on Tauri 2 (Rust), Svelte 5 and xterm.js with `portable-pty`.
 Many tabs, each with its own shell (Git Bash, WSL, PowerShell, cmd), split panes, and your last
 session back when you reopen it. No account, no telemetry.
 
@@ -22,6 +29,12 @@ session back when you reopen it. No account, no telemetry.
 - **Window memory:** size, position and maximized state come back
 - **Updates:** Settings → About → Check for updates downloads and installs the latest release in one click
 - **Robust files:** config, profiles and `session.json` hot-reload; a broken file is moved aside with a toast and never blocks startup
+
+## Why EmberTerm
+
+Terminals that forget your tabs, or fail to start after an update, cost you time every day.
+EmberTerm keeps one job: open fast, show your shells, and bring everything back the way you left it.
+Settings, profiles and the session are plain files you can read, and a broken file never blocks startup.
 
 ## Folder restore
 
@@ -74,6 +87,10 @@ docs/        theming.md: writing and importing themes
 
 [CLAUDE.md](CLAUDE.md) has the architecture, file map and IPC reference.
 
+## Docs and contributing
+
+[Contributing](CONTRIBUTING.md) · [Theming](docs/theming.md) · [Architecture](CLAUDE.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Windows is the primary target; macOS builds are also published.
