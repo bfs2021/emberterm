@@ -79,10 +79,20 @@ pub fn load_profiles_from(
     (profiles, warnings)
 }
 
+/// The id becomes a file name, so anything that could leave the profiles folder is refused.
+pub fn profile_path_in(dir: &Path, id: &str) -> Result<PathBuf> {
+    let valid = (1..=64).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    anyhow::ensure!(valid, "invalid profile id {id:?}");
+    Ok(dir.join(format!("{id}.toml")))
+}
+
 pub fn save_profile(profile: &Profile) -> Result<()> {
     let dir = profiles_dir().ok_or_else(|| anyhow::anyhow!("no config dir"))?;
+    let path = profile_path_in(&dir, &profile.id)?;
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("{}.toml", profile.id));
     let text = toml::to_string_pretty(profile)?;
     write_atomic(&path, text.as_bytes())?;
     Ok(())
@@ -90,7 +100,7 @@ pub fn save_profile(profile: &Profile) -> Result<()> {
 
 pub fn delete_profile(id: &str) -> Result<()> {
     let dir = profiles_dir().ok_or_else(|| anyhow::anyhow!("no config dir"))?;
-    let path = dir.join(format!("{}.toml", id));
+    let path = profile_path_in(&dir, id)?;
     if path.exists() {
         std::fs::remove_file(path)?;
     }

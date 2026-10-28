@@ -46,3 +46,42 @@ font_size = 15
     assert_eq!(profiles[0].id, "old");
     assert_eq!(profiles[0].shell, "bash.exe");
 }
+
+#[test]
+fn profile_path_rejects_ids_that_escape_the_folder() {
+    let dir = Path::new("profiles");
+    for bad in [
+        "",
+        "..",
+        "../x",
+        r"..\x",
+        "a/b",
+        r"a\b",
+        "C:x",
+        "x.toml",
+        &"a".repeat(65),
+    ] {
+        assert!(profile_path_in(dir, bad).is_err(), "accepted {bad:?}");
+    }
+}
+
+#[test]
+fn profile_path_accepts_generated_and_builtin_ids() {
+    let dir = Path::new("profiles");
+    for ok in ["default", "3f9a1c2e", "builtin-gitbash", "my_profile-2"] {
+        assert_eq!(
+            profile_path_in(dir, ok).unwrap(),
+            dir.join(format!("{ok}.toml"))
+        );
+    }
+}
+
+#[test]
+fn save_and_delete_refuse_a_traversal_id() {
+    let p = Profile {
+        id: "../evil".into(),
+        ..Profile::default()
+    };
+    assert!(save_profile(&p).is_err());
+    assert!(delete_profile("../evil").is_err());
+}
