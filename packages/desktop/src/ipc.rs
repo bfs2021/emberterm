@@ -234,29 +234,33 @@ pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
         // Normalise MINGW/Cygwin paths (/d/foo → D:/foo) so Windows git can
         // resolve the directory regardless of which shell reported the cwd.
         let cwd = normalise_cwd(&cwd);
+        let no_repo = GitStatus {
+            branch: None,
+            dirty: false,
+            insertions: 0,
+            deletions: 0,
+        };
+        let Some(cwd) = crate::git::safe_cwd(&cwd) else {
+            return no_repo;
+        };
 
         // Branch name
-        let branch = git_run(&cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
+        let branch = git_run(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
             .filter(|b| !b.is_empty() && b != "HEAD");
 
         if branch.is_none() {
-            return GitStatus {
-                branch: None,
-                dirty: false,
-                insertions: 0,
-                deletions: 0,
-            };
+            return no_repo;
         }
 
         // Any uncommitted changes (staged or unstaged)?
-        let dirty = git_command(&cwd)
+        let dirty = crate::git::command(cwd)
             .args(["status", "--porcelain"])
             .output()
             .map(|o| o.status.success() && !o.stdout.is_empty())
             .unwrap_or(false);
 
         // Line counts vs HEAD (staged + unstaged)
-        let (insertions, deletions) = git_run(&cwd, &["diff", "HEAD", "--shortstat"])
+        let (insertions, deletions) = git_run(cwd, &["diff", "HEAD", "--shortstat"])
             .map(|s| parse_shortstat(&s))
             .unwrap_or((0, 0));
 
@@ -291,22 +295,8 @@ fn normalise_cwd(cwd: &str) -> String {
     cwd.to_string()
 }
 
-/// The release build has no console, so Windows would open (and flash) a new console
-/// window for every git call unless it is told not to.
-fn git_command(cwd: &str) -> std::process::Command {
-    let mut cmd = std::process::Command::new("git");
-    cmd.current_dir(cwd);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    cmd
-}
-
 fn git_run(cwd: &str, args: &[&str]) -> Option<String> {
-    let out = git_command(cwd).args(args).output().ok()?;
+    let out = crate::git::command(cwd).args(args).output().ok()?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {

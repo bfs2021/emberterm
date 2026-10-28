@@ -3,6 +3,7 @@
 mod config;
 mod fonts;
 mod fsutil;
+mod git;
 mod ipc;
 mod profile;
 mod session_store;
