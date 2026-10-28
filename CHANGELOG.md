@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-28
+
+First stable release.
+
 ### Security
 
 - The status bar no longer runs `git` in a network path or a missing folder, and runs it with `core.fsmonitor` off and without repository locks. The folder comes from terminal output, which a program can forge.
