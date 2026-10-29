@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const openUrl = vi.fn().mockResolvedValue(undefined);
+const pushToast = vi.fn();
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl }));
+vi.mock("../stores/app.js", () => ({ pushToast }));
 
 const { openExternalLink } = await import("./links.js");
 
 describe("openExternalLink", () => {
-  beforeEach(() => openUrl.mockClear());
+  beforeEach(() => {
+    openUrl.mockClear();
+    pushToast.mockClear();
+  });
 
   it("opens http and https links through the opener plugin", () => {
     openExternalLink(undefined, "http://example.com");
@@ -23,11 +28,23 @@ describe("openExternalLink", () => {
     expect(openUrl).toHaveBeenCalledWith("HTTPS://EXAMPLE.COM");
   });
 
-  it("ignores other schemes so the webview never navigates", () => {
+  it("ignores other schemes and unparseable urls", () => {
     openExternalLink(undefined, "file:///etc/passwd");
     openExternalLink(undefined, "javascript:alert(1)");
     openExternalLink(undefined, "mailto:a@b.example");
     openExternalLink(undefined, "not a url");
+    openExternalLink(undefined, "https://");
     expect(openUrl).not.toHaveBeenCalled();
+    expect(pushToast).not.toHaveBeenCalled();
+  });
+
+  it("raises a toast when the opener rejects", async () => {
+    openUrl.mockRejectedValueOnce(new Error("scope denied"));
+    openExternalLink(undefined, "https://example.com");
+    await vi.waitFor(() =>
+      expect(pushToast).toHaveBeenCalledWith(
+        "Could not open https://example.com: scope denied",
+      ),
+    );
   });
 });

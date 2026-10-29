@@ -4,7 +4,6 @@
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebLinksAddon } from "@xterm/addon-web-links";
-  import { openExternalLink } from "./links.js";
   import { SearchAddon } from "@xterm/addon-search";
   import { readText } from "@tauri-apps/plugin-clipboard-manager";
   import FindBar from "./FindBar.svelte";
@@ -14,6 +13,7 @@
   import { activeTheme } from "../theme/store.js";
   import { fontConfig } from "../theme/fontStore.js";
   import { getOutputSink } from "./outputSink.js";
+  import { openExternalLink } from "./links.js";
   import { attachWebgl } from "./webglRenderer.js";
   import { terminalConfig } from "../stores/terminalConfigStore.js";
   import { terminalPadding } from "../theme/paddingStore.js";
